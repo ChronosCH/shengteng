@@ -1,0 +1,54 @@
+{
+  "name": "signavatar-web-frontend",
+  "version": "1.0.0",
+  "description": "SignAvatar Web - Real-time Sign Language Recognition Frontend",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev-no-check": "vite --force",
+    "dev-js": "vite --mode development --force",
+    "build": "vite build",
+    "build-check": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.14.19",
+    "@mui/material": "^5.14.20",
+    "@react-three/drei": "^9.88.13",
+    "@react-three/fiber": "^8.15.11",
+    "@types/react-router-dom": "^5.3.3",
+    "@types/three": "^0.158.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.7.1",
+    "socket.io-client": "^4.7.4",
+    "three": "^0.158.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@types/webxr": "^0.5.2",
+    "@typescript-eslint/eslint-plugin": "^6.10.0",
+    "@typescript-eslint/parser": "^6.10.0",
+    "@vitejs/plugin-react": "^4.1.1",
+    "eslint": "^8.53.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.4",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "keywords": [
+    "sign-language",
+    "ai",
+    "react",
+    "typescript",
+    "accessibility"
+  ],
+  "author": "SignAvatar Team",
+  "license": "MIT"
+}
