@@ -1,6 +1,5 @@
 /**
- * 升级版3D手语Avatar页面 - 使用专业手语系统
- * 专门解决原有的"鸡爪"手型和粗糙建模问题
+ * 专业手语Avatar演示页面 - 替换原有的粗糙3D小人
  */
 
 import { useState, useCallback } from 'react'
@@ -13,6 +12,7 @@ import {
   Card,
   CardContent,
   Button,
+  TextField,
   Stack,
   Chip,
   FormControlLabel,
@@ -25,23 +25,23 @@ import {
   List,
   ListItem,
   ListItemText,
+  ListItemButton,
+  Divider,
   Slider,
-  Badge,
 } from '@mui/material'
 import {
+  Person,
   PlayArrow,
   Stop,
   Settings,
   ExpandMore,
+  ThreeDRotation,
   Animation,
   Tune,
   Visibility,
   Psychology,
   TouchApp,
   AutoAwesome,
-  Upgrade,
-  Lightbulb,
-  Speed,
 } from '@mui/icons-material'
 
 import ErrorBoundary from '../components/ErrorBoundary'
@@ -49,16 +49,16 @@ import ProfessionalSignLanguageAvatar from '../components/ProfessionalSignLangua
 import { 
   CHINESE_SIGN_LANGUAGE_LIBRARY, 
   SignLanguagePlayer,
-  type HandKeypoint
+  type SignLanguageKeypoint
 } from '../data/ChineseSignLanguageLibrary'
 
-function AvatarPage() {
-  const [currentText, setCurrentText] = useState('体验全新专业手语Avatar')
+function ProfessionalAvatarPage() {
+  const [currentText, setCurrentText] = useState('你好，欢迎体验专业手语Avatar')
   const [selectedGesture, setSelectedGesture] = useState('hello')
   const [isPerforming, setIsPerforming] = useState(false)
   const [currentKeypoints, setCurrentKeypoints] = useState<{
-    left?: HandKeypoint[]
-    right?: HandKeypoint[]
+    left?: SignLanguageKeypoint[]
+    right?: SignLanguageKeypoint[]
   }>({})
   
   // 专业设置
@@ -67,6 +67,9 @@ function AvatarPage() {
     showBones: false,
     showWireframe: false,
     animationSpeed: 1.0,
+    handDetail: 'high',
+    lightingQuality: 'ultra',
+    shadowQuality: 'high',
   })
 
   // 手语播放器
@@ -121,44 +124,29 @@ function AvatarPage() {
     }))
   }
 
-  // 快速演示
-  const quickDemos = [
-    { id: 'hello', name: '你好', icon: '👋' },
-    { id: 'thank_you', name: '谢谢', icon: '🙏' },
-    { id: 'i_love_you', name: '我爱你', icon: '❤️' },
-    { id: 'goodbye', name: '再见', icon: '👋' },
-  ]
+  // 手语词汇分类
+  const gestureCategories = {
+    greeting: Object.values(CHINESE_SIGN_LANGUAGE_LIBRARY).filter(g => g.category === 'greeting'),
+    daily: Object.values(CHINESE_SIGN_LANGUAGE_LIBRARY).filter(g => g.category === 'daily'),
+    emotion: Object.values(CHINESE_SIGN_LANGUAGE_LIBRARY).filter(g => g.category === 'emotion'),
+    number: Object.values(CHINESE_SIGN_LANGUAGE_LIBRARY).filter(g => g.category === 'number'),
+    phrase: Object.values(CHINESE_SIGN_LANGUAGE_LIBRARY).filter(g => g.category === 'phrase'),
+  }
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
-      {/* 页面标题和升级提示 */}
+      {/* 页面标题 */}
       <Fade in timeout={600}>
         <Box sx={{ mb: 4, textAlign: 'center' }}>
-          <Badge badgeContent="升级版" color="primary" sx={{ mb: 2 }}>
-            <Typography variant="h3" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'center' }}>
-              <AutoAwesome sx={{ fontSize: 40, color: 'primary.main' }} />
-              3D手语Avatar - 专业版
-            </Typography>
-          </Badge>
-          
-          <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
-            高精度手部建模 • 告别"鸡爪"效果 • 专业手语表达
+          <Typography variant="h3" gutterBottom sx={{ fontWeight: 600 }}>
+            🤖 专业手语识别Avatar
+          </Typography>
+          <Typography variant="h6" color="text.secondary">
+            高精度3D手部建模 • 专业手语动作库 • 实时表达演示
           </Typography>
           
-          <Alert 
-            severity="success" 
-            sx={{ 
-              mt: 2, 
-              maxWidth: 800, 
-              mx: 'auto',
-              background: 'linear-gradient(135deg, #e8f5e8 0%, #f0f8ff 100%)',
-              border: '1px solid #4caf50'
-            }}
-            icon={<Upgrade />}
-          >
-            <Typography variant="body1" sx={{ fontWeight: 500 }}>
-              🎉 系统已升级！全新专业级3D手语Avatar，解决了粗糙建模问题，现在拥有解剖学级精度
-            </Typography>
+          <Alert severity="success" sx={{ mt: 2, maxWidth: 600, mx: 'auto' }}>
+            ✨ 全新升级：告别"鸡爪"手型，体验专业级手语表达效果
           </Alert>
         </Box>
       </Fade>
@@ -167,40 +155,54 @@ function AvatarPage() {
         {/* 左侧控制面板 */}
         <Grid item xs={12} lg={4}>
           <Stack spacing={3}>
-            {/* 快速演示 */}
+            {/* 手语词汇选择 */}
             <Fade in timeout={800}>
-              <Card sx={{ background: 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)' }}>
+              <Card>
                 <CardContent sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Lightbulb sx={{ mr: 1, color: 'warning.main' }} />
-                    快速体验
+                    <Psychology sx={{ mr: 1 }} />
+                    手语词汇库
                   </Typography>
                   
-                  <Grid container spacing={2}>
-                    {quickDemos.map((demo) => (
-                      <Grid item xs={6} key={demo.id}>
-                        <Button
-                          fullWidth
-                          variant={selectedGesture === demo.id ? "contained" : "outlined"}
-                          onClick={() => {
-                            setSelectedGesture(demo.id)
-                            if (!isPerforming) {
-                              handlePlayGesture()
-                            }
-                          }}
-                          startIcon={<span style={{ fontSize: '20px' }}>{demo.icon}</span>}
-                          sx={{ 
-                            py: 1.5,
-                            flexDirection: 'column',
-                            gap: 0.5,
-                            height: 80
-                          }}
-                        >
-                          <Typography variant="body2">{demo.name}</Typography>
-                        </Button>
-                      </Grid>
-                    ))}
-                  </Grid>
+                  {Object.entries(gestureCategories).map(([category, gestures]) => (
+                    <Accordion key={category} sx={{ mb: 1 }}>
+                      <AccordionSummary expandIcon={<ExpandMore />}>
+                        <Typography variant="subtitle2">
+                          {category === 'greeting' && '问候语'}
+                          {category === 'daily' && '日常用语'}
+                          {category === 'emotion' && '情感表达'}
+                          {category === 'number' && '数字'}
+                          {category === 'phrase' && '短语'}
+                          {` (${gestures.length})`}
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails sx={{ pt: 0 }}>
+                        <List dense>
+                          {gestures.map((gesture) => (
+                            <ListItemButton
+                              key={gesture.id}
+                              selected={selectedGesture === gesture.id}
+                              onClick={() => setSelectedGesture(gesture.id)}
+                              sx={{ borderRadius: 1, mb: 0.5 }}
+                            >
+                              <ListItemText
+                                primary={gesture.name}
+                                secondary={gesture.description}
+                              />
+                              <Chip 
+                                label={gesture.difficulty}
+                                size="small"
+                                color={
+                                  gesture.difficulty === 'easy' ? 'success' :
+                                  gesture.difficulty === 'medium' ? 'warning' : 'error'
+                                }
+                              />
+                            </ListItemButton>
+                          ))}
+                        </List>
+                      </AccordionDetails>
+                    </Accordion>
+                  ))}
                 </CardContent>
               </Card>
             </Fade>
@@ -256,14 +258,6 @@ function AvatarPage() {
                         color="success"
                         icon={<Animation />}
                         size="small"
-                        sx={{ 
-                          animation: 'pulse 2s infinite',
-                          '@keyframes pulse': {
-                            '0%': { opacity: 1 },
-                            '50%': { opacity: 0.7 },
-                            '100%': { opacity: 1 },
-                          }
-                        }}
                       />
                     </Box>
                   )}
@@ -271,7 +265,7 @@ function AvatarPage() {
               </Card>
             </Fade>
 
-            {/* 高级设置 */}
+            {/* 专业设置 */}
             <Fade in timeout={1200}>
               <Card>
                 <CardContent sx={{ p: 3 }}>
@@ -284,7 +278,7 @@ function AvatarPage() {
                     <AccordionSummary expandIcon={<ExpandMore />}>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <Visibility sx={{ mr: 1 }} />
-                        <Typography>视觉效果</Typography>
+                        <Typography>渲染质量</Typography>
                       </Box>
                     </AccordionSummary>
                     <AccordionDetails>
@@ -305,7 +299,16 @@ function AvatarPage() {
                               onChange={(e) => handleSettingChange('showBones', e.target.checked)}
                             />
                           }
-                          label="显示骨骼结构（调试）"
+                          label="显示骨骼（调试）"
+                        />
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={avatarSettings.showWireframe}
+                              onChange={(e) => handleSettingChange('showWireframe', e.target.checked)}
+                            />
+                          }
+                          label="线框模式"
                         />
                       </Stack>
                     </AccordionDetails>
@@ -314,8 +317,8 @@ function AvatarPage() {
                   <Accordion>
                     <AccordionSummary expandIcon={<ExpandMore />}>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Speed sx={{ mr: 1 }} />
-                        <Typography>动画控制</Typography>
+                        <Tune sx={{ mr: 1 }} />
+                        <Typography>动画参数</Typography>
                       </Box>
                     </AccordionSummary>
                     <AccordionDetails>
@@ -331,62 +334,11 @@ function AvatarPage() {
                             max={2.0}
                             step={0.1}
                             size="small"
-                            marks={[
-                              { value: 0.5, label: '0.5x' },
-                              { value: 1.0, label: '1x' },
-                              { value: 2.0, label: '2x' }
-                            ]}
                           />
                         </Box>
                       </Stack>
                     </AccordionDetails>
                   </Accordion>
-                </CardContent>
-              </Card>
-            </Fade>
-
-            {/* 专业特性展示 */}
-            <Fade in timeout={1400}>
-              <Card sx={{ 
-                background: 'linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%)',
-                border: '1px solid rgba(33, 150, 243, 0.2)'
-              }}>
-                <CardContent sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Psychology sx={{ mr: 1, color: 'primary.main' }} />
-                    专业特性
-                  </Typography>
-                  
-                  <List dense>
-                    <ListItem>
-                      <ListItemText 
-                        primary="21关键点精确建模"
-                        secondary="MediaPipe Holistic级别的手部精度"
-                      />
-                      <Chip label="NEW" color="primary" size="small" />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemText 
-                        primary="解剖学级别手部结构"
-                        secondary="包含掌骨、关节、肌肉群建模"
-                      />
-                      <Chip label="PRO" color="success" size="small" />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemText 
-                        primary="专业手语动作库"
-                        secondary="标准中国手语词汇和动作序列"
-                      />
-                      <Chip label="HOT" color="warning" size="small" />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemText 
-                        primary="实时动作插值"
-                        secondary="平滑的手语动作过渡效果"
-                      />
-                      <Chip label="AI" color="info" size="small" />
-                    </ListItem>
-                  </List>
                 </CardContent>
               </Card>
             </Fade>
@@ -403,19 +355,17 @@ function AvatarPage() {
                 display: 'flex', 
                 flexDirection: 'column',
                 background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
-                position: 'relative',
-                overflow: 'hidden'
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <AutoAwesome sx={{ mr: 2, color: 'primary.main', fontSize: 32 }} />
+                  <AutoAwesome sx={{ mr: 2, color: 'primary.main', fontSize: 28 }} />
                   <Box>
                     <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                      专业手语Avatar 2.0
+                      专业手语Avatar
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      高精度建模 • 实时识别 • 专业表达
+                      高精度手部建模 • 实时动作捕捉 • 专业表达效果
                     </Typography>
                   </Box>
                 </Box>
@@ -448,8 +398,7 @@ function AvatarPage() {
                   borderRadius: 3,
                   overflow: 'hidden',
                   position: 'relative',
-                  border: '3px solid rgba(255, 255, 255, 0.8)',
-                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+                  border: '2px solid rgba(0,0,0,0.1)',
                 }}
               >
                 <ErrorBoundary>
@@ -496,34 +445,103 @@ function AvatarPage() {
         </Grid>
       </Grid>
 
-      {/* 对比展示 */}
+      {/* 功能介绍 */}
+      <Fade in timeout={1400}>
+        <Box sx={{ mt: 6 }}>
+          <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
+            🚀 技术特色
+          </Typography>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ textAlign: 'center', py: 4 }}>
+                  <ThreeDRotation sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+                  <Typography variant="h6" gutterBottom>
+                    高精度手部建模
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    21个关键点精确映射，解剖学级别的手指关节建模，告别"鸡爪"效果
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            
+            <Grid item xs={12} md={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ textAlign: 'center', py: 4 }}>
+                  <Psychology sx={{ fontSize: 48, color: 'success.main', mb: 2 }} />
+                  <Typography variant="h6" gutterBottom>
+                    专业手语动作库
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    中国手语标准动作，精确的时序控制和动作插值，真实还原手语表达
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            
+            <Grid item xs={12} md={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ textAlign: 'center', py: 4 }}>
+                  <Animation sx={{ fontSize: 48, color: 'warning.main', mb: 2 }} />
+                  <Typography variant="h6" gutterBottom>
+                    实时动作识别
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    MediaPipe Holistic集成，实时手语识别与3D Avatar同步演示
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            
+            <Grid item xs={12} md={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ textAlign: 'center', py: 4 }}>
+                  <AutoAwesome sx={{ fontSize: 48, color: 'error.main', mb: 2 }} />
+                  <Typography variant="h6" gutterBottom>
+                    写实渲染效果
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    PBR材质系统，环境光照，阴影效果，专业级3D渲染质量
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </Box>
+      </Fade>
+
+      {/* 使用说明 */}
       <Fade in timeout={1600}>
         <Box sx={{ mt: 6 }}>
-          <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, textAlign: 'center' }}>
-            🔥 升级前后对比
+          <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
+            📖 使用指南
           </Typography>
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
-              <Card sx={{ height: '100%', border: '2px solid #f44336' }}>
-                <CardContent sx={{ textAlign: 'center', py: 4 }}>
-                  <Typography variant="h6" color="error" gutterBottom>
-                    ❌ 旧版本问题
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom color="primary">
+                    基础操作
                   </Typography>
                   <List dense>
                     <ListItem>
-                      <ListItemText primary="粗糙的火柴人造型" />
+                      <ListItemText 
+                        primary="选择手语词汇"
+                        secondary="从左侧词汇库中选择要演示的手语动作"
+                      />
                     </ListItem>
                     <ListItem>
-                      <ListItemText primary="'鸡爪'式手部建模" />
+                      <ListItemText 
+                        primary="开始演示"
+                        secondary="点击演示按钮观看3D Avatar执行手语动作"
+                      />
                     </ListItem>
                     <ListItem>
-                      <ListItemText primary="简单的几何图形拼接" />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemText primary="基础材质和光照" />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemText primary="有限的动作表达" />
+                      <ListItemText 
+                        primary="调整视角"
+                        secondary="鼠标拖拽旋转，滚轮缩放，右键平移视角"
+                      />
                     </ListItem>
                   </List>
                 </CardContent>
@@ -531,26 +549,29 @@ function AvatarPage() {
             </Grid>
             
             <Grid item xs={12} md={6}>
-              <Card sx={{ height: '100%', border: '2px solid #4caf50' }}>
-                <CardContent sx={{ textAlign: 'center', py: 4 }}>
-                  <Typography variant="h6" color="success" gutterBottom>
-                    ✅ 新版本优势
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom color="success">
+                    高级功能
                   </Typography>
                   <List dense>
                     <ListItem>
-                      <ListItemText primary="解剖学级别的真实建模" />
+                      <ListItemText 
+                        primary="骨骼调试模式"
+                        secondary="显示手部骨骼结构，用于动作分析和调试"
+                      />
                     </ListItem>
                     <ListItem>
-                      <ListItemText primary="21关键点精确手部结构" />
+                      <ListItemText 
+                        primary="写实/卡通切换"
+                        secondary="支持不同渲染风格，适应各种应用场景"
+                      />
                     </ListItem>
                     <ListItem>
-                      <ListItemText primary="专业PBR材质系统" />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemText primary="Studio级环境光照" />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemText primary="专业手语动作库" />
+                      <ListItemText 
+                        primary="动画速度调节"
+                        secondary="0.5x到2x速度调节，便于学习和观察细节"
+                      />
                     </ListItem>
                   </List>
                 </CardContent>
@@ -563,4 +584,4 @@ function AvatarPage() {
   )
 }
 
-export default AvatarPage
+export default ProfessionalAvatarPage

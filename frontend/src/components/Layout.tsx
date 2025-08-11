@@ -47,6 +47,10 @@ import {
   Dashboard,
   Notifications,
   Help,
+  AutoAwesome,
+  Diamond,
+  Face,
+  Compare,
 } from '@mui/icons-material'
 
 import StatusIndicator from './StatusIndicator'
@@ -66,7 +70,16 @@ const navigationGroups = [
       { text: '总览', icon: <Dashboard />, path: '/', color: '#FFB3BA', description: '系统总览和快速访问' },
       { text: '手语识别', icon: <Visibility />, path: '/recognition', color: '#B5EAD7', description: '实时手语识别体验' },
       { text: '学习训练', icon: <School />, path: '/learning', color: '#C7CEDB', description: '系统化手语学习' },
-      { text: '3D Avatar', icon: <Person />, path: '/avatar', color: '#FFDAB9', description: '3D手语演示' },
+    ]
+  },
+  {
+    title: '3D Avatar系统',
+    items: [
+      { text: '基础Avatar', icon: <Person />, path: '/avatar', color: '#FFDAB9', description: '基础3D手语演示' },
+      { text: '专业Avatar', icon: <AutoAwesome />, path: '/avatar-pro', color: '#FFE4B5', description: '专业手语Avatar' },
+      { text: '高质量Avatar', icon: <Diamond />, path: '/avatar-hq', color: '#F0E68C', description: '高质量3D建模' },
+      { text: '真人级Avatar', icon: <Face />, path: '/avatar-advanced', color: '#98FB98', description: '真人级3D Avatar' },
+      { text: 'Avatar对比', icon: <Compare />, path: '/avatar-compare', color: '#87CEEB', description: 'Avatar版本对比' },
     ]
   },
   {

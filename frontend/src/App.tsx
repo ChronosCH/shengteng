@@ -9,6 +9,10 @@ import HomePage from './pages/HomePage.tsx'
 import RecognitionPage from './pages/RecognitionPage.tsx'
 import LearningPage from './pages/LearningPage.tsx'
 import AvatarPage from './pages/AvatarPage.tsx'
+import ProfessionalAvatarPage from './pages/ProfessionalAvatarPage.tsx'
+import HighQualityAvatarPage from './pages/HighQualityAvatarPage.tsx'
+import AdvancedAvatarPage from './pages/AdvancedAvatarPage.tsx'
+import AvatarComparisonPage from './pages/AvatarComparisonPage.tsx'
 import SettingsPage from './pages/SettingsPage.tsx'
 import LabPage from './pages/LabPage.tsx'
 
@@ -164,6 +168,10 @@ function App() {
               <Route path="/recognition" element={<RecognitionPage />} />
               <Route path="/learning" element={<LearningPage />} />
               <Route path="/avatar" element={<AvatarPage />} />
+              <Route path="/avatar-pro" element={<ProfessionalAvatarPage />} />
+              <Route path="/avatar-hq" element={<HighQualityAvatarPage />} />
+              <Route path="/avatar-advanced" element={<AdvancedAvatarPage />} />
+              <Route path="/avatar-compare" element={<AvatarComparisonPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/lab" element={<LabPage />} />
             </Routes>

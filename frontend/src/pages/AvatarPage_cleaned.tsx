@@ -49,7 +49,7 @@ import ProfessionalSignLanguageAvatar from '../components/ProfessionalSignLangua
 import { 
   CHINESE_SIGN_LANGUAGE_LIBRARY, 
   SignLanguagePlayer,
-  type HandKeypoint
+  type SignLanguageKeypoint
 } from '../data/ChineseSignLanguageLibrary'
 
 function AvatarPage() {
@@ -57,8 +57,8 @@ function AvatarPage() {
   const [selectedGesture, setSelectedGesture] = useState('hello')
   const [isPerforming, setIsPerforming] = useState(false)
   const [currentKeypoints, setCurrentKeypoints] = useState<{
-    left?: HandKeypoint[]
-    right?: HandKeypoint[]
+    left?: SignLanguageKeypoint[]
+    right?: SignLanguageKeypoint[]
   }>({})
   
   // 专业设置

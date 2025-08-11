@@ -1,0 +1,199 @@
+/* 详细手部模型演示组件样式 */
+
+.hand-model-demo {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  font-family: 'Arial', sans-serif;
+}
+
+.demo-controls {
+  width: 300px;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  overflow-y: auto;
+  backdrop-filter: blur(10px);
+}
+
+.canvas-container {
+  flex: 1;
+  position: relative;
+}
+
+.control-section {
+  margin-bottom: 25px;
+}
+
+.control-section h3 {
+  margin: 0 0 10px 0;
+  color: #3498db;
+  font-size: 18px;
+}
+
+.control-section h4 {
+  margin: 0 0 15px 0;
+  color: #ecf0f1;
+  font-size: 14px;
+  border-bottom: 1px solid #34495e;
+  padding-bottom: 8px;
+}
+
+.control-section p {
+  margin: 0 0 15px 0;
+  color: #bdc3c7;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.control-section ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #bdc3c7;
+  font-size: 12px;
+}
+
+.control-section li {
+  margin-bottom: 5px;
+}
+
+.gesture-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.gesture-buttons button {
+  background: rgba(52, 152, 219, 0.8);
+  border: none;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 11px;
+}
+
+.gesture-buttons button:hover {
+  background: rgba(52, 152, 219, 1);
+  transform: translateY(-2px);
+}
+
+.gesture-buttons button.active {
+  background: #e74c3c;
+  box-shadow: 0 4px 8px rgba(231, 76, 60, 0.3);
+}
+
+.slider-control {
+  margin-bottom: 15px;
+}
+
+.slider-control label {
+  display: block;
+  margin-bottom: 8px;
+  color: #ecf0f1;
+  font-size: 12px;
+}
+
+.slider-control input[type="range"] {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: #34495e;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.slider-control input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #3498db;
+  cursor: pointer;
+}
+
+.slider-control input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #3498db;
+  cursor: pointer;
+  border: none;
+}
+
+.checkbox-control {
+  margin-bottom: 15px;
+}
+
+.checkbox-control label {
+  display: flex;
+  align-items: center;
+  color: #ecf0f1;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.checkbox-control input[type="checkbox"] {
+  margin-right: 8px;
+  transform: scale(1.2);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .hand-model-demo {
+    flex-direction: column;
+  }
+  
+  .demo-controls {
+    width: 100%;
+    height: 200px;
+    padding: 15px;
+  }
+  
+  .control-section {
+    margin-bottom: 15px;
+  }
+  
+  .gesture-buttons {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  
+  .gesture-buttons button {
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+}
+
+/* 动画效果 */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.gesture-buttons button.active {
+  animation: pulse 2s infinite;
+}
+
+/* 滚动条样式 */
+.demo-controls::-webkit-scrollbar {
+  width: 6px;
+}
+
+.demo-controls::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.demo-controls::-webkit-scrollbar-thumb {
+  background: rgba(52, 152, 219, 0.6);
+  border-radius: 3px;
+}
+
+.demo-controls::-webkit-scrollbar-thumb:hover {
+  background: rgba(52, 152, 219, 0.8);
+}

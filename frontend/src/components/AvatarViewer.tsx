@@ -168,168 +168,215 @@ const AvatarViewer: React.FC<AvatarViewerProps> = ({
         bgcolor: isFullscreen ? 'black' : 'transparent',
       }}
     >
-      <Grid container spacing={2} sx={{ height: '100%' }}>
-        {/* 控制面板 */}
-        {!isFullscreen && !isXRActive && (
-          <>
-            <Grid item xs={12} md={3}>
+      {/* 简化的控制栏 - 只显示必要信息 */}
+      <Box sx={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        mb: 2,
+        opacity: isFullscreen ? 0.9 : 1,
+        px: 1,
+      }}>
+        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+          {getAvatarAnimation()}
+          {currentSignSequence && (
+            <Typography component="span" color="primary" sx={{ ml: 1, fontWeight: 600 }}>
+              | {currentSignSequence.text}
+            </Typography>
+          )}
+        </Typography>
+
+        <Box>
+          <Tooltip title="切换风格">
+            <IconButton
+              size="small"
+              onClick={() => setAvatarStyle(prev => prev === 'cartoon' ? 'realistic' : 'cartoon')}
+            >
+              <ThreeDRotation />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="重新加载">
+            <IconButton
+              size="small"
+              onClick={() => {
+                setIsLoading(true)
+                setTimeout(() => setIsLoading(false), 1000)
+              }}
+            >
+              <Refresh />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title={isFullscreen ? "退出全屏" : "全屏显示"}>
+            <IconButton size="small" onClick={handleFullscreenToggle}>
+              {isFullscreen ? <FullscreenExit /> : <Fullscreen />}
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </Box>
+
+      {/* 主要3D Avatar显示区域 - 占据大部分空间 */}
+      <Box sx={{
+        height: 'calc(100% - 60px)',
+        position: 'relative',
+        bgcolor: isFullscreen ? 'black' : 'rgba(248, 253, 255, 0.8)',
+        borderRadius: isFullscreen ? 0 : 3,
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxShadow: isFullscreen ? 'none' : '0 8px 32px rgba(0, 0, 0, 0.1)',
+      }}>
+        <Suspense fallback={
+          <Box sx={{ textAlign: 'center' }}>
+            <CircularProgress size={60} thickness={4} />
+            <Typography variant="body1" color="text.secondary" sx={{ mt: 2, fontWeight: 500 }}>
+              正在加载3D模型...
+            </Typography>
+          </Box>
+        }>
+          <ThreeAvatar
+            text={text}
+            isActive={isActive}
+            animationType={getAvatarAnimation()}
+            signSequence={activeSignSequence ? {
+              keypoints: activeSignSequence.keypoints,
+              timestamps: activeSignSequence.timestamps,
+              duration: activeSignSequence.duration
+            } : undefined}
+            leftHandKeypoints={leftHandKeypoints || autoHandKeypoints.left}
+            rightHandKeypoints={rightHandKeypoints || autoHandKeypoints.right}
+            onAvatarMeshReady={handleAvatarMeshReady}
+          />
+
+          {/* 风格指示器 */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              bgcolor: 'rgba(0, 0, 0, 0.7)',
+              color: 'white',
+              px: 2,
+              py: 1,
+              borderRadius: 2,
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              zIndex: 10,
+              backdropFilter: 'blur(10px)',
+            }}
+          >
+            {avatarStyle === 'cartoon' ? '🎭 卡通风格' : '👤 写实风格'}
+          </Box>
+
+          {/* 生成状态指示器 */}
+          {isGenerating && (
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 16,
+                left: 16,
+                bgcolor: 'rgba(0, 0, 0, 0.7)',
+                color: 'white',
+                px: 2,
+                py: 1,
+                borderRadius: 2,
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                zIndex: 10,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                backdropFilter: 'blur(10px)',
+              }}
+            >
+              <CircularProgress size={18} color="inherit" thickness={4} />
+              正在生成手语动画...
+            </Box>
+          )}
+
+          {/* 活动状态指示器 */}
+          {isActive && (
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 16,
+                left: 16,
+                bgcolor: 'rgba(76, 175, 80, 0.9)',
+                color: 'white',
+                px: 2,
+                py: 1,
+                borderRadius: 2,
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                zIndex: 10,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                animation: 'pulse 2s infinite',
+              }}
+            >
+              🔴 实时演示
+            </Box>
+          )}
+        </Suspense>
+      </Box>
+
+      {/* 控制面板 - 在非全屏时显示在底部 */}
+      {!isFullscreen && !isXRActive && (
+        <Box sx={{ 
+          position: 'absolute', 
+          bottom: 0, 
+          left: 0, 
+          right: 0, 
+          p: 2,
+          background: 'linear-gradient(to top, rgba(255, 255, 255, 0.95), transparent)',
+          backdropFilter: 'blur(10px)',
+        }}>
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
               <DiffusionPanel
                 onSequenceGenerated={handleSequenceGenerated}
                 isGenerating={isGenerating}
               />
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={6}>
               <WebXRPanel
                 onSessionStart={handleXRSessionStart}
                 onSessionEnd={handleXRSessionEnd}
                 avatarMesh={avatarMesh || undefined}
               />
             </Grid>
-          </>
-        )}
+          </Grid>
+        </Box>
+      )}
 
-        {/* 3D Avatar 显示区域 */}
-        <Grid item xs={12} md={isFullscreen ? 12 : (isXRActive ? 12 : 6)}>
-          <Box sx={{
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-          }}>
-            {/* 控制栏 */}
-            <Box sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              mb: 1,
-              opacity: isFullscreen ? 0.8 : 1,
-            }}>
-              <Typography variant="subtitle2" color="text.secondary">
-                动画: {getAvatarAnimation()}
-                {currentSignSequence && (
-                  <Typography component="span" color="primary" sx={{ ml: 1 }}>
-                    | 播放中: {currentSignSequence.text}
-                  </Typography>
-                )}
-              </Typography>
-
-              <Box>
-                <Tooltip title="切换风格">
-                  <IconButton
-                    size="small"
-                    onClick={() => setAvatarStyle(prev => prev === 'cartoon' ? 'realistic' : 'cartoon')}
-                  >
-                    <ThreeDRotation />
-                  </IconButton>
-                </Tooltip>
-
-                <Tooltip title="重新加载">
-                  <IconButton
-                    size="small"
-                    onClick={() => {
-                      setIsLoading(true)
-                      setTimeout(() => setIsLoading(false), 1000)
-                    }}
-                  >
-                    <Refresh />
-                  </IconButton>
-                </Tooltip>
-
-                <Tooltip title={isFullscreen ? "退出全屏" : "全屏显示"}>
-                  <IconButton size="small" onClick={handleFullscreenToggle}>
-                    {isFullscreen ? <FullscreenExit /> : <Fullscreen />}
-                  </IconButton>
-                </Tooltip>
-              </Box>
-            </Box>
-
-            {/* 3D Avatar显示区域 */}
-            <Box sx={{
-              flex: 1,
-              position: 'relative',
-              bgcolor: 'grey.100',
-              borderRadius: isFullscreen ? 0 : 1,
-              overflow: 'hidden',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <Suspense fallback={
-                <Box sx={{ textAlign: 'center' }}>
-                  <CircularProgress size={40} />
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    正在加载3D模型...
-                  </Typography>
-                </Box>
-              }>
-                <ThreeAvatar
-                  text={text}
-                  isActive={isActive}
-                  animationType={getAvatarAnimation()}
-                  signSequence={activeSignSequence ? {
-                    keypoints: activeSignSequence.keypoints,
-                    timestamps: activeSignSequence.timestamps,
-                    duration: activeSignSequence.duration
-                  } : undefined}
-                  leftHandKeypoints={leftHandKeypoints || autoHandKeypoints.left}
-                  rightHandKeypoints={rightHandKeypoints || autoHandKeypoints.right}
-                  onAvatarMeshReady={handleAvatarMeshReady}
-                />
-
-                {/* 风格指示器 */}
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 10,
-                    right: 10,
-                    bgcolor: 'rgba(0, 0, 0, 0.6)',
-                    color: 'white',
-                    px: 1,
-                    py: 0.5,
-                    borderRadius: 1,
-                    fontSize: '0.75rem',
-                    zIndex: 10,
-                  }}
-                >
-                  {avatarStyle === 'cartoon' ? '卡通风格' : '写实风格'}
-                </Box>
-
-                {/* 生成状态指示器 */}
-                {isGenerating && (
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      bottom: 10,
-                      left: 10,
-                      bgcolor: 'rgba(0, 0, 0, 0.6)',
-                      color: 'white',
-                      px: 1,
-                      py: 0.5,
-                      borderRadius: 1,
-                      fontSize: '0.75rem',
-                      zIndex: 10,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                    }}
-                  >
-                    <CircularProgress size={16} color="inherit" />
-                    正在生成手语...
-                  </Box>
-                )}
-              </Suspense>
-            </Box>
-
-            {/* 底部信息 */}
-            {!isFullscreen && (
-              <Box sx={{ mt: 1, textAlign: 'center' }}>
-                <Typography variant="caption" color="text.secondary">
-                  💡 使用左侧面板生成手语动画，点击全屏按钮获得更好的观看体验
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        </Grid>
-      </Grid>
+      {/* 底部提示信息 */}
+      {!isFullscreen && (
+        <Box sx={{ 
+          position: 'absolute', 
+          bottom: 8, 
+          left: '50%', 
+          transform: 'translateX(-50%)',
+          zIndex: 5,
+        }}>
+          <Typography 
+            variant="caption" 
+            color="text.secondary" 
+            sx={{ 
+              bgcolor: 'rgba(255, 255, 255, 0.8)', 
+              px: 2, 
+              py: 0.5, 
+              borderRadius: 2,
+              backdropFilter: 'blur(10px)',
+              fontWeight: 500,
+            }}
+          >
+            💡 点击全屏按钮获得更好的观看体验
+          </Typography>
+        </Box>
+      )}
     </Box>
   )
 }

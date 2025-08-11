@@ -192,204 +192,205 @@ function RecognitionPage() {
         </Box>
       </Fade>
 
-      <Grid container spacing={4}>
-        {/* 左侧控制面板 */}
-        <Grid item xs={12} lg={3}>
-          <Stack spacing={3}>
-            {/* 连接控制 */}
-            <Fade in timeout={800}>
-              <Card
-                elevation={0}
-                sx={{
-                  background: 'linear-gradient(135deg, #FFB3BA20 0%, #FFD6CC10 100%)',
-                  border: '2px solid #FFB3BA30',
-                  borderRadius: 4,
-                }}
-              >
-                <CardContent sx={{ textAlign: 'center', py: 4 }}>
-                  <Avatar
+      {/* 优化的响应式布局 */}
+      <Box sx={{ mb: 4 }}>
+        <Grid container spacing={3}>
+          {/* 顶部控制面板 - 水平排列减少拥挤感 */}
+          <Grid item xs={12}>
+            <Grid container spacing={3}>
+              {/* 连接状态 */}
+              <Grid item xs={12} md={4}>
+                <Fade in timeout={600}>
+                  <Card
+                    elevation={0}
                     sx={{
-                      width: 56,
-                      height: 56,
-                      mx: 'auto',
-                      mb: 3,
-                      backgroundColor: isConnected ? '#B5EAD7' : '#FFB3BA',
-                      boxShadow: isConnected 
-                        ? '0 8px 20px rgba(181, 234, 215, 0.3)'
-                        : '0 8px 20px rgba(255, 179, 186, 0.3)',
+                      background: 'linear-gradient(135deg, #FFB3BA15 0%, #FFD6CC08 100%)',
+                      border: '1px solid #FFB3BA20',
+                      borderRadius: 3,
+                      height: '100%',
                     }}
                   >
-                    {isConnected ? <CheckCircle /> : <Settings />}
-                  </Avatar>
-                  
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                    服务器连接
-                  </Typography>
-                  
-                  {!isConnected ? (
-                    <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 3, lineHeight: 1.6 }}>
-                        需要先连接到手语识别服务器才能开始识别
+                    <CardContent sx={{ p: 3, textAlign: 'center' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
+                        <Avatar
+                          sx={{
+                            width: 40,
+                            height: 40,
+                            mr: 2,
+                            backgroundColor: isConnected ? '#B5EAD7' : '#FFB3BA',
+                            boxShadow: isConnected 
+                              ? '0 4px 12px rgba(181, 234, 215, 0.3)'
+                              : '0 4px 12px rgba(255, 179, 186, 0.3)',
+                          }}
+                        >
+                          {isConnected ? <CheckCircle sx={{ fontSize: 20 }} /> : <Settings sx={{ fontSize: 20 }} />}
+                        </Avatar>
+                        <Box sx={{ textAlign: 'left' }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5 }}>
+                            服务器连接
+                          </Typography>
+                          <Chip
+                            label={isConnected ? '已连接' : '未连接'}
+                            color={isConnected ? 'success' : 'warning'}
+                            size="small"
+                            sx={{ fontSize: '0.75rem' }}
+                          />
+                        </Box>
+                      </Box>
+                      
+                      {!isConnected && (
+                        <Button
+                          variant="contained"
+                          onClick={handleConnect}
+                          disabled={isConnecting}
+                          size="small"
+                          startIcon={isConnecting ? <CircularProgress size={16} /> : null}
+                          sx={{
+                            borderRadius: 2,
+                            background: 'linear-gradient(135deg, #FFB3BA 0%, #FFD6CC 100%)',
+                            fontSize: '0.8rem',
+                          }}
+                        >
+                          {isConnecting ? '连接中...' : '连接'}
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Fade>
+              </Grid>
+
+              {/* 识别控制 */}
+              <Grid item xs={12} md={4}>
+                <Fade in timeout={800}>
+                  <Card
+                    elevation={0}
+                    sx={{
+                      background: 'linear-gradient(135deg, #B5EAD715 0%, #C7F0DB08 100%)',
+                      border: '1px solid #B5EAD720',
+                      borderRadius: 3,
+                      height: '100%',
+                    }}
+                  >
+                    <CardContent sx={{ p: 3, textAlign: 'center' }}>
+                      <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
+                        识别控制
                       </Typography>
+                      
                       <Button
                         variant="contained"
-                        onClick={handleConnect}
-                        disabled={isConnecting}
-                        fullWidth
+                        color={isRecognizing ? "error" : "primary"}
+                        startIcon={isRecognizing ? <Stop /> : <PlayArrow />}
+                        onClick={handleStartStop}
+                        disabled={!isConnected}
                         size="large"
-                        startIcon={isConnecting ? <CircularProgress size={20} /> : null}
-                        sx={{
+                        sx={{ 
                           borderRadius: 3,
-                          py: 1.5,
-                          background: 'linear-gradient(135deg, #FFB3BA 0%, #FFD6CC 100%)',
-                          '&:hover': {
-                            transform: 'translateY(-2px)',
-                            boxShadow: '0 8px 25px rgba(255, 179, 186, 0.4)',
-                          },
-                          transition: 'all 0.3s ease',
+                          fontWeight: 600,
+                          px: 4,
+                          background: isRecognizing 
+                            ? 'linear-gradient(135deg, #FFB3BA 0%, #FF9AA2 100%)'
+                            : 'linear-gradient(135deg, #B5EAD7 0%, #9BC1BC 100%)',
                         }}
                       >
-                        {isConnecting ? '连接中...' : '连接服务器'}
+                        {isRecognizing ? '停止' : '开始'}
                       </Button>
-                    </Box>
-                  ) : (
-                    <Box>
-                      <Chip 
-                        label="连接正常" 
-                        color="success" 
-                        icon={<Favorite />}
-                        sx={{ mb: 2, fontWeight: 600 }}
-                      />
-                      <Typography variant="body2" color="success.main" sx={{ fontWeight: 500 }}>
-                        服务器连接稳定，可以开始识别
-                      </Typography>
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-            </Fade>
 
-            {/* 识别控制 */}
-            <Fade in timeout={1000}>
-              <Card
-                elevation={0}
-                sx={{
-                  background: 'linear-gradient(135deg, #B5EAD720 0%, #C7F0DB10 100%)',
-                  border: '2px solid #B5EAD730',
-                  borderRadius: 4,
-                }}
-              >
-                <CardContent sx={{ py: 4 }}>
-                  <Typography variant="h6" gutterBottom sx={{ textAlign: 'center', fontWeight: 600, mb: 3 }}>
-                    识别控制
-                  </Typography>
-                  
-                  <Button
-                    variant="contained"
-                    color={isRecognizing ? "error" : "primary"}
-                    startIcon={isRecognizing ? <Stop /> : <PlayArrow />}
-                    onClick={handleStartStop}
-                    disabled={!isConnected}
-                    fullWidth
-                    size="large"
-                    sx={{ 
-                      py: 2,
-                      fontSize: '1.1rem',
+                      {confidence !== null && (
+                        <Box sx={{ mt: 2 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            置信度: {(confidence * 100).toFixed(1)}%
+                          </Typography>
+                          <LinearProgress
+                            variant="determinate"
+                            value={confidence * 100}
+                            sx={{
+                              mt: 1,
+                              height: 4,
+                              borderRadius: 2,
+                              backgroundColor: 'rgba(181, 234, 215, 0.2)',
+                              '& .MuiLinearProgress-bar': {
+                                borderRadius: 2,
+                                background: confidence > 0.8 
+                                  ? 'linear-gradient(90deg, #B5EAD7 0%, #9BC1BC 100%)'
+                                  : confidence > 0.6
+                                  ? 'linear-gradient(90deg, #FFDAB9 0%, #FFCC99 100%)'
+                                  : 'linear-gradient(90deg, #FFB3BA 0%, #FF9AA2 100%)',
+                              },
+                            }}
+                          />
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Fade>
+              </Grid>
+
+              {/* 识别结果预览 */}
+              <Grid item xs={12} md={4}>
+                <Fade in timeout={1000}>
+                  <Card
+                    elevation={0}
+                    sx={{
+                      background: 'linear-gradient(135deg, #C7CEDB15 0%, #D6DCE508 100%)',
+                      border: '1px solid #C7CEDB20',
                       borderRadius: 3,
-                      fontWeight: 600,
-                      background: isRecognizing 
-                        ? 'linear-gradient(135deg, #FFB3BA 0%, #FF9AA2 100%)'
-                        : 'linear-gradient(135deg, #B5EAD7 0%, #9BC1BC 100%)',
-                      '&:hover': {
-                        transform: 'translateY(-2px)',
-                        boxShadow: isRecognizing
-                          ? '0 8px 25px rgba(255, 179, 186, 0.4)'
-                          : '0 8px 25px rgba(181, 234, 215, 0.4)',
-                      },
-                      transition: 'all 0.3s ease',
+                      height: '100%',
                     }}
                   >
-                    {isRecognizing ? '停止识别' : '开始识别'}
-                  </Button>
-
-                  {!isConnected && (
-                    <Typography 
-                      variant="caption" 
-                      display="block" 
-                      sx={{ mt: 2, textAlign: 'center', color: 'text.secondary', fontStyle: 'italic' }}
-                    >
-                      请先连接服务器
-                    </Typography>
-                  )}
-
-                  {isRecognizing && (
-                    <Box sx={{ mt: 3, textAlign: 'center' }}>
-                      <Typography variant="body2" color="info.main" gutterBottom sx={{ fontWeight: 500 }}>
-                        正在分析手语动作...
+                    <CardContent sx={{ p: 3 }}>
+                      <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, textAlign: 'center', mb: 2 }}>
+                        识别结果
                       </Typography>
-                      <LinearProgress 
-                        sx={{ 
-                          borderRadius: 2,
-                          height: 6,
-                          background: 'rgba(181, 234, 215, 0.2)',
-                          '& .MuiLinearProgress-bar': {
-                            background: 'linear-gradient(90deg, #B5EAD7 0%, #9BC1BC 100%)',
-                            borderRadius: 2,
-                          }
-                        }} 
-                      />
-                    </Box>
-                  )}
-
-                  {confidence !== null && (
-                    <Box sx={{ mt: 3 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          识别置信度
-                        </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {(confidence * 100).toFixed(1)}%
-                        </Typography>
+                      <Box sx={{ 
+                        minHeight: 60, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        background: 'rgba(255, 255, 255, 0.5)',
+                        borderRadius: 2,
+                        p: 2,
+                      }}>
+                        {currentText ? (
+                          <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main', textAlign: 'center' }}>
+                            {currentText}
+                          </Typography>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', fontStyle: 'italic' }}>
+                            {isRecognizing ? '正在识别...' : '等待手语输入'}
+                          </Typography>
+                        )}
                       </Box>
-                      <LinearProgress
-                        variant="determinate"
-                        value={confidence * 100}
-                        sx={{
-                          height: 8,
-                          borderRadius: 4,
-                          backgroundColor: 'rgba(181, 234, 215, 0.2)',
-                          '& .MuiLinearProgress-bar': {
-                            borderRadius: 4,
-                            background: confidence > 0.8 
-                              ? 'linear-gradient(90deg, #B5EAD7 0%, #9BC1BC 100%)'
-                              : confidence > 0.6
-                              ? 'linear-gradient(90deg, #FFDAB9 0%, #FFCC99 100%)'
-                              : 'linear-gradient(90deg, #FFB3BA 0%, #FF9AA2 100%)',
-                          },
-                        }}
-                      />
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-            </Fade>
+                    </CardContent>
+                  </Card>
+                </Fade>
+              </Grid>
+            </Grid>
+          </Grid>
+        </Grid>
+      </Box>
 
-            {/* 摄像头预览 */}
-            <Fade in timeout={1200}>
-              <Card
-                elevation={0}
-                sx={{
-                  background: 'linear-gradient(135deg, #C7CEDB20 0%, #D6DCE510 100%)',
-                  border: '2px solid #C7CEDB30',
-                  borderRadius: 4,
-                }}
-              >
-                <CardContent sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, textAlign: 'center', mb: 3 }}>
-                    摄像头预览
-                  </Typography>
+      {/* 主要内容区域 */}
+      <Grid container spacing={4}>
+        {/* 左侧：摄像头预览 */}
+        <Grid item xs={12} lg={4}>
+          <Fade in timeout={1200}>
+            <Card
+              elevation={0}
+              sx={{
+                background: 'linear-gradient(135deg, #C7CEDB20 0%, #D6DCE510 100%)',
+                border: '2px solid #C7CEDB30',
+                borderRadius: 4,
+                height: { xs: 'auto', lg: '600px' },
+              }}
+            >
+              <CardContent sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, textAlign: 'center', mb: 3 }}>
+                  摄像头预览
+                </Typography>
+                <Box sx={{ flex: 1, display: 'flex', alignItems: 'center' }}>
                   <ErrorBoundary>
                     <Box sx={{ 
+                      width: '100%',
                       borderRadius: 3, 
                       overflow: 'hidden',
                       background: 'linear-gradient(135deg, #F0F8FF 0%, #E6F7FF 100%)',
@@ -397,20 +398,20 @@ function RecognitionPage() {
                       <VideoCapture isActive={isRecognizing} />
                     </Box>
                   </ErrorBoundary>
-                </CardContent>
-              </Card>
-            </Fade>
-          </Stack>
+                </Box>
+              </CardContent>
+            </Card>
+          </Fade>
         </Grid>
 
-        {/* 中间3D Avatar区域 */}
-        <Grid item xs={12} lg={6}>
+        {/* 中间：3D Avatar - 更大更突出 */}
+        <Grid item xs={12} lg={8}>
           <Fade in timeout={600}>
             <Paper 
               elevation={0}
               sx={{ 
                 p: 4, 
-                height: '750px', 
+                height: { xs: '500px', lg: '600px' },
                 display: 'flex', 
                 flexDirection: 'column',
                 background: 'linear-gradient(135deg, #FFDAB920 0%, #FFE7CC10 100%)',
@@ -430,7 +431,7 @@ function RecognitionPage() {
                 },
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 4 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <Avatar
                     sx={{
@@ -450,7 +451,7 @@ function RecognitionPage() {
                 <Stack direction="row" spacing={1}>
                   {currentText && (
                     <Chip 
-                      label="有识别内容"
+                      label="实时演示"
                       color="success"
                       size="small"
                       sx={{ fontWeight: 600 }}
@@ -458,7 +459,7 @@ function RecognitionPage() {
                   )}
                   {isRecognizing && (
                     <Chip 
-                      label="实时演示"
+                      label="识别中"
                       color="info"
                       size="small"
                       sx={{ fontWeight: 600, animation: 'pulse 2s infinite' }}
@@ -514,35 +515,12 @@ function RecognitionPage() {
             </Paper>
           </Fade>
         </Grid>
+      </Grid>
 
-        {/* 右侧结果显示 */}
-        <Grid item xs={12} lg={3}>
-          <Stack spacing={3}>
-            <Fade in timeout={1400}>
-              <Card
-                elevation={0}
-                sx={{
-                  background: 'linear-gradient(135deg, #C7CEDB20 0%, #D6DCE510 100%)',
-                  border: '2px solid #C7CEDB30',
-                  borderRadius: 4,
-                }}
-              >
-                <CardContent sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, textAlign: 'center', mb: 3 }}>
-                    识别结果
-                  </Typography>
-                  <ErrorBoundary>
-                    <SubtitleDisplay
-                      text={currentText}
-                      confidence={confidence}
-                      isRecognizing={isRecognizing}
-                    />
-                  </ErrorBoundary>
-                </CardContent>
-              </Card>
-            </Fade>
-
-            {/* 使用提示 */}
+      {/* 底部辅助信息 */}
+      <Box sx={{ mt: 4 }}>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
             <Fade in timeout={1600}>
               <Paper 
                 elevation={0}
@@ -563,13 +541,13 @@ function RecognitionPage() {
                   • 确保手部完全在摄像头范围内<br/>
                   • 保持充足稳定的光线条件<br/>
                   • 手语动作要清晰标准规范<br/>
-                  • 适当调整与摄像头的距离<br/>
-                  • 避免背景干扰和遮挡
+                  • 适当调整与摄像头的距离
                 </Typography>
               </Paper>
             </Fade>
+          </Grid>
 
-            {/* 隐私说明 */}
+          <Grid item xs={12} md={6}>
             <Fade in timeout={1800}>
               <Paper 
                 elevation={0}
@@ -592,9 +570,9 @@ function RecognitionPage() {
                 </Typography>
               </Paper>
             </Fade>
-          </Stack>
+          </Grid>
         </Grid>
-      </Grid>
+      </Box>
 
       {/* 错误提示 */}
       <Snackbar
