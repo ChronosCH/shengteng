@@ -4,6 +4,9 @@ import { ThemeProvider, createTheme } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import App from './App'
 
+// 导入MUI Fade修复
+import './utils/muiFadeFix'
+
 // 马卡龙配色主题
 const theme = createTheme({
   palette: {
@@ -199,12 +202,10 @@ const hideLoading = () => {
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <App />
-    </ThemeProvider>
-  </React.StrictMode>,
+  <ThemeProvider theme={theme}>
+    <CssBaseline />
+    <App />
+  </ThemeProvider>,
 )
 
 // 应用加载完成后隐藏加载屏幕

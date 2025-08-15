@@ -1,145 +1,212 @@
 """
-增强的手语数据预处理管道
-专为CE-CSL数据集优化，支持多模态特征提取
-基于MindSpore和华为昇腾AI处理器
+增强的手语数据预处理模块
+支持CE-CSL数据集和TFNet模型的数据处理需求
+结合MindSpore框架和华为昇腾优化
 """
 
 import os
+import sys
 import cv2
 import json
-import numpy as np
-import mediapipe as mp
-from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Union
 import argparse
+import numpy as np
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, asdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
-import time
-from tqdm import tqdm
 
 # MindSpore相关导入
-import mindspore as ms
-import mindspore.dataset as ds
-from mindspore.dataset import vision, transforms
-from mindspore import Tensor
+try:
+    import mindspore as ms
+    from mindspore import Tensor, ops, nn
+    from mindspore.dataset import vision
+    MINDSPORE_AVAILABLE = True
+except ImportError:
+    MINDSPORE_AVAILABLE = False
+    print("警告: MindSpore未安装，部分功能不可用")
 
-# 配置日志
+# MediaPipe导入（可选）
+try:
+    import mediapipe as mp
+    MEDIAPIPE_AVAILABLE = True
+except ImportError:
+    MEDIAPIPE_AVAILABLE = False
+    print("警告: MediaPipe未安装，关键点提取功能不可用")
+
+# 设置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @dataclass
-class VideoSample:
-    """视频样本数据类"""
-    video_path: str
-    gloss_sequence: List[str]
-    text: str
-    video_id: str
-    translator: str = ""
-    start_frame: int = 0
-    end_frame: Optional[int] = None
-
-@dataclass
-class ProcessedSample:
-    """处理后的样本数据类"""
-    video_id: str
-    gloss_sequence: List[str]
-    text: str
-    frames: np.ndarray  # (T, H, W, C) 视频帧
-    keypoints: Optional[np.ndarray] = None  # (T, 543, 3) 所有关键点
-    face_landmarks: Optional[np.ndarray] = None  # (T, 468, 3)
-    pose_landmarks: Optional[np.ndarray] = None  # (T, 33, 3)
-    left_hand_landmarks: Optional[np.ndarray] = None  # (T, 21, 3)
-    right_hand_landmarks: Optional[np.ndarray] = None  # (T, 21, 3)
-    duration: float = 0.0
-    fps: int = 25
-    
-    def to_dict(self):
-        """转换为字典格式"""
-        return {
-            'video_id': self.video_id,
-            'gloss_sequence': self.gloss_sequence,
-            'text': self.text,
-            'frames_shape': self.frames.shape if self.frames is not None else None,
-            'duration': self.duration,
-            'fps': self.fps
-        }
-
-@dataclass
 class PreprocessingConfig:
-    """预处理配置"""
+    """数据预处理配置"""
+    # 视频处理参数
     target_fps: int = 25
-    min_sequence_length: int = 10
     max_sequence_length: int = 300
+    min_sequence_length: int = 10
     image_size: Tuple[int, int] = (224, 224)
-    enable_keypoints: bool = False  # 是否提取关键点
-    enable_augmentation: bool = True
-    num_workers: int = 4
-    batch_size: int = 32
     
     # 数据增强参数
-    random_crop_prob: float = 0.5
+    enable_augmentation: bool = True
     horizontal_flip_prob: float = 0.5
     brightness_factor: float = 0.2
     contrast_factor: float = 0.2
+    random_crop_prob: float = 0.3
     
-    # 质量控制
-    min_confidence: float = 0.5
-    blur_threshold: float = 100.0  # Laplacian方差阈值
+    # 关键点提取参数
+    enable_keypoints: bool = True
+    mediapipe_confidence: float = 0.5
+    
+    # 处理参数
+    num_workers: int = 4
+    batch_size: int = 32
+    cache_dir: str = "./cache"
+    
+    # 质量控制参数 - 调整为更宽松的阈值
+    min_quality_score: float = 0.1  # 降低最小质量分数要求
+    blur_threshold: float = 50.0    # 降低模糊度阈值，手语视频允许一定模糊
+    brightness_min: float = 20      # 最小亮度值
+    brightness_max: float = 235     # 最大亮度值
+    contrast_threshold: float = 0.15 # 降低对比度要求
+    quality_frame_ratio: float = 0.3 # 降低好帧比例要求到30%
+    enable_quality_check: bool = True # 是否启用质量检查
+    skip_bad_quality: bool = False   # 是否跳过质量不佳的视频（False表示仅警告）
+
+@dataclass 
+class VideoSample:
+    """视频样本数据结构"""
+    video_path: str
+    gloss_sequence: List[str]
+    text: str = ""
+    video_id: str = ""
+    translator: str = ""
+    start_frame: int = 0
+    end_frame: Optional[int] = None
+    fps: float = 25.0
+
+@dataclass
+class ProcessedSample:
+    """处理后的样本数据结构"""
+    video_id: str
+    gloss_sequence: List[str]
+    text: str
+    frames: np.ndarray
+    keypoints: Optional[np.ndarray] = None
+    face_landmarks: Optional[np.ndarray] = None
+    pose_landmarks: Optional[np.ndarray] = None
+    left_hand_landmarks: Optional[np.ndarray] = None
+    right_hand_landmarks: Optional[np.ndarray] = None
+    duration: float = 0.0
+    fps: float = 25.0
+    
+    def to_dict(self) -> Dict:
+        """转换为字典格式"""
+        result = asdict(self)
+        # 将numpy数组转换为列表（用于JSON序列化）
+        for key, value in result.items():
+            if isinstance(value, np.ndarray):
+                result[key] = value.shape  # 只保存形状信息
+        return result
 
 class EnhancedSignLanguagePreprocessor:
     """增强的手语数据预处理器"""
     
     def __init__(self, config: PreprocessingConfig):
         self.config = config
-        
-        # 初始化MediaPipe（如果需要关键点）
-        if config.enable_keypoints:
-            self._init_mediapipe()
-        
-        # 统计信息
         self.stats = {
             'processed_videos': 0,
             'failed_videos': 0,
             'total_frames': 0,
             'avg_duration': 0.0,
-            'avg_fps': 0.0
+            'quality_scores': []
         }
         
-        logger.info("增强手语数据预处理器初始化完成")
+        # 初始化MediaPipe（如果可用）
+        if MEDIAPIPE_AVAILABLE and config.enable_keypoints:
+            self.mp_holistic = mp.solutions.holistic
+            self.holistic = self.mp_holistic.Holistic(
+                static_image_mode=False,
+                model_complexity=1,
+                smooth_landmarks=True,
+                min_detection_confidence=config.mediapipe_confidence,
+                min_tracking_confidence=config.mediapipe_confidence
+            )
+        else:
+            self.holistic = None
+            
+        # 创建缓存目录
+        Path(config.cache_dir).mkdir(parents=True, exist_ok=True)
     
-    def _init_mediapipe(self):
-        """初始化MediaPipe"""
-        self.mp_holistic = mp.solutions.holistic
-        self.holistic = self.mp_holistic.Holistic(
-            static_image_mode=False,
-            model_complexity=2,
-            enable_segmentation=False,
-            refine_face_landmarks=True,
-            min_detection_confidence=self.config.min_confidence,
-            min_tracking_confidence=self.config.min_confidence
-        )
-        logger.info("MediaPipe Holistic 初始化完成")
-    
-    def check_video_quality(self, frame: np.ndarray) -> Dict[str, float]:
-        """检查视频帧质量"""
-        # 计算图像清晰度（Laplacian方差）
-        gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-        blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
-        
-        # 计算亮度
-        brightness = np.mean(gray)
-        
-        # 计算对比度
-        contrast = np.std(gray)
-        
-        return {
-            'blur_score': blur_score,
-            'brightness': brightness,
-            'contrast': contrast,
-            'is_good_quality': blur_score > self.config.blur_threshold
-        }
-    
+    def check_video_quality(self, frame: np.ndarray) -> Dict:
+        """检查视频帧质量 - 优化后的质量检查算法"""
+        try:
+            # 转换为灰度图
+            gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+            
+            # 计算模糊度（拉普拉斯方差）
+            blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
+            
+            # 计算亮度统计
+            brightness_mean = np.mean(gray)
+            brightness_std = np.std(gray)
+            
+            # 计算对比度
+            contrast = brightness_std / brightness_mean if brightness_mean > 0 else 0
+            
+            # 更宽松的质量评估
+            # 1. 模糊度评估 - 使用更低的阈值
+            blur_ok = blur_score > self.config.blur_threshold
+            
+            # 2. 亮度评估 - 使用更宽松的范围
+            brightness_ok = (brightness_mean > self.config.brightness_min and 
+                           brightness_mean < self.config.brightness_max)
+            
+            # 3. 对比度评估 - 使用更低的阈值
+            contrast_ok = contrast > self.config.contrast_threshold
+            
+            # 综合质量评分 - 使用加权平均
+            # 给模糊度更低的权重，因为手语视频允许一定程度的模糊
+            quality_score = (
+                0.3 * min(1.0, blur_score / self.config.blur_threshold) +
+                0.3 * min(1.0, contrast / 0.5) +  # 对比度权重
+                0.4 * min(1.0, max(0, 1.0 - abs(brightness_mean - 128) / 128))  # 亮度权重
+            )
+            
+            # 更宽松的质量判断 - 满足任意两个条件即可
+            conditions_met = sum([blur_ok, brightness_ok, contrast_ok])
+            is_good_quality = (
+                conditions_met >= 2 or  # 满足任意两个条件
+                quality_score > self.config.min_quality_score  # 或者综合分数达标
+            )
+            
+            return {
+                'blur_score': blur_score,
+                'brightness_mean': brightness_mean,
+                'brightness_std': brightness_std,
+                'contrast': contrast,
+                'quality_score': quality_score,
+                'is_good_quality': is_good_quality,
+                'blur_ok': blur_ok,
+                'brightness_ok': brightness_ok,
+                'contrast_ok': contrast_ok,
+                'conditions_met': conditions_met
+            }
+            
+        except Exception as e:
+            logger.warning(f"质量检查失败: {e}")
+            return {
+                'blur_score': 0.0,
+                'brightness_mean': 0.0,
+                'brightness_std': 0.0,
+                'contrast': 0.0,
+                'quality_score': 0.0,
+                'is_good_quality': False,
+                'blur_ok': False,
+                'brightness_ok': False,
+                'contrast_ok': False,
+                'conditions_met': 0
+            }
     
     def extract_frames_from_video(self, video_path: str, 
                                  start_frame: int = 0, 
@@ -179,7 +246,7 @@ class EnhancedSignLanguagePreprocessor:
                 
                 # 检查帧质量
                 quality_info = self.check_video_quality(frame_rgb)
-                total_quality_score += quality_info['blur_score']
+                total_quality_score += quality_info['quality_score']
                 
                 # 调整大小
                 frame_resized = cv2.resize(frame_rgb, self.config.image_size)
@@ -207,8 +274,20 @@ class EnhancedSignLanguagePreprocessor:
                 logger.warning(f"视频帧数不足: {video_path} ({len(frames)} < {self.config.min_sequence_length})")
                 return None
             
-            if quality_ratio < 0.5:  # 至少50%的帧质量良好
-                logger.warning(f"视频质量不佳: {video_path} (质量比例: {quality_ratio:.2f})")
+            # 更宽松的质量检查和详细的日志输出
+            if self.config.enable_quality_check and quality_ratio < self.config.quality_frame_ratio:
+                logger.info(f"视频质量统计: {video_path}")
+                logger.info(f"  总帧数: {len(frames)}, 良好帧数: {good_frames}")
+                logger.info(f"  质量比例: {quality_ratio:.2f}, 平均质量分: {avg_quality:.2f}")
+                logger.info(f"  阈值设置: 质量比例>={self.config.quality_frame_ratio}, 模糊度>={self.config.blur_threshold}")
+                
+                if self.config.skip_bad_quality:
+                    logger.warning(f"跳过质量不佳的视频: {video_path} (质量比例: {quality_ratio:.2f})")
+                    return None
+                else:
+                    logger.warning(f"视频质量提醒: {video_path} (质量比例: {quality_ratio:.2f}) - 继续使用")
+            else:
+                logger.debug(f"视频质量良好: {video_path} (质量比例: {quality_ratio:.2f}, 平均分: {avg_quality:.2f})")
             
             frames_array = np.array(frames)
             logger.debug(f"成功提取帧: {video_path} - {frames_array.shape}")
@@ -221,7 +300,7 @@ class EnhancedSignLanguagePreprocessor:
     
     def extract_keypoints_from_frames(self, frames: np.ndarray) -> Dict[str, np.ndarray]:
         """从帧序列中提取关键点"""
-        if not self.config.enable_keypoints:
+        if not self.config.enable_keypoints or self.holistic is None:
             return {}
         
         try:
@@ -510,6 +589,46 @@ class CECSLDatasetProcessor:
     def __init__(self, config: PreprocessingConfig):
         self.config = config
         self.preprocessor = EnhancedSignLanguagePreprocessor(config)
+        self.video_mapping = {}  # 存储video_id到实际文件名的映射
+        self._load_video_mapping()
+    
+    def _load_video_mapping(self):
+        """加载视频ID到实际文件名的映射"""
+        try:
+            data_root = getattr(self.config, 'data_root', "./data/CE-CSL")
+            
+            # 加载train, dev, test的映射
+            for split in ['train', 'dev', 'test']:
+                label_detail_file = os.path.join(data_root, 'label', f'{split}.csv')
+                if os.path.exists(label_detail_file):
+                    with open(label_detail_file, 'r', encoding='utf-8') as f:
+                        import csv
+                        reader = csv.reader(f)
+                        next(reader)  # 跳过标题行
+                        
+                        for row in reader:
+                            if len(row) >= 2:
+                                actual_video_name = row[0]  # train-00001
+                                translator = row[1]  # A, B, C等
+                                
+                                # 为每个video_id创建映射
+                                # 从train-00001转换为train_video_000格式
+                                parts = actual_video_name.split('-')
+                                if len(parts) == 2:
+                                    prefix = parts[0]  # train
+                                    number = int(parts[1]) - 1  # 00001 -> 0
+                                    video_id = f"{prefix}_video_{number:03d}"  # train_video_000
+                                    
+                                    self.video_mapping[video_id] = {
+                                        'actual_name': actual_video_name,
+                                        'translator': translator,
+                                        'split': split
+                                    }
+                                    
+                    logger.info(f"加载 {split} 视频映射: {len([k for k in self.video_mapping.keys() if k.startswith(split)])} 个")
+                            
+        except Exception as e:
+            logger.warning(f"加载视频映射失败: {e}")
     
     def load_cecsl_labels(self, label_file: str) -> List[VideoSample]:
         """加载CE-CSL标签文件"""
@@ -525,24 +644,70 @@ class CECSLDatasetProcessor:
                     
                     if len(row) >= 4:
                         video_id = row[0]
-                        translator = row[1] if len(row) > 1 else ""
-                        text = row[2] if len(row) > 2 else ""
-                        gloss_sequence = row[3].split("/")
+                        start_frame = int(row[1]) if row[1].isdigit() else 0
+                        end_frame = int(row[2]) if row[2].isdigit() else 30
+                        label = row[3]
                         
-                        # 构建视频路径（需要根据实际数据结构调整）
-                        video_path = self._construct_video_path(video_id, translator)
-                        
-                        if os.path.exists(video_path):
-                            sample = VideoSample(
-                                video_path=video_path,
-                                gloss_sequence=gloss_sequence,
-                                text=text,
-                                video_id=video_id,
-                                translator=translator
+                        # 获取视频映射信息
+                        if video_id in self.video_mapping:
+                            mapping_info = self.video_mapping[video_id]
+                            actual_name = mapping_info['actual_name']
+                            translator = mapping_info['translator']
+                            split = mapping_info['split']
+                            
+                            # 构建视频路径
+                            video_path = self._construct_video_path_with_mapping(
+                                actual_name, translator, split
                             )
-                            samples.append(sample)
+                            
+                            text = label  # 使用label作为文本
+                            gloss_sequence = [label]  # 将label作为gloss序列
+                            
+                            if os.path.exists(video_path):
+                                sample = VideoSample(
+                                    video_path=video_path,
+                                    gloss_sequence=gloss_sequence,
+                                    text=text,
+                                    video_id=video_id,
+                                    translator=translator
+                                )
+                                samples.append(sample)
+                            else:
+                                logger.warning(f"视频文件不存在: {video_path}")
                         else:
-                            logger.warning(f"视频文件不存在: {video_path}")
+                            logger.warning(f"未找到视频映射: {video_id}")
+                    elif len(row) == 2:  # 处理只有video_id和label的简化格式
+                        video_id = row[0]
+                        label = row[1]
+                        
+                        # 获取视频映射信息
+                        if video_id in self.video_mapping:
+                            mapping_info = self.video_mapping[video_id]
+                            actual_name = mapping_info['actual_name']
+                            translator = mapping_info['translator']
+                            split = mapping_info['split']
+                            
+                            # 构建视频路径
+                            video_path = self._construct_video_path_with_mapping(
+                                actual_name, translator, split
+                            )
+                            
+                            text = label
+                            gloss_sequence = [label]
+                            
+                            if os.path.exists(video_path):
+                                sample = VideoSample(
+                                    video_path=video_path,
+                                    gloss_sequence=gloss_sequence,
+                                    text=text,
+                                    video_id=video_id,
+                                    translator=translator
+                                )
+                                samples.append(sample)
+                            else:
+                                logger.warning(f"视频文件不存在: {video_path}")
+                        else:
+                            logger.warning(f"未找到视频映射: {video_id}")
             
             logger.info(f"加载标签文件: {label_file} - {len(samples)} 个样本")
             return samples
@@ -551,18 +716,69 @@ class CECSLDatasetProcessor:
             logger.error(f"标签文件加载失败 {label_file}: {e}")
             return []
     
+    def _construct_video_path_with_mapping(self, actual_name: str, translator: str, split: str) -> str:
+        """使用映射信息构建视频文件路径"""
+        data_root = getattr(self.config, 'data_root', "./data/CE-CSL")
+        
+        # 构建路径: data_root/video/split/translator/actual_name.mp4
+        video_path = os.path.join(
+            data_root,
+            "video",
+            split,
+            translator,
+            f"{actual_name}.mp4"
+        )
+        
+        return video_path
+    
     def _construct_video_path(self, video_id: str, translator: str) -> str:
-        """构建视频文件路径"""
-        # 根据CE-CSL数据集的实际结构调整
-        # 假设结构为: data_root/video/split/translator/video_file
-        parts = video_id.split('_')
-        if len(parts) >= 3:
-            split = parts[0]  # train/dev/test
-            video_file = f"{video_id}.mp4"  # 或其他视频格式
-            return os.path.join(
-                self.config.data_root if hasattr(self.config, 'data_root') else "./data/CE-CSL",
-                "video", split, translator, video_file
+        """构建视频文件路径（保留原方法用于兼容性）"""
+        # 首先尝试使用映射
+        if video_id in self.video_mapping:
+            mapping_info = self.video_mapping[video_id]
+            return self._construct_video_path_with_mapping(
+                mapping_info['actual_name'],
+                mapping_info['translator'],
+                mapping_info['split']
             )
+        
+        # 原始逻辑（作为后备）
+        # 根据CE-CSL数据集的实际结构调整
+        # 实际结构为: data_root/video/split/video_file.mp4
+        parts = video_id.split('_')
+        if len(parts) >= 2:
+            split = parts[0]  # train/dev/test
+            video_file = f"{video_id}.mp4"  # 视频文件名
+            
+            # 首先尝试直接在split目录下查找
+            direct_path = os.path.join(
+                self.config.data_root if hasattr(self.config, 'data_root') else "./data/CE-CSL",
+                "video", split, video_file
+            )
+            
+            if os.path.exists(direct_path):
+                return direct_path
+            
+            # 如果直接路径不存在，尝试在translator子目录中查找
+            if translator:
+                translator_path = os.path.join(
+                    self.config.data_root if hasattr(self.config, 'data_root') else "./data/CE-CSL",
+                    "video", split, translator, video_file
+                )
+                if os.path.exists(translator_path):
+                    return translator_path
+            
+            # 如果以上都不存在，尝试在所有子目录中查找
+            video_dir = os.path.join(
+                self.config.data_root if hasattr(self.config, 'data_root') else "./data/CE-CSL",
+                "video", split
+            )
+            
+            if os.path.exists(video_dir):
+                for root, dirs, files in os.walk(video_dir):
+                    if video_file in files:
+                        return os.path.join(root, video_file)
+        
         return ""
     
     def process_cecsl_split(self, label_file: str, output_dir: str, split: str):
@@ -591,6 +807,55 @@ class CECSLDatasetProcessor:
             logger.info(f"  平均时长: {stats['avg_duration']:.2f} 秒")
         else:
             logger.error(f"{split} 数据集处理失败")
+
+class MindSporeDatasetGenerator:
+    """MindSpore数据集生成器"""
+    
+    def __init__(self, config: PreprocessingConfig):
+        self.config = config
+    
+    def create_mindspore_dataset(self, metadata_file: str, 
+                                batch_size: int = 32,
+                                shuffle: bool = True,
+                                num_workers: int = 4):
+        """创建MindSpore数据集"""
+        if not MINDSPORE_AVAILABLE:
+            raise ImportError("MindSpore未安装")
+        
+        import mindspore.dataset as ds
+        
+        # 加载元数据
+        with open(metadata_file, 'r', encoding='utf-8') as f:
+            metadata = json.load(f)
+        
+        # 创建数据生成器
+        def data_generator():
+            for sample_meta in metadata:
+                # 加载帧数据
+                frames = np.load(sample_meta['frames_path'])
+                
+                # 加载关键点（如果有）
+                keypoints = None
+                if sample_meta.get('keypoints_path'):
+                    keypoints = np.load(sample_meta['keypoints_path'])
+                
+                # 创建标签
+                gloss_sequence = sample_meta['gloss_sequence']
+                
+                yield frames, gloss_sequence, keypoints
+        
+        # 创建数据集
+        dataset = ds.GeneratorDataset(
+            data_generator,
+            column_names=['frames', 'gloss_sequence', 'keypoints'],
+            shuffle=shuffle,
+            num_parallel_workers=num_workers
+        )
+        
+        # 批处理
+        dataset = dataset.batch(batch_size, drop_remainder=True)
+        
+        return dataset
 
 def main():
     """主函数"""
@@ -639,280 +904,6 @@ def main():
             logger.warning(f"标签文件不存在: {label_file}")
     
     logger.info("CE-CSL数据集预处理完成!")
-
-if __name__ == "__main__":
-    main()
-            
-            for frame_idx in range(start_frame, min(end_frame, total_frames)):
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                
-                # 按目标FPS采样
-                if frame_count % target_frame_interval != 0:
-                    frame_count += 1
-                    continue
-                
-                # 调整图像大小
-                frame = cv2.resize(frame, self.image_size)
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                
-                # MediaPipe处理
-                results = self.holistic.process(frame_rgb)
-                
-                # 提取各部分关键点
-                frame_keypoints = self._extract_frame_keypoints(results)
-                all_keypoints.append(frame_keypoints)
-                
-                # 分别存储各部分关键点
-                face_landmarks_list.append(self._extract_face_landmarks(results))
-                pose_landmarks_list.append(self._extract_pose_landmarks(results))
-                left_hand_landmarks_list.append(self._extract_hand_landmarks(results.left_hand_landmarks))
-                right_hand_landmarks_list.append(self._extract_hand_landmarks(results.right_hand_landmarks))
-                
-                frame_count += 1
-            
-            cap.release()
-            
-            if len(all_keypoints) < self.min_sequence_length:
-                logger.warning(f"序列长度不足: {len(all_keypoints)} < {self.min_sequence_length}")
-                return None
-            
-            # 转换为numpy数组
-            keypoints_array = np.array(all_keypoints)  # (T, 543, 3)
-            face_array = np.array(face_landmarks_list)  # (T, 468, 3)
-            pose_array = np.array(pose_landmarks_list)  # (T, 33, 3)
-            left_hand_array = np.array(left_hand_landmarks_list)  # (T, 21, 3)
-            right_hand_array = np.array(right_hand_landmarks_list)  # (T, 21, 3)
-            
-            # 序列长度限制
-            if len(keypoints_array) > self.max_sequence_length:
-                keypoints_array = keypoints_array[:self.max_sequence_length]
-                face_array = face_array[:self.max_sequence_length]
-                pose_array = pose_array[:self.max_sequence_length]
-                left_hand_array = left_hand_array[:self.max_sequence_length]
-                right_hand_array = right_hand_array[:self.max_sequence_length]
-            
-            return {
-                'keypoints': keypoints_array,
-                'face_landmarks': face_array,
-                'pose_landmarks': pose_array,
-                'left_hand_landmarks': left_hand_array,
-                'right_hand_landmarks': right_hand_array,
-                'duration': len(keypoints_array) / self.target_fps,
-                'fps': self.target_fps,
-                'original_fps': fps
-            }
-            
-        except Exception as e:
-            logger.error(f"提取关键点失败 {video_path}: {e}")
-            return None
-    
-    def _extract_frame_keypoints(self, results) -> np.ndarray:
-        """提取单帧的所有关键点 (543个点)"""
-        keypoints = np.zeros((543, 3))
-        
-        # 面部关键点 (468个)
-        if results.face_landmarks:
-            for i, landmark in enumerate(results.face_landmarks.landmark):
-                keypoints[i] = [landmark.x, landmark.y, landmark.z]
-        
-        # 身体姿态关键点 (33个)
-        if results.pose_landmarks:
-            for i, landmark in enumerate(results.pose_landmarks.landmark):
-                keypoints[468 + i] = [landmark.x, landmark.y, landmark.z]
-        
-        # 左手关键点 (21个)
-        if results.left_hand_landmarks:
-            for i, landmark in enumerate(results.left_hand_landmarks.landmark):
-                keypoints[501 + i] = [landmark.x, landmark.y, landmark.z]
-        
-        # 右手关键点 (21个)
-        if results.right_hand_landmarks:
-            for i, landmark in enumerate(results.right_hand_landmarks.landmark):
-                keypoints[522 + i] = [landmark.x, landmark.y, landmark.z]
-        
-        return keypoints
-    
-    def _extract_face_landmarks(self, results) -> np.ndarray:
-        """提取面部关键点"""
-        landmarks = np.zeros((468, 3))
-        if results.face_landmarks:
-            for i, landmark in enumerate(results.face_landmarks.landmark):
-                landmarks[i] = [landmark.x, landmark.y, landmark.z]
-        return landmarks
-    
-    def _extract_pose_landmarks(self, results) -> np.ndarray:
-        """提取身体姿态关键点"""
-        landmarks = np.zeros((33, 3))
-        if results.pose_landmarks:
-            for i, landmark in enumerate(results.pose_landmarks.landmark):
-                landmarks[i] = [landmark.x, landmark.y, landmark.z]
-        return landmarks
-    
-    def _extract_hand_landmarks(self, hand_landmarks) -> np.ndarray:
-        """提取手部关键点"""
-        landmarks = np.zeros((21, 3))
-        if hand_landmarks:
-            for i, landmark in enumerate(hand_landmarks.landmark):
-                landmarks[i] = [landmark.x, landmark.y, landmark.z]
-        return landmarks
-    
-    def process_dataset(self, 
-                       annotation_file: str, 
-                       video_dir: str, 
-                       output_dir: str,
-                       num_workers: int = 4) -> None:
-        """处理整个数据集"""
-        
-        # 创建输出目录
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # 加载标注文件
-        with open(annotation_file, 'r', encoding='utf-8') as f:
-            annotations = json.load(f)
-        
-        logger.info(f"开始处理数据集，共 {len(annotations)} 个样本")
-        
-        # 准备任务
-        tasks = []
-        for item in annotations:
-            video_path = os.path.join(video_dir, item['video_file'])
-            if os.path.exists(video_path):
-                sample = VideoSample(
-                    video_path=video_path,
-                    gloss_sequence=item['gloss_sequence'],
-                    text=item['text'],
-                    start_frame=item.get('start_frame', 0),
-                    end_frame=item.get('end_frame', None)
-                )
-                tasks.append((item['video_id'], sample))
-        
-        # 并行处理
-        processed_count = 0
-        failed_count = 0
-        
-        with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            future_to_task = {
-                executor.submit(self._process_single_sample, video_id, sample, output_dir): (video_id, sample)
-                for video_id, sample in tasks
-            }
-            
-            for future in as_completed(future_to_task):
-                video_id, sample = future_to_task[future]
-                try:
-                    success = future.result()
-                    if success:
-                        processed_count += 1
-                    else:
-                        failed_count += 1
-                    
-                    if (processed_count + failed_count) % 100 == 0:
-                        logger.info(f"已处理: {processed_count + failed_count}/{len(tasks)}, "
-                                  f"成功: {processed_count}, 失败: {failed_count}")
-                        
-                except Exception as e:
-                    logger.error(f"处理样本 {video_id} 时出错: {e}")
-                    failed_count += 1
-        
-        logger.info(f"数据集处理完成！成功: {processed_count}, 失败: {failed_count}")
-        
-        # 生成数据集统计信息
-        self._generate_dataset_stats(output_dir, processed_count)
-    
-    def _process_single_sample(self, video_id: str, sample: VideoSample, output_dir: str) -> bool:
-        """处理单个样本"""
-        try:
-            # 提取关键点
-            keypoint_data = self.extract_keypoints_from_video(
-                sample.video_path, 
-                sample.start_frame, 
-                sample.end_frame
-            )
-            
-            if keypoint_data is None:
-                return False
-            
-            # 创建处理后的样本
-            processed_sample = ProcessedSample(
-                video_id=video_id,
-                gloss_sequence=sample.gloss_sequence,
-                text=sample.text,
-                keypoints=keypoint_data['keypoints'],
-                face_landmarks=keypoint_data['face_landmarks'],
-                pose_landmarks=keypoint_data['pose_landmarks'],
-                left_hand_landmarks=keypoint_data['left_hand_landmarks'],
-                right_hand_landmarks=keypoint_data['right_hand_landmarks'],
-                duration=keypoint_data['duration'],
-                fps=keypoint_data['fps']
-            )
-            
-            # 保存处理后的数据
-            output_file = os.path.join(output_dir, f"{video_id}.npz")
-            np.savez_compressed(
-                output_file,
-                video_id=video_id,
-                gloss_sequence=sample.gloss_sequence,
-                text=sample.text,
-                keypoints=processed_sample.keypoints,
-                face_landmarks=processed_sample.face_landmarks,
-                pose_landmarks=processed_sample.pose_landmarks,
-                left_hand_landmarks=processed_sample.left_hand_landmarks,
-                right_hand_landmarks=processed_sample.right_hand_landmarks,
-                duration=processed_sample.duration,
-                fps=processed_sample.fps
-            )
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"处理样本 {video_id} 失败: {e}")
-            return False
-    
-    def _generate_dataset_stats(self, output_dir: str, sample_count: int) -> None:
-        """生成数据集统计信息"""
-        stats = {
-            'total_samples': sample_count,
-            'target_fps': self.target_fps,
-            'image_size': self.image_size,
-            'min_sequence_length': self.min_sequence_length,
-            'max_sequence_length': self.max_sequence_length,
-            'keypoint_dimensions': 543,
-            'coordinate_dimensions': 3
-        }
-        
-        stats_file = os.path.join(output_dir, 'dataset_stats.json')
-        with open(stats_file, 'w', encoding='utf-8') as f:
-            json.dump(stats, f, ensure_ascii=False, indent=2)
-        
-        logger.info(f"数据集统计信息已保存到: {stats_file}")
-
-def main():
-    parser = argparse.ArgumentParser(description='手语数据预处理')
-    parser.add_argument('--annotation_file', required=True, help='标注文件路径')
-    parser.add_argument('--video_dir', required=True, help='视频文件目录')
-    parser.add_argument('--output_dir', required=True, help='输出目录')
-    parser.add_argument('--target_fps', type=int, default=25, help='目标帧率')
-    parser.add_argument('--min_length', type=int, default=10, help='最小序列长度')
-    parser.add_argument('--max_length', type=int, default=300, help='最大序列长度')
-    parser.add_argument('--num_workers', type=int, default=4, help='并行工作数')
-    
-    args = parser.parse_args()
-    
-    # 创建预处理器
-    preprocessor = SignLanguagePreprocessor(
-        target_fps=args.target_fps,
-        min_sequence_length=args.min_length,
-        max_sequence_length=args.max_length
-    )
-    
-    # 处理数据集
-    preprocessor.process_dataset(
-        annotation_file=args.annotation_file,
-        video_dir=args.video_dir,
-        output_dir=args.output_dir,
-        num_workers=args.num_workers
-    )
 
 if __name__ == "__main__":
     main()

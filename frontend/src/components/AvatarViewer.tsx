@@ -13,16 +13,15 @@ import {
   Grid,
 } from '@mui/material'
 import {
-  ThreeDRotation,
   Fullscreen,
   FullscreenExit,
   Refresh,
 } from '@mui/icons-material'
-import ThreeAvatar from './ThreeAvatar'
 import DiffusionPanel from './DiffusionPanel'
 import WebXRPanel from './WebXRPanel'
 import { SignSequence } from '../services/diffusionService'
 import { getSignPreset } from './SignLanguagePresets'
+import ImprovedAvatar from './avatar/ImprovedAvatar'
 
 interface HandKeypoint {
   x: number
@@ -51,7 +50,7 @@ const AvatarViewer: React.FC<AvatarViewerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [avatarStyle, setAvatarStyle] = useState<'cartoon' | 'realistic'>('cartoon')
+  // const [avatarStyle, setAvatarStyle] = useState<'cartoon' | 'realistic' | 'improved'>('cartoon')
   const [currentSignSequence, setCurrentSignSequence] = useState<SignSequence | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isXRActive, setIsXRActive] = useState(false)
@@ -83,8 +82,8 @@ const AvatarViewer: React.FC<AvatarViewerProps> = ({
       } else {
         // 检查文本中的单个字符
         const chars = text.split('')
-        const firstChar = chars[0]
-        const charPreset = getSignPreset(firstChar)
+        const firstCharLocal = chars[0]
+        const charPreset = getSignPreset(firstCharLocal)
         if (charPreset) {
           setAutoHandKeypoints({
             left: charPreset,
@@ -187,15 +186,6 @@ const AvatarViewer: React.FC<AvatarViewerProps> = ({
         </Typography>
 
         <Box>
-          <Tooltip title="切换风格">
-            <IconButton
-              size="small"
-              onClick={() => setAvatarStyle(prev => prev === 'cartoon' ? 'realistic' : 'cartoon')}
-            >
-              <ThreeDRotation />
-            </IconButton>
-          </Tooltip>
-
           <Tooltip title="重新加载">
             <IconButton
               size="small"
@@ -236,21 +226,16 @@ const AvatarViewer: React.FC<AvatarViewerProps> = ({
             </Typography>
           </Box>
         }>
-          <ThreeAvatar
-            text={text}
-            isActive={isActive}
-            animationType={getAvatarAnimation()}
-            signSequence={activeSignSequence ? {
-              keypoints: activeSignSequence.keypoints,
-              timestamps: activeSignSequence.timestamps,
-              duration: activeSignSequence.duration
-            } : undefined}
-            leftHandKeypoints={leftHandKeypoints || autoHandKeypoints.left}
-            rightHandKeypoints={rightHandKeypoints || autoHandKeypoints.right}
-            onAvatarMeshReady={handleAvatarMeshReady}
-          />
+          {/* 仅保留改进版 Avatar */}
+          <Box sx={{position:'absolute', inset:0}}>
+            <ImprovedAvatar
+              isActive={isActive}
+              leftHandKeypoints={leftHandKeypoints || autoHandKeypoints.left}
+              rightHandKeypoints={rightHandKeypoints || autoHandKeypoints.right}
+            />
+          </Box>
 
-          {/* 风格指示器 */}
+          {/* 风格指示器改为固定显示 */}
           <Box
             sx={{
               position: 'absolute',
@@ -267,7 +252,7 @@ const AvatarViewer: React.FC<AvatarViewerProps> = ({
               backdropFilter: 'blur(10px)',
             }}
           >
-            {avatarStyle === 'cartoon' ? '🎭 卡通风格' : '👤 写实风格'}
+            👤 高质量Avatar
           </Box>
 
           {/* 生成状态指示器 */}
@@ -303,7 +288,7 @@ const AvatarViewer: React.FC<AvatarViewerProps> = ({
                 position: 'absolute',
                 top: 16,
                 left: 16,
-                bgcolor: 'rgba(76, 175, 80, 0.9)',
+                bgcolor: 'rgba(76, 175, 76, 0.9)',
                 color: 'white',
                 px: 2,
                 py: 1,

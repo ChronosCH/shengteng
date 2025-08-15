@@ -12,7 +12,6 @@ import {
   CardContent,
   Alert,
   Snackbar,
-  Fade,
   CircularProgress,
   Avatar,
   LinearProgress,
@@ -31,15 +30,18 @@ import {
 } from '@mui/icons-material'
 
 import ErrorBoundary from '../components/ErrorBoundary'
+import SafeFade from '../components/SafeFade'
 import VideoCapture from '../components/VideoCapture'
 import SubtitleDisplay from '../components/SubtitleDisplay'
 import AvatarViewer from '../components/AvatarViewer'
 import { useSignLanguageRecognition } from '../hooks/useSignLanguageRecognition'
+import VideoFileRecognition from '../components/VideoFileRecognition'
 
 function RecognitionPage() {
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
 
   const {
     isRecognizing,
@@ -49,6 +51,12 @@ function RecognitionPage() {
     stopRecognition,
     websocketService,
   } = useSignLanguageRecognition()
+
+  // 确保组件完全挂载后再显示动画
+  useEffect(() => {
+    const timer = setTimeout(() => setIsMounted(true), 100)
+    return () => clearTimeout(timer)
+  }, [])
 
   // WebSocket连接状态监听
   useEffect(() => {
@@ -109,7 +117,7 @@ function RecognitionPage() {
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* 页面标题和状态 */}
-      <Fade in timeout={600}>
+      <SafeFade in={isMounted} timeout={600}>
         <Box sx={{ mb: 6, textAlign: 'center' }}>
           <Avatar
             sx={{
@@ -190,7 +198,7 @@ function RecognitionPage() {
             )}
           </Stack>
         </Box>
-      </Fade>
+      </SafeFade>
 
       {/* 优化的响应式布局 */}
       <Box sx={{ mb: 4 }}>
@@ -200,7 +208,7 @@ function RecognitionPage() {
             <Grid container spacing={3}>
               {/* 连接状态 */}
               <Grid item xs={12} md={4}>
-                <Fade in timeout={600}>
+                <SafeFade in={isMounted} timeout={600} key="connection-status">
                   <Card
                     elevation={0}
                     sx={{
@@ -256,12 +264,12 @@ function RecognitionPage() {
                       )}
                     </CardContent>
                   </Card>
-                </Fade>
+                </SafeFade>
               </Grid>
 
               {/* 识别控制 */}
               <Grid item xs={12} md={4}>
-                <Fade in timeout={800}>
+                <SafeFade in={isMounted} timeout={800} key="recognition-control">
                   <Card
                     elevation={0}
                     sx={{
@@ -322,12 +330,12 @@ function RecognitionPage() {
                       )}
                     </CardContent>
                   </Card>
-                </Fade>
+                </SafeFade>
               </Grid>
 
               {/* 识别结果预览 */}
               <Grid item xs={12} md={4}>
-                <Fade in timeout={1000}>
+                <SafeFade in={isMounted} timeout={1000} key="recognition-result">
                   <Card
                     elevation={0}
                     sx={{
@@ -362,7 +370,7 @@ function RecognitionPage() {
                       </Box>
                     </CardContent>
                   </Card>
-                </Fade>
+                </SafeFade>
               </Grid>
             </Grid>
           </Grid>
@@ -373,7 +381,7 @@ function RecognitionPage() {
       <Grid container spacing={4}>
         {/* 左侧：摄像头预览 */}
         <Grid item xs={12} lg={4}>
-          <Fade in timeout={1200}>
+          <SafeFade in={isMounted} timeout={1200} key="video-capture">
             <Card
               elevation={0}
               sx={{
@@ -401,12 +409,12 @@ function RecognitionPage() {
                 </Box>
               </CardContent>
             </Card>
-          </Fade>
+          </SafeFade>
         </Grid>
 
         {/* 中间：3D Avatar - 更大更突出 */}
         <Grid item xs={12} lg={8}>
-          <Fade in timeout={600}>
+          <SafeFade in={isMounted} timeout={600} key="avatar-viewer">
             <Paper 
               elevation={0}
               sx={{ 
@@ -513,7 +521,7 @@ function RecognitionPage() {
                 </ErrorBoundary>
               </Box>
             </Paper>
-          </Fade>
+          </SafeFade>
         </Grid>
       </Grid>
 
@@ -521,7 +529,7 @@ function RecognitionPage() {
       <Box sx={{ mt: 4 }}>
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
-            <Fade in timeout={1600}>
+            <SafeFade in={isMounted} timeout={1600} key="usage-tips">
               <Paper 
                 elevation={0}
                 sx={{ 
@@ -544,11 +552,11 @@ function RecognitionPage() {
                   • 适当调整与摄像头的距离
                 </Typography>
               </Paper>
-            </Fade>
+            </SafeFade>
           </Grid>
 
           <Grid item xs={12} md={6}>
-            <Fade in timeout={1800}>
+            <SafeFade in={isMounted} timeout={1800} key="privacy-info">
               <Paper 
                 elevation={0}
                 sx={{ 
@@ -569,7 +577,13 @@ function RecognitionPage() {
                   确保您的隐私和数据安全。所有传输均采用加密协议保护。
                 </Typography>
               </Paper>
-            </Fade>
+            </SafeFade>
+          </Grid>
+
+          <Grid item xs={12} md={12}>
+            <SafeFade in={isMounted} timeout={2000} key="video-file-recognition">
+              <VideoFileRecognition onResult={(r)=>console.log('offline video result', r)} />
+            </SafeFade>
           </Grid>
         </Grid>
       </Box>

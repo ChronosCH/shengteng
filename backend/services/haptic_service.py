@@ -17,7 +17,7 @@ from collections import deque
 
 try:
     import mindspore as ms
-    import mindspore.lite as mslite
+    import mindspore.context as ms_context
     from mindspore import Tensor
     MINDSPORE_AVAILABLE = True
 except ImportError:
@@ -712,7 +712,10 @@ class HapticService:
         """清理资源"""
         try:
             # 停止播放
-            await self.stop_playback()
+            self.stop_playback.set()
+            
+            # 等待一小段时间确保线程停止
+            await asyncio.sleep(0.1)
 
             # 关闭设备连接
             if self.haptic_device and self.haptic_device != "mock_haptic":

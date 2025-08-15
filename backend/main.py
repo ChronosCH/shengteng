@@ -25,6 +25,7 @@ from services.privacy_service import PrivacyService, AnonymizationConfig, Anonym
 from services.multimodal_sensor_service import MultimodalSensorService, SensorConfig, FusionMode
 from services.haptic_service import HapticService, HapticPattern, HapticIntensity
 from services.federated_learning_service import FederatedLearningService, ClientRole, AggregationMethod
+from services.sign_recognition_service import SignRecognitionService
 from utils.config import Settings
 from utils.logger import setup_logger
 from utils.database import db_manager
@@ -48,12 +49,13 @@ multimodal_sensor_service: MultimodalSensorService = None
 haptic_service: HapticService = None
 federated_learning_service: FederatedLearningService = None
 websocket_manager: WebSocketManager = None
+default_sign_recognition_service: Optional[SignRecognitionService] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    global mediapipe_service, cslr_service, diffusion_slp_service, privacy_service, multimodal_sensor_service, haptic_service, federated_learning_service, websocket_manager
+    global mediapipe_service, cslr_service, diffusion_slp_service, privacy_service, multimodal_sensor_service, haptic_service, federated_learning_service, websocket_manager, default_sign_recognition_service
 
     logger.info("正在启动 SignAvatar Web 后端服务...")
 
@@ -81,6 +83,10 @@ async def lifespan(app: FastAPI):
         await haptic_service.initialize()
         await federated_learning_service.initialize()
 
+        # 初始化手语识别服务
+        sign_recognition_service = SignRecognitionService(mediapipe_service, cslr_service)
+        default_sign_recognition_service = sign_recognition_service
+
         logger.info("所有服务初始化完成")
         yield
 
@@ -106,6 +112,8 @@ async def lifespan(app: FastAPI):
             await federated_learning_service.cleanup()
         if mediapipe_service:
             await mediapipe_service.cleanup()
+        if default_sign_recognition_service:
+            await default_sign_recognition_service.cleanup()
         
         # 清理基础设施服务
         await performance_monitor.cleanup()
@@ -262,6 +270,21 @@ class FileUploadResponse(BaseModel):
 
 class FileDeleteRequest(BaseModel):
     file_hash: str
+
+
+class VideoRecognitionStartResponse(BaseModel):
+    success: bool
+    task_id: Optional[str] = None
+    message: str
+
+class VideoRecognitionStatusResponse(BaseModel):
+    status: str
+    progress: Optional[float] = None
+    error: Optional[str] = None
+
+class VideoRecognitionResultResponse(BaseModel):
+    status: str
+    result: Optional[Dict] = None
 
 
 # API路由
@@ -1319,6 +1342,48 @@ async def cleanup_temp_files(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="清理临时文件失败"
         )
+
+
+@app.post("/api/sign/start", response_model=VideoRecognitionStartResponse)
+async def start_sign_recognition(
+    file_hash: str,
+    current_user: dict = Depends(security_manager.get_current_active_user)
+):
+    if not default_sign_recognition_service:
+        raise HTTPException(status_code=503, detail="Sign recognition service unavailable")
+    file_info = await file_manager.get_file_info(file_hash)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+    if file_info.get("user_id") != current_user["id"] and not current_user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+    if file_info.get("file_type") != "video":
+        raise HTTPException(status_code=400, detail="File is not a video")
+    task_id = await default_sign_recognition_service.start_video_recognition(file_info["file_path"])
+    return VideoRecognitionStartResponse(success=True, task_id=task_id, message="任务已启动")
+
+@app.get("/api/sign/status/{task_id}", response_model=VideoRecognitionStatusResponse)
+async def get_sign_status(task_id: str, current_user: dict = Depends(security_manager.get_current_active_user)):
+    if not default_sign_recognition_service:
+        raise HTTPException(status_code=503, detail="Sign recognition service unavailable")
+    data = await default_sign_recognition_service.get_status(task_id)
+    if data.get("status") == "not_found":
+        raise HTTPException(status_code=404, detail="Task not found")
+    return VideoRecognitionStatusResponse(status=data.get("status"), progress=data.get("progress"), error=data.get("error"))
+
+@app.get("/api/sign/result/{task_id}", response_model=VideoRecognitionResultResponse)
+async def get_sign_result(task_id: str, current_user: dict = Depends(security_manager.get_current_active_user)):
+    if not default_sign_recognition_service:
+        raise HTTPException(status_code=503, detail="Sign recognition service unavailable")
+    result = await default_sign_recognition_service.get_result(task_id)
+    if result.get("status") == "not_found":
+        raise HTTPException(status_code=404, detail="Task not found")
+    return VideoRecognitionResultResponse(status=result.get("status"), result=result.get("result"))
+
+
+# 挂载识别结果静态目录 (SRT 等)
+if not os.path.exists("temp/sign_results"):
+    os.makedirs("temp/sign_results", exist_ok=True)
+app.mount("/sign_results", StaticFiles(directory="temp/sign_results"), name="sign_results")
 
 
 if __name__ == "__main__":

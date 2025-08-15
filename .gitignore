@@ -198,6 +198,25 @@ logs/
 *.sqlite
 *.sqlite3
 
+# 数据集和大文件
+data/
+cache/
+checkpoints/
+output/
+models/*.h5
+models/*.pt
+models/*.pth
+models/*.pkl
+models/*.model
+
+# 参考项目和外部代码
+references/
+
+# 训练相关文件
+training.log
+simple_train_test.log
+*.log
+
 # 临时文件
 temp/
 tmp/
@@ -209,13 +228,14 @@ uploads/*/
 # Docker 相关（可选）
 .dockerignore
 
-# 模型文件（如果很大的话）
-# models/
-# *.model
-# *.pkl
-# *.h5
-# *.pt
-# *.pth
+# 大型模型文件
+*.model
+*.pkl
+*.h5
+*.pt
+*.pth
+*.ckpt
+*.safetensors
 
 # 配置文件（包含敏感信息）
 config.ini

@@ -1,0 +1,337 @@
+{
+  "training_configs": {
+    "tfnet_default": {
+      "description": "TFNet模型默认配置 - 标准训练",
+      "model_config": {
+        "model_type": "tfnet",
+        "vocab_size": 1000,
+        "d_model": 512,
+        "n_heads": 8,
+        "n_layers": 6,
+        "dropout": 0.1
+      },
+      "training_config": {
+        "batch_size": 16,
+        "learning_rate": 0.0001,
+        "weight_decay": 0.0001,
+        "epochs": 200,
+        "warmup_epochs": 10,
+        "gradient_clip_norm": 1.0
+      },
+      "data_config": {
+        "target_fps": 25,
+        "max_sequence_length": 300,
+        "min_sequence_length": 10,
+        "image_size": [224, 224],
+        "enable_keypoints": true,
+        "enable_augmentation": true
+      },
+      "optimization_config": {
+        "enable_amp": true,
+        "amp_level": "O1",
+        "enable_graph_kernel": true,
+        "enable_distributed": false,
+        "dataset_sink_mode": true
+      }
+    },
+    
+    "tfnet_fast": {
+      "description": "TFNet模型快速训练配置 - 用于快速验证",
+      "model_config": {
+        "model_type": "tfnet",
+        "vocab_size": 500,
+        "d_model": 256,
+        "n_heads": 4,
+        "n_layers": 3,
+        "dropout": 0.1
+      },
+      "training_config": {
+        "batch_size": 32,
+        "learning_rate": 0.001,
+        "weight_decay": 0.0001,
+        "epochs": 50,
+        "warmup_epochs": 5,
+        "gradient_clip_norm": 1.0
+      },
+      "data_config": {
+        "target_fps": 25,
+        "max_sequence_length": 150,
+        "min_sequence_length": 10,
+        "image_size": [112, 112],
+        "enable_keypoints": false,
+        "enable_augmentation": true
+      },
+      "optimization_config": {
+        "enable_amp": true,
+        "amp_level": "O2",
+        "enable_graph_kernel": true,
+        "enable_distributed": false,
+        "dataset_sink_mode": true
+      }
+    },
+    
+    "tfnet_high_quality": {
+      "description": "TFNet模型高质量配置 - 最佳性能",
+      "model_config": {
+        "model_type": "tfnet",
+        "vocab_size": 2000,
+        "d_model": 768,
+        "n_heads": 12,
+        "n_layers": 8,
+        "dropout": 0.1
+      },
+      "training_config": {
+        "batch_size": 8,
+        "learning_rate": 0.00005,
+        "weight_decay": 0.0001,
+        "epochs": 300,
+        "warmup_epochs": 20,
+        "gradient_clip_norm": 1.0
+      },
+      "data_config": {
+        "target_fps": 25,
+        "max_sequence_length": 500,
+        "min_sequence_length": 10,
+        "image_size": [256, 256],
+        "enable_keypoints": true,
+        "enable_augmentation": true
+      },
+      "optimization_config": {
+        "enable_amp": true,
+        "amp_level": "O1",
+        "enable_graph_kernel": true,
+        "enable_distributed": false,
+        "dataset_sink_mode": true
+      }
+    },
+    
+    "mstnet_default": {
+      "description": "MSTNet模型默认配置",
+      "model_config": {
+        "model_type": "mstnet",
+        "vocab_size": 1000,
+        "d_model": 512,
+        "n_heads": 8,
+        "n_layers": 6,
+        "dropout": 0.1
+      },
+      "training_config": {
+        "batch_size": 16,
+        "learning_rate": 0.0001,
+        "weight_decay": 0.0001,
+        "epochs": 200,
+        "warmup_epochs": 10,
+        "gradient_clip_norm": 1.0
+      },
+      "data_config": {
+        "target_fps": 25,
+        "max_sequence_length": 300,
+        "min_sequence_length": 10,
+        "image_size": [224, 224],
+        "enable_keypoints": true,
+        "enable_augmentation": true
+      },
+      "optimization_config": {
+        "enable_amp": true,
+        "amp_level": "O1",
+        "enable_graph_kernel": true,
+        "enable_distributed": false,
+        "dataset_sink_mode": true
+      }
+    },
+    
+    "vac_default": {
+      "description": "VAC模型默认配置",
+      "model_config": {
+        "model_type": "vac",
+        "vocab_size": 1000,
+        "d_model": 512,
+        "n_heads": 8,
+        "n_layers": 6,
+        "dropout": 0.1
+      },
+      "training_config": {
+        "batch_size": 16,
+        "learning_rate": 0.0001,
+        "weight_decay": 0.0001,
+        "epochs": 200,
+        "warmup_epochs": 10,
+        "gradient_clip_norm": 1.0
+      },
+      "data_config": {
+        "target_fps": 25,
+        "max_sequence_length": 300,
+        "min_sequence_length": 10,
+        "image_size": [224, 224],
+        "enable_keypoints": true,
+        "enable_augmentation": true
+      },
+      "optimization_config": {
+        "enable_amp": true,
+        "amp_level": "O1",
+        "enable_graph_kernel": true,
+        "enable_distributed": false,
+        "dataset_sink_mode": true
+      }
+    },
+    
+    "distributed_training": {
+      "description": "分布式训练配置 - 多卡训练",
+      "model_config": {
+        "model_type": "tfnet",
+        "vocab_size": 1000,
+        "d_model": 512,
+        "n_heads": 8,
+        "n_layers": 6,
+        "dropout": 0.1
+      },
+      "training_config": {
+        "batch_size": 32,
+        "learning_rate": 0.0002,
+        "weight_decay": 0.0001,
+        "epochs": 100,
+        "warmup_epochs": 10,
+        "gradient_clip_norm": 1.0
+      },
+      "data_config": {
+        "target_fps": 25,
+        "max_sequence_length": 300,
+        "min_sequence_length": 10,
+        "image_size": [224, 224],
+        "enable_keypoints": true,
+        "enable_augmentation": true
+      },
+      "optimization_config": {
+        "enable_amp": true,
+        "amp_level": "O2",
+        "enable_graph_kernel": true,
+        "enable_distributed": true,
+        "dataset_sink_mode": true
+      }
+    }
+  },
+  
+  "device_configs": {
+    "ascend_910": {
+      "description": "昇腾910配置",
+      "device_target": "Ascend",
+      "max_device_memory": "30GB",
+      "variable_memory_max_size": "31GB",
+      "recommended_batch_size": 16,
+      "max_workers": 8
+    },
+    
+    "ascend_310": {
+      "description": "昇腾310配置",
+      "device_target": "Ascend",
+      "max_device_memory": "8GB",
+      "variable_memory_max_size": "8GB",
+      "recommended_batch_size": 8,
+      "max_workers": 4
+    },
+    
+    "gpu_v100": {
+      "description": "NVIDIA V100配置",
+      "device_target": "GPU",
+      "max_device_memory": "32GB",
+      "variable_memory_max_size": "32GB",
+      "recommended_batch_size": 32,
+      "max_workers": 8
+    },
+    
+    "cpu_fallback": {
+      "description": "CPU回退配置",
+      "device_target": "CPU",
+      "max_device_memory": "16GB",
+      "variable_memory_max_size": "16GB",
+      "recommended_batch_size": 4,
+      "max_workers": 4
+    }
+  },
+  
+  "data_preprocessing": {
+    "ce_csl_standard": {
+      "description": "CE-CSL标准预处理配置",
+      "target_fps": 25,
+      "max_sequence_length": 300,
+      "min_sequence_length": 10,
+      "image_size": [224, 224],
+      "enable_keypoints": true,
+      "mediapipe_confidence": 0.5,
+      "enable_augmentation": true,
+      "horizontal_flip_prob": 0.5,
+      "brightness_factor": 0.2,
+      "contrast_factor": 0.2,
+      "random_crop_prob": 0.3,
+      "min_quality_score": 0.3,
+      "blur_threshold": 100.0
+    },
+    
+    "ce_csl_fast": {
+      "description": "CE-CSL快速预处理配置",
+      "target_fps": 15,
+      "max_sequence_length": 150,
+      "min_sequence_length": 5,
+      "image_size": [112, 112],
+      "enable_keypoints": false,
+      "enable_augmentation": false
+    },
+    
+    "ce_csl_high_quality": {
+      "description": "CE-CSL高质量预处理配置",
+      "target_fps": 30,
+      "max_sequence_length": 500,
+      "min_sequence_length": 20,
+      "image_size": [256, 256],
+      "enable_keypoints": true,
+      "mediapipe_confidence": 0.7,
+      "enable_augmentation": true,
+      "horizontal_flip_prob": 0.5,
+      "brightness_factor": 0.15,
+      "contrast_factor": 0.15,
+      "random_crop_prob": 0.2,
+      "min_quality_score": 0.5,
+      "blur_threshold": 150.0
+    }
+  },
+  
+  "common_paths": {
+    "data_root": "D:/shengteng/data/CE-CSL",
+    "output_dir": "D:/shengteng/output",
+    "checkpoint_dir": "D:/shengteng/checkpoints",
+    "log_dir": "D:/shengteng/logs",
+    "cache_dir": "D:/shengteng/cache"
+  },
+  
+  "training_presets": {
+    "quick_test": {
+      "description": "快速测试 - 验证代码正确性",
+      "config": "tfnet_fast",
+      "epochs": 5,
+      "batch_size": 8,
+      "max_sequence_length": 50
+    },
+    
+    "development": {
+      "description": "开发调试 - 中等规模训练",
+      "config": "tfnet_default",
+      "epochs": 50,
+      "enable_profiling": true
+    },
+    
+    "production": {
+      "description": "生产环境 - 完整训练",
+      "config": "tfnet_high_quality",
+      "epochs": 300,
+      "enable_profiling": false,
+      "enable_early_stopping": true
+    },
+    
+    "distributed": {
+      "description": "分布式训练 - 多卡并行",
+      "config": "distributed_training",
+      "enable_distributed": true,
+      "device_num": 8
+    }
+  }
+}

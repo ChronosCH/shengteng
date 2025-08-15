@@ -23,7 +23,6 @@ import {
   useMediaQuery,
   Avatar,
   Badge,
-  Fade,
   Tooltip,
   Collapse,
   Paper,
@@ -54,6 +53,7 @@ import {
 } from '@mui/icons-material'
 
 import StatusIndicator from './StatusIndicator'
+import SafeFade from './SafeFade'
 import { useSignLanguageRecognition } from '../hooks/useSignLanguageRecognition'
 
 interface LayoutProps {
@@ -95,6 +95,7 @@ function Layout({ children, darkMode, onToggleDarkMode }: LayoutProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<string[]>(['主要功能'])
   const [notifications, setNotifications] = useState(3)
+  const [isMounted, setIsMounted] = useState(false)
   
   const navigate = useNavigate()
   const location = useLocation()
@@ -104,6 +105,12 @@ function Layout({ children, darkMode, onToggleDarkMode }: LayoutProps) {
 
   const { isRecognizing, confidence, websocketService, stats } = useSignLanguageRecognition()
   const [isConnected, setIsConnected] = useState(false)
+
+  // 确保组件完全挂载后再显示动画
+  useEffect(() => {
+    const timer = setTimeout(() => setIsMounted(true), 100)
+    return () => clearTimeout(timer)
+  }, [])
 
   // 优化的WebSocket连接状态监听
   useEffect(() => {
@@ -256,7 +263,7 @@ function Layout({ children, darkMode, onToggleDarkMode }: LayoutProps) {
             <Collapse in={expandedGroups.includes(group.title)}>
               <List sx={{ pt: 0 }}>
                 {group.items.map((item, index) => (
-                  <Fade in timeout={200 + index * 50} key={item.text}>
+                  <SafeFade in={isMounted} timeout={200 + index * 50} key={`${group.title}-${item.text}`}>
                     <ListItem disablePadding sx={{ mb: 0.5 }}>
                       <Tooltip title={item.description} placement="right" arrow>
                         <ListItemButton
@@ -321,7 +328,7 @@ function Layout({ children, darkMode, onToggleDarkMode }: LayoutProps) {
                         </ListItemButton>
                       </Tooltip>
                     </ListItem>
-                  </Fade>
+                  </SafeFade>
                 ))}
               </List>
             </Collapse>
@@ -421,7 +428,7 @@ function Layout({ children, darkMode, onToggleDarkMode }: LayoutProps) {
                   sx={{ fontSize: '0.6rem' }}
                 />
                 <Chip
-                  label={`${Math.round(stats.averageAccuracy)}%准确`}
+                  label={`${Math.round(stats.averageConfidence * 100)}%准确`}
                   size="small"
                   variant="outlined"
                   color="success"

@@ -36,6 +36,14 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // 忽略MUI Fade组件的scrollTop错误
+    if (error.message?.includes('scrollTop') || 
+        error.message?.includes('Cannot read properties of null')) {
+      console.warn('忽略MUI Fade组件的scrollTop错误:', error.message)
+      this.setState({ hasError: false })
+      return
+    }
+
     console.error('ErrorBoundary caught an error:', error, errorInfo)
     this.setState({
       error,

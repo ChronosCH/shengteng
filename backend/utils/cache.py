@@ -746,6 +746,20 @@ class CacheManager:
             "evictions": 0
         }
         logger.info("缓存统计信息已重置")
+    
+    async def cleanup(self):
+        """清理缓存资源"""
+        try:
+            if self.redis_client:
+                await self.redis_client.close()
+                logger.info("Redis 连接已关闭")
+            
+            self.memory_cache.clear()
+            self.reset_stats()
+            logger.info("缓存管理器清理完成")
+            
+        except Exception as e:
+            logger.error(f"缓存清理失败: {e}")
 
 
 # 缓存装饰器
