@@ -20,6 +20,7 @@ from typing import Dict, List, Tuple, Optional
 import time
 from pathlib import Path
 import random
+import csv
 
 # 设置日志
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s:%(message)s')
@@ -30,25 +31,25 @@ class EnhancedCECSLConfig:
     """增强版CE-CSL训练配置"""
     # 模型配置
     vocab_size: int = 1000
-    d_model: int = 256
-    n_layers: int = 3
-    dropout: float = 0.3  # 增加dropout防止过拟合
+    d_model: int = 192         # 降低维度，减少显存/内存
+    n_layers: int = 2          # 降低层数
+    dropout: float = 0.3
     
     # 训练配置
-    batch_size: int = 2  # 减小batch size适应小数据集
-    learning_rate: float = 1e-4  # 降低学习率
-    weight_decay: float = 1e-3  # 增加正则化
-    epochs: int = 100  # 增加训练轮数
-    warmup_epochs: int = 10  # 学习率预热
+    batch_size: int = 1        # 更小的 batch
+    learning_rate: float = 1e-4
+    weight_decay: float = 1e-3
+    epochs: int = 100
+    warmup_epochs: int = 10
     
     # 数据配置
-    data_root: str = "../data/CE-CSL"
-    max_sequence_length: int = 100
-    image_size: Tuple[int, int] = (224, 224)
+    data_root: str = "../data/CS-CSL"
+    max_sequence_length: int = 64  # 先将序列长度降一点
+    image_size: Tuple[int, int] = (112, 112)  # 配合 2× 降采样
     
     # 数据增强配置
-    augment_factor: int = 10  # 每个样本增强10倍
-    noise_std: float = 0.01  # 噪声标准差
+    augment_factor: int = 1  # 关闭离线增广，改为在线
+    noise_std: float = 0.01
     time_stretch_range: Tuple[float, float] = (0.8, 1.2)  # 时间拉伸范围
     
     # 设备配置
@@ -130,9 +131,17 @@ class EnhancedCECSLDataset:
         self.split = split
         self.use_augmentation = use_augmentation and (split == 'train')
         self.data_root = Path(config.data_root)
-        
-        # 数据增强器
+        # 新增：在线增广器（即使不使用也要定义为 None 防止属性不存在）
         self.augmentor = DataAugmentor(config) if self.use_augmentation else None
+        
+        # 若首选 CS-CSL 不存在则回退到 CE-CSL
+        if not self.data_root.exists():
+            alt = Path(str(self.data_root).replace("CS-CSL", "CE-CSL"))
+            if alt.exists():
+                logger.warning(f"未找到数据目录 {self.data_root} ，自动回退到 {alt}")
+                self.data_root = alt
+            else:
+                logger.warning(f"未找到数据目录 {self.data_root} ，请确认数据是否已放置")
         
         # 加载词汇表
         self.word2idx = {}
@@ -142,11 +151,11 @@ class EnhancedCECSLDataset:
         # 加载数据
         self.samples = []
         self._load_data()
-        
-        # 应用数据增强
-        if self.use_augmentation:
-            self._apply_augmentation()
-        
+
+        # 重要：不再在初始化中做离线增广，转为在线增广
+        # if self.use_augmentation:
+        #     self._apply_augmentation()
+
         logger.info(f"加载 {split} 数据集: {len(self.samples)} 个样本")
         logger.info(f"词汇表大小: {len(self.word2idx)}")
     
@@ -175,97 +184,158 @@ class EnhancedCECSLDataset:
         logger.info(f"词汇表构建完成: {sorted(all_labels)}")
     
     def _load_data(self):
-        """加载预处理数据"""
+        """加载预处理数据（仅保存路径，懒加载）"""
         metadata_file = self.data_root / "processed" / self.split / f"{self.split}_metadata.json"
         
         if not metadata_file.exists():
             logger.warning(f"元数据文件不存在: {metadata_file}")
+            self._load_from_corpus()
             return
         
-        with open(metadata_file, 'r', encoding='utf-8') as f:
-            metadata = json.load(f)
-        
-        for item in metadata:
-            video_id = item['video_id']
-            label = item['text']
+        try:
+            with open(metadata_file, 'r', encoding='utf-8') as f:
+                metadata = json.load(f)
             
-            frames_file = self.data_root / "processed" / self.split / f"{video_id}_frames.npy"
-            
-            if frames_file.exists():
-                try:
-                    frames = self._load_frames(str(frames_file))
-                    label_idx = self.word2idx.get(label, self.word2idx['<UNK>'])
-                    
-                    self.samples.append({
-                        'frames': frames,
-                        'label': label,
-                        'label_idx': label_idx,
-                        'video_id': video_id,
-                        'is_augmented': False
-                    })
-                except Exception as e:
-                    logger.error(f"加载数据失败 {frames_file}: {e}")
+            for item in metadata:
+                video_id = item['video_id']
+                # 从corpus获取标签
+                label = self._get_label_from_corpus(video_id)
+                if label is None:
+                    continue
+                
+                frames_file = self.data_root / "processed" / self.split / f"{video_id}_frames.npy"
+                
+                if frames_file.exists():
+                    try:
+                        label_idx = self.word2idx.get(label, self.word2idx.get('<UNK>', 1))
+                        
+                        self.samples.append({
+                            'frames_path': str(frames_file),  # 仅保存路径
+                            'label': label,
+                            'label_idx': label_idx,
+                            'video_id': video_id,
+                            'is_augmented': False
+                        })
+                    except Exception as e:
+                        logger.error(f"记录数据失败 {frames_file}: {e}")
+        except Exception as e:
+            logger.error(f"加载元数据失败: {e}")
+            self._load_from_corpus()
     
-    def _load_frames(self, frames_file: str) -> np.ndarray:
-        """加载视频帧数据"""
-        frames = np.load(frames_file)
-        
-        if frames.dtype != np.float32:
-            frames = frames.astype(np.float32)
-        
-        if frames.max() > 1.0:
-            frames = frames / 255.0
-        
-        # 调整序列长度
-        if len(frames) > self.config.max_sequence_length:
-            indices = np.linspace(0, len(frames) - 1, self.config.max_sequence_length, dtype=int)
-            frames = frames[indices]
-        elif len(frames) < self.config.max_sequence_length:
-            pad_length = self.config.max_sequence_length - len(frames)
-            pad_frames = np.zeros((pad_length,) + frames.shape[1:], dtype=frames.dtype)
-            frames = np.concatenate([frames, pad_frames], axis=0)
-        
-        # 转换格式
-        if len(frames.shape) == 4 and frames.shape[-1] in [1, 3]:
-            frames = np.transpose(frames, (0, 3, 1, 2))
-        
-        return frames
-    
-    def _apply_augmentation(self):
-        """应用数据增强"""
-        if not self.augmentor:
+    def _load_from_corpus(self):
+        """直接从corpus文件加载数据（仅保存路径，懒加载）"""
+        corpus_file = self.data_root / f"{self.split}.corpus.csv"
+        if not corpus_file.exists():
+            logger.error(f"Corpus文件不存在: {corpus_file}")
             return
         
-        original_samples = self.samples.copy()
-        augmented_samples = []
+        with open(corpus_file, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                video_id = row['video_id']
+                label = row['label']
+                
+                frames_file = self.data_root / "processed" / self.split / f"{video_id}_frames.npy"
+                
+                if frames_file.exists():
+                    try:
+                        label_idx = self.word2idx.get(label, self.word2idx.get('<UNK>', 1))
+                        
+                        self.samples.append({
+                            'frames_path': str(frames_file),  # 仅保存路径
+                            'label': label,
+                            'label_idx': label_idx,
+                            'video_id': video_id,
+                            'is_augmented': False
+                        })
+                    except Exception as e:
+                        logger.error(f"记录数据失败 {frames_file}: {e}")
         
-        for sample in original_samples:
-            augmented_frames_list = self.augmentor.augment_sample(sample['frames'])
-            
-            # 添加增强样本（跳过第一个，因为是原始样本）
-            for i, aug_frames in enumerate(augmented_frames_list[1:], 1):
-                augmented_samples.append({
-                    'frames': aug_frames,
-                    'label': sample['label'],
-                    'label_idx': sample['label_idx'],
-                    'video_id': f"{sample['video_id']}_aug_{i}",
-                    'is_augmented': True
-                })
+        logger.info(f"从corpus加载 {len(self.samples)} 个样本")
+    
+    def _get_label_from_corpus(self, video_id: str) -> Optional[str]:
+        """从corpus文件获取视频的标签"""
+        corpus_file = self.data_root / f"{self.split}.corpus.csv"
+        if not corpus_file.exists():
+            return None
         
-        self.samples.extend(augmented_samples)
-        logger.info(f"数据增强完成: 原始 {len(original_samples)} -> 总计 {len(self.samples)}")
+        try:
+            with open(corpus_file, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row['video_id'] == video_id:
+                        return row['label']
+        except Exception as e:
+            logger.error(f"读取corpus文件失败: {e}")
+        
+        return None
     
     def __getitem__(self, index):
-        """获取单个样本"""
+        """懒加载 + 在线增广 + 可选 2× 降采样 + 展平"""
         sample = self.samples[index]
-        frames = sample['frames']
-        
-        # 展平帧数据
-        seq_len = frames.shape[0]
-        features = np.prod(frames.shape[1:])
-        frames_flat = frames.reshape(seq_len, features)
-        
-        return frames_flat.astype(np.float32), np.array(sample['label_idx'], dtype=np.int32)
+        path = sample.get('frames_path')
+
+        # 1) 懒加载 + 内存映射
+        frames = np.load(path, mmap_mode='r')  # 可能是 (T,H,W,C) 或 (T,C,H,W)
+
+        # 2) 统一为 (T,H,W,C) 以便处理，再转回 (T,C,H,W)
+        if frames.ndim != 4:
+            raise ValueError(f"不支持的帧维度: {frames.shape}")
+        if frames.shape[-1] in (1, 3):
+            layout = "THWC"
+            thwc = frames
+        elif frames.shape[1] in (1, 3):
+            layout = "TCHW"
+            # 转为 THWC
+            thwc = np.transpose(frames, (0, 2, 3, 1))
+        else:
+            # 尝试猜测通道在最后
+            layout = "THWC"
+            thwc = frames
+
+        # 3) 可选 2× 降采样（224->112），与 config.image_size 配套
+        if thwc.shape[1] == 224 and thwc.shape[2] == 224 and self.config.image_size == (112, 112):
+            thwc = thwc[:, ::2, ::2, :]
+
+        # 4) 归一化到 [0,1] + float32
+        if thwc.dtype != np.float32:
+            thwc = thwc.astype(np.float32, copy=False)
+        if thwc.max() > 1.0:
+            thwc = thwc / 255.0
+
+        # 5) 在线增广（仅训练集）
+        if self.use_augmentation and self.augmentor is not None:
+            # 简化的在线增广组合
+            if random.random() < 0.7:
+                thwc = self.augmentor.add_noise(thwc)
+            if random.random() < 0.5:
+                thwc = self.augmentor.time_stretch(thwc)  # 会改变时间长度
+            if random.random() < 0.6:
+                thwc = self.augmentor.spatial_jitter(thwc)
+
+        # 6) 转回 (T,C,H,W)
+        if thwc.ndim != 4:
+            raise ValueError(f"增广后帧维度异常: {thwc.shape}")
+        tchw = np.transpose(thwc, (0, 3, 1, 2))
+
+        # 7) 调整序列长度
+        seq_len = tchw.shape[0]
+        if seq_len > self.config.max_sequence_length:
+            idx = np.linspace(0, seq_len - 1, self.config.max_sequence_length, dtype=int)
+            tchw = tchw[idx]
+        elif seq_len < self.config.max_sequence_length:
+            pad = np.zeros(
+                (self.config.max_sequence_length - seq_len,) + tchw.shape[1:],
+                dtype=tchw.dtype
+            )
+            tchw = np.concatenate([tchw, pad], axis=0)
+
+        # 8) 展平为 (T, F)
+        T = tchw.shape[0]
+        F = int(np.prod(tchw.shape[1:], dtype=np.int64))
+        frames_flat = tchw.reshape(T, F).astype(np.float32, copy=False)
+
+        return frames_flat, np.array(sample['label_idx'], dtype=np.int32)
     
     def __len__(self):
         return len(self.samples)
@@ -410,8 +480,14 @@ class EnhancedCECSLTrainer:
         self.lr_scheduler = None
         self.early_stopping = None
         
-        # 设置设备
-        ms.set_context(mode=ms.GRAPH_MODE, device_target=config.device_target)
+        # 设置设备（新接口优先，兼容旧接口）
+        try:
+            if hasattr(ms, "set_device"):
+                ms.set_device(config.device_target)
+            else:
+                ms.set_context(mode=ms.GRAPH_MODE, device_target=config.device_target)
+        except Exception:
+            ms.set_context(mode=ms.GRAPH_MODE, device_target=config.device_target)
         
         # 创建输出目录
         self.output_dir = Path("./output")
@@ -430,17 +506,21 @@ class EnhancedCECSLTrainer:
         if len(train_data) == 0:
             raise ValueError("训练数据集为空，请检查数据路径和预处理数据")
         
-        # 创建MindSpore数据集
+        # 创建MindSpore数据集，控制并行度避免内存峰值
         self.train_dataset = GeneratorDataset(
-            train_data, 
+            train_data,
             column_names=["sequence", "label"],
-            shuffle=True
+            shuffle=True,
+            num_parallel_workers=1,
+            python_multiprocessing=False
         ).batch(self.config.batch_size)
-        
+
         self.val_dataset = GeneratorDataset(
-            val_data, 
+            val_data,
             column_names=["sequence", "label"],
-            shuffle=False
+            shuffle=False,
+            num_parallel_workers=1,
+            python_multiprocessing=False
         ).batch(self.config.batch_size)
         
         # 保存词汇表信息
@@ -673,3 +753,55 @@ class EnhancedCECSLTrainer:
             json.dump(vocab_info, f, ensure_ascii=False, indent=2)
         
         logger.info("✅ 增强版模型和词汇表保存完成")
+def main():
+    """主函数 - 运行增强版CE-CSL训练"""
+    try:
+        # 创建配置（已更新默认值以更省内存）
+        config = EnhancedCECSLConfig()
+        
+        # 打印配置信息
+        logger.info("=" * 60)
+        logger.info("增强版CE-CSL手语识别训练器启动")
+        logger.info("=" * 60)
+        logger.info(f"数据路径: {config.data_root}")
+        logger.info(f"批次大小: {config.batch_size}")
+        logger.info(f"学习率: {config.learning_rate}")
+        logger.info(f"训练轮数: {config.epochs}")
+        logger.info(f"设备: {config.device_target}")
+        logger.info(f"数据增强倍数: {config.augment_factor}")
+        logger.info("=" * 60)
+        
+        # 创建训练器
+        trainer = EnhancedCECSLTrainer(config)
+        
+        # 加载数据
+        logger.info("步骤 1: 加载数据...")
+        trainer.load_data()
+        
+        # 构建模型
+        logger.info("步骤 2: 构建模型...")
+        trainer.build_model()
+        
+        # 开始训练
+        logger.info("步骤 3: 开始训练...")
+        model = trainer.train()
+        
+        # 保存模型
+        logger.info("步骤 4: 保存模型...")
+        final_model_path = trainer.output_dir / "enhanced_cecsl_final_model.ckpt"
+        trainer.save_model(str(final_model_path))
+        
+        logger.info("=" * 60)
+        logger.info("✅ 增强版CE-CSL训练完成!")
+        logger.info(f"最终模型保存至: {final_model_path}")
+        logger.info(f"训练历史保存至: {trainer.output_dir / 'enhanced_training_history.json'}")
+        logger.info("=" * 60)
+        
+    except Exception as e:
+        logger.error(f"❌ 训练过程中发生错误: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

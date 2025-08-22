@@ -175,12 +175,20 @@ class EnhancedUltraSimpleDataset:
         """加载数据"""
         data_path = Path(self.config.data_dir) / f"{self.split}.json"
         
+        # 若首选 CS-CSL 路径不存在，回退到 CE-CSL
+        if not data_path.exists() and "CS-CSL" in str(self.config.data_dir):
+            alt_dir = str(self.config.data_dir).replace("CS-CSL", "CE-CSL")
+            alt_path = Path(alt_dir) / f"{self.split}.json"
+            if alt_path.exists():
+                logger.warning(f"未找到 {data_path} ，自动回退到 {alt_path}")
+                data_path = alt_path
+        
         if not data_path.exists():
             logger.warning(f"数据文件不存在: {data_path}")
             # 创建模拟数据
             self._create_mock_data()
             return
-            
+        
         try:
             with open(data_path, 'r', encoding='utf-8') as f:
                 raw_data = json.load(f)
@@ -188,7 +196,7 @@ class EnhancedUltraSimpleDataset:
             logger.warning(f"加载数据失败: {e}，使用模拟数据")
             self._create_mock_data()
             return
-            
+        
         logger.info(f"📊 加载数据...")
         
         # 处理原始数据

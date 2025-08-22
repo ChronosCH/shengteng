@@ -296,7 +296,7 @@
   },
   
   "common_paths": {
-    "data_root": "D:/shengteng/data/CE-CSL",
+    "data_root": "data/CE-CSL",
     "output_dir": "D:/shengteng/output",
     "checkpoint_dir": "D:/shengteng/checkpoints",
     "log_dir": "D:/shengteng/logs",

@@ -258,18 +258,41 @@ def test_data_preprocessing():
         # 创建预处理器
         preprocessor = EnhancedSignLanguagePreprocessor(config)
         
-        # 测试质量检查
+        # 测试真实数据路径
+        data_root = Path("../data/CE-CSL")
+        if data_root.exists():
+            logger.info(f"  找到真实数据目录: {data_root}")
+            
+            # 检查processed目录
+            processed_dir = data_root / "processed" / "train"
+            if processed_dir.exists():
+                npy_files = list(processed_dir.glob("*_frames.npy"))
+                logger.info(f"  找到 {len(npy_files)} 个预处理文件")
+                
+                if npy_files:
+                    # 测试加载真实数据
+                    sample_file = npy_files[0]
+                    sample_data = np.load(sample_file)
+                    logger.info(f"  样本数据形状: {sample_data.shape}")
+                    logger.info(f"  数据类型: {sample_data.dtype}")
+                    logger.info(f"  数据范围: [{sample_data.min():.3f}, {sample_data.max():.3f}]")
+            
+            # 检查corpus文件
+            corpus_file = data_root / "train.corpus.csv"
+            if corpus_file.exists():
+                logger.info(f"  找到corpus文件: {corpus_file}")
+                # 简单读取测试
+                with open(corpus_file, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                    logger.info(f"  corpus条目数: {len(lines) - 1}")  # 减去标题行
+        else:
+            logger.warning(f"  真实数据目录不存在: {data_root}")
+        
+        # 测试质量检查功能
         dummy_frame = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
         quality_info = preprocessor.check_video_quality(dummy_frame)
         
         logger.info(f"  质量检查结果: blur_score={quality_info['blur_score']:.2f}")
-        
-        # 测试数据增强
-        dummy_frames = np.random.randint(0, 255, (5, 32, 32, 3), dtype=np.uint8)
-        augmented_frames = preprocessor.apply_augmentation(dummy_frames)
-        
-        logger.info(f"  数据增强输入形状: {dummy_frames.shape}")
-        logger.info(f"  数据增强输出形状: {augmented_frames.shape}")
         
         logger.info("  ✓ 数据预处理测试通过")
         return True

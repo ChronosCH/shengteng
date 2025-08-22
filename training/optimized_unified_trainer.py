@@ -46,7 +46,7 @@ class OptimizedTrainingConfig:
     num_workers: int = 4
     
     # 数据路径
-    data_root: str = "./data/CE-CSL"
+    data_root: str = "./data/CS-CSL"
     output_dir: str = "./output"
     checkpoint_dir: str = "./checkpoints"
     
@@ -90,6 +90,13 @@ class OptimizedSignLanguageTrainer:
     
     def __init__(self, config: OptimizedTrainingConfig):
         self.config = config
+        # 当传入的 data_root 目录不存在时，尝试改用 CE-CSL 兼容目录
+        import os
+        if not os.path.exists(self.config.data_root):
+            fallback = self.config.data_root.replace("CS-CSL", "CE-CSL")
+            if os.path.exists(fallback):
+                logger.warning(f"未找到 {self.config.data_root} ，自动回退到 {fallback}")
+                self.config.data_root = fallback
         self.vocab = None
         self.model = None
         self.optimizer = None

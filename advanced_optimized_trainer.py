@@ -44,7 +44,7 @@ class AdvancedOptimizedConfig:
         self.dropout_rate = 0.05  # 轻微dropout
         
         # 数据配置
-        self.data_dir = "data/CE-CSL"
+        self.data_dir = "data/CS-CSL"
         self.augmentation_factor = 15  # 更激进的增强
         self.max_frames = 80  # 减少填充开销
         self.ensemble_models = 3  # 集成学习
