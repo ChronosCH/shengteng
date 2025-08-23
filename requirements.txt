@@ -2,6 +2,7 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 websockets==12.0
+python-multipart==0.0.6
 
 # AI/ML Libraries
 # mindspore==2.7.0rc1  # Already installed
@@ -13,7 +14,6 @@ scipy==1.11.4
 # Data Processing
 pydantic==2.5.0
 pydantic-settings==2.1.0
-python-multipart==0.0.6
 aiofiles==23.2.0
 aiosqlite==0.19.0
 asyncio-mqtt==0.16.1

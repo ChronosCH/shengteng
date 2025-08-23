@@ -36,6 +36,7 @@ import SubtitleDisplay from '../components/SubtitleDisplay'
 import AvatarViewer from '../components/AvatarViewer'
 import { useSignLanguageRecognition } from '../hooks/useSignLanguageRecognition'
 import VideoFileRecognition from '../components/VideoFileRecognition'
+import EnhancedVideoRecognition from '../components/EnhancedVideoRecognition'
 
 function RecognitionPage() {
   const [isConnected, setIsConnected] = useState(false)
@@ -581,8 +582,8 @@ function RecognitionPage() {
           </Grid>
 
           <Grid item xs={12} md={12}>
-            <SafeFade in={isMounted} timeout={2000} key="video-file-recognition">
-              <VideoFileRecognition onResult={(r)=>console.log('offline video result', r)} />
+            <SafeFade in={isMounted} timeout={2200} key="enhanced-video-recognition">
+              <EnhancedVideoRecognition onResult={(r)=>console.log('enhanced cecsl result', r)} />
             </SafeFade>
           </Grid>
         </Grid>

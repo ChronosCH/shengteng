@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>增强版CE-CSL手语识别模型测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 20px 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat-item {
+            background: #f8f9ff;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            border: 2px solid #e0e7ff;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+
+        .test-section {
+            margin: 30px 0;
+        }
+
+        .test-controls {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+        }
+
+        .result-display {
+            background: #f8f9ff;
+            border: 2px solid #e0e7ff;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            min-height: 150px;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-label {
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .result-value {
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .confidence-bar {
+            background: #e5e7eb;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 5px 0;
+        }
+
+        .confidence-fill {
+            background: linear-gradient(90deg, #10b981, #34d399);
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-success { background: #10b981; }
+        .status-error { background: #ef4444; }
+        .status-warning { background: #f59e0b; }
+
+        .error-message {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .success-message {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #166534;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .landmark-visualization {
+            background: #1f2937;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            color: white;
+            font-family: 'Courier New', monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .landmark-frame {
+            margin: 10px 0;
+            padding: 10px;
+            background: #374151;
+            border-radius: 5px;
+        }
+
+        .responsive-table {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        th {
+            background: #f8f9ff;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .test-controls {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 增强版CE-CSL手语识别模型测试</h1>
+            <p>基于训练好的enhanced_cecsl_final_model.ckpt模型的Web应用集成测试</p>
+        </div>
+
+        <!-- 服务状态卡片 -->
+        <div class="card">
+            <h2>📊 服务状态</h2>
+            <div id="serviceStatus">
+                <div class="loading"></div> 正在检查服务状态...
+            </div>
+            <div class="stats-grid" id="statsGrid" style="display: none;">
+                <div class="stat-item">
+                    <div class="stat-value" id="modelStatus">--</div>
+                    <div class="stat-label">模型状态</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="vocabSize">--</div>
+                    <div class="stat-label">词汇表大小</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalPredictions">--</div>
+                    <div class="stat-label">总预测次数</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="avgInferenceTime">--</div>
+                    <div class="stat-label">平均推理时间(秒)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 视频上传测试卡片 -->
+        <div class="card">
+            <h2>🎥 视频手语识别测试</h2>
+            <div class="test-section">
+                <p>上传手语视频文件进行识别测试（支持 MP4, AVI, MOV, MKV, WEBM 格式）：</p>
+                
+                <div class="upload-area" id="uploadArea" 
+                     style="border: 2px dashed #d1d5db; border-radius: 10px; padding: 40px; text-align: center; margin: 20px 0; cursor: pointer; transition: all 0.3s ease;"
+                     onmouseenter="this.style.borderColor='#667eea'; this.style.backgroundColor='#f8f9ff';"
+                     onmouseleave="this.style.borderColor='#d1d5db'; this.style.backgroundColor='transparent';"
+                     onclick="document.getElementById('videoFile').click()">
+                    <div id="uploadContent">
+                        <div style="font-size: 48px; margin-bottom: 15px;">📤</div>
+                        <p style="font-size: 18px; color: #374151; margin-bottom: 10px;">点击上传视频文件</p>
+                        <p style="font-size: 14px; color: #6b7280;">或将文件拖拽到此区域</p>
+                        <p style="font-size: 12px; color: #9ca3af; margin-top: 10px;">最大文件大小: 100MB</p>
+                    </div>
+                </div>
+                
+                <input type="file" id="videoFile" accept="video/*" style="display: none;" onchange="handleVideoUpload(event)">
+                
+                <div id="uploadProgress" style="display: none; margin: 20px 0;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                        <span id="progressText">正在上传...</span>
+                        <span id="progressPercent">0%</span>
+                    </div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="progressBar" style="width: 0%;"></div>
+                    </div>
+                </div>
+                
+                <div class="result-display" id="videoResults" style="display: none;">
+                    <h3>识别结果</h3>
+                    <div id="videoResultContent"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 模型测试卡片 -->
+        <div class="card">
+            <h2>🧪 模型预测测试</h2>
+            <div class="test-section">
+                <p>点击下方按钮生成测试数据并进行手语识别预测：</p>
+                <div class="test-controls">
+                    <button class="btn" onclick="runSingleTest()">
+                        <span id="singleTestBtn">单次预测测试</span>
+                    </button>
+                    <button class="btn btn-secondary" onclick="runBatchTest()">
+                        <span id="batchTestBtn">批量测试 (5次)</span>
+                    </button>
+                    <button class="btn btn-secondary" onclick="generateCustomLandmarks()">
+                        自定义测试数据
+                    </button>
+                </div>
+                
+                <div class="result-display" id="testResults">
+                    <p style="text-align: center; color: #6b7280;">点击测试按钮开始预测</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 测试历史卡片 -->
+        <div class="card">
+            <h2>📈 测试历史</h2>
+            <div class="responsive-table">
+                <table id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>预测文本</th>
+                            <th>置信度</th>
+                            <th>推理时间</th>
+                            <th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody">
+                        <tr>
+                            <td colspan="5" style="text-align: center; color: #6b7280;">暂无测试历史</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8001/api';
+        let testHistory = [];
+
+        // 初始化页面
+        document.addEventListener('DOMContentLoaded', function() {
+            checkServiceStatus();
+            loadTestHistory();
+        });
+
+        // 检查服务状态
+        async function checkServiceStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/enhanced-cecsl/stats`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateServiceStatus(data);
+                } else {
+                    showError('服务状态检查失败: ' + data.message);
+                }
+            } catch (error) {
+                showError('无法连接到后端服务: ' + error.message);
+            }
+        }
+
+        // 更新服务状态显示
+        function updateServiceStatus(data) {
+            const statusElement = document.getElementById('serviceStatus');
+            const statsGrid = document.getElementById('statsGrid');
+            
+            if (data.model_info.is_loaded) {
+                statusElement.innerHTML = `
+                    <div class="success-message">
+                        <span class="status-indicator status-success"></span>
+                        增强版CE-CSL服务运行正常
+                    </div>
+                `;
+                
+                // 更新统计数据
+                document.getElementById('modelStatus').textContent = '已加载';
+                document.getElementById('vocabSize').textContent = data.model_info.vocab_size;
+                document.getElementById('totalPredictions').textContent = data.stats.predictions;
+                document.getElementById('avgInferenceTime').textContent = 
+                    data.stats.avg_inference_time.toFixed(4);
+                
+                statsGrid.style.display = 'grid';
+            } else {
+                statusElement.innerHTML = `
+                    <div class="error-message">
+                        <span class="status-indicator status-error"></span>
+                        模型未加载或服务异常
+                    </div>
+                `;
+            }
+        }
+
+        // 生成测试关键点数据
+        function generateTestLandmarks(numFrames = 30) {
+            const landmarks = [];
+            const featuresPerFrame = 543 * 3; // MediaPipe 关键点数据
+            
+            for (let frame = 0; frame < numFrames; frame++) {
+                const frameData = [];
+                for (let i = 0; i < featuresPerFrame; i++) {
+                    // 生成归一化的随机坐标 (0.1-0.9)
+                    frameData.push(Math.random() * 0.8 + 0.1);
+                }
+                landmarks.push(frameData);
+            }
+            
+            return landmarks;
+        }
+
+        // 单次预测测试
+        async function runSingleTest() {
+            const btn = document.getElementById('singleTestBtn');
+            const originalText = btn.textContent;
+            
+            try {
+                btn.innerHTML = '<div class="loading"></div> 预测中...';
+                
+                const landmarks = generateTestLandmarks(30);
+                const result = await makePrediction(landmarks, '单次测试');
+                
+                displayTestResult(result);
+                addToHistory(result);
+                
+            } catch (error) {
+                showError('预测失败: ' + error.message);
+            } finally {
+                btn.textContent = originalText;
+            }
+        }
+
+        // 批量测试
+        async function runBatchTest() {
+            const btn = document.getElementById('batchTestBtn');
+            const originalText = btn.textContent;
+            
+            try {
+                btn.innerHTML = '<div class="loading"></div> 批量测试中...';
+                
+                const results = [];
+                for (let i = 0; i < 5; i++) {
+                    btn.innerHTML = `<div class="loading"></div> 测试中 (${i + 1}/5)...`;
+                    const landmarks = generateTestLandmarks(Math.floor(Math.random() * 40) + 20);
+                    const result = await makePrediction(landmarks, `批量测试 #${i + 1}`);
+                    results.push(result);
+                    addToHistory(result);
+                    
+                    // 短暂延迟避免请求过于频繁
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                
+                displayBatchResults(results);
+                
+            } catch (error) {
+                showError('批量测试失败: ' + error.message);
+            } finally {
+                btn.textContent = originalText;
+            }
+        }
+
+        // 发送预测请求
+        async function makePrediction(landmarks, description) {
+            const response = await fetch(`${API_BASE}/enhanced-cecsl/test`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    landmarks: landmarks,
+                    description: description
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+            }
+
+            const data = await response.json();
+            if (!data.success) {
+                throw new Error(data.message);
+            }
+
+            return {
+                ...data.prediction,
+                description: description,
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        // 显示单次测试结果
+        function displayTestResult(result) {
+            const resultsDiv = document.getElementById('testResults');
+            
+            resultsDiv.innerHTML = `
+                <div class="result-item">
+                    <span class="result-label">预测文本:</span>
+                    <span class="result-value">${result.text || 'N/A'}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">置信度:</span>
+                    <span class="result-value">${(result.confidence * 100).toFixed(2)}%</span>
+                </div>
+                <div class="confidence-bar">
+                    <div class="confidence-fill" style="width: ${result.confidence * 100}%"></div>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">手势序列:</span>
+                    <span class="result-value">${result.gloss_sequence.join(', ') || 'N/A'}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">推理时间:</span>
+                    <span class="result-value">${(result.inference_time * 1000).toFixed(2)}ms</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">状态:</span>
+                    <span class="result-value">
+                        <span class="status-indicator ${result.status === 'success' ? 'status-success' : 'status-error'}"></span>
+                        ${result.status}
+                    </span>
+                </div>
+                ${result.error ? `<div class="error-message">错误: ${result.error}</div>` : ''}
+            `;
+        }
+
+        // 显示批量测试结果
+        function displayBatchResults(results) {
+            const avgConfidence = results.reduce((sum, r) => sum + r.confidence, 0) / results.length;
+            const avgTime = results.reduce((sum, r) => sum + r.inference_time, 0) / results.length;
+            const successCount = results.filter(r => r.status === 'success').length;
+            
+            const resultsDiv = document.getElementById('testResults');
+            resultsDiv.innerHTML = `
+                <h3>批量测试结果汇总</h3>
+                <div class="result-item">
+                    <span class="result-label">测试次数:</span>
+                    <span class="result-value">${results.length}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">成功次数:</span>
+                    <span class="result-value">${successCount}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">成功率:</span>
+                    <span class="result-value">${((successCount / results.length) * 100).toFixed(1)}%</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">平均置信度:</span>
+                    <span class="result-value">${(avgConfidence * 100).toFixed(2)}%</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">平均推理时间:</span>
+                    <span class="result-value">${(avgTime * 1000).toFixed(2)}ms</span>
+                </div>
+            `;
+        }
+
+        // 添加到历史记录
+        function addToHistory(result) {
+            testHistory.unshift({
+                ...result,
+                id: Date.now()
+            });
+            
+            // 限制历史记录数量
+            if (testHistory.length > 50) {
+                testHistory = testHistory.slice(0, 50);
+            }
+            
+            updateHistoryTable();
+            saveTestHistory();
+        }
+
+        // 更新历史记录表格
+        function updateHistoryTable() {
+            const tbody = document.getElementById('historyBody');
+            
+            if (testHistory.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #6b7280;">暂无测试历史</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = testHistory.slice(0, 10).map(item => `
+                <tr>
+                    <td>${new Date(item.timestamp).toLocaleString()}</td>
+                    <td>${item.text || 'N/A'}</td>
+                    <td>${(item.confidence * 100).toFixed(1)}%</td>
+                    <td>${(item.inference_time * 1000).toFixed(1)}ms</td>
+                    <td>
+                        <span class="status-indicator ${item.status === 'success' ? 'status-success' : 'status-error'}"></span>
+                        ${item.status}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // 保存测试历史到本地存储
+        function saveTestHistory() {
+            localStorage.setItem('enhanced_cecsl_test_history', JSON.stringify(testHistory));
+        }
+
+        // 加载测试历史
+        function loadTestHistory() {
+            const saved = localStorage.getItem('enhanced_cecsl_test_history');
+            if (saved) {
+                testHistory = JSON.parse(saved);
+                updateHistoryTable();
+            }
+        }
+
+        // 显示错误信息
+        function showError(message) {
+            const statusElement = document.getElementById('serviceStatus');
+            statusElement.innerHTML = `
+                <div class="error-message">
+                    <span class="status-indicator status-error"></span>
+                    ${message}
+                </div>
+            `;
+        }
+
+        // 自定义测试数据
+        function generateCustomLandmarks() {
+            const frames = prompt('请输入帧数 (10-100):', '30');
+            if (frames && !isNaN(frames)) {
+                const numFrames = Math.max(10, Math.min(100, parseInt(frames)));
+                const landmarks = generateTestLandmarks(numFrames);
+                
+                makePrediction(landmarks, `自定义测试 (${numFrames}帧)`)
+                    .then(result => {
+                        displayTestResult(result);
+                        addToHistory(result);
+                    })
+                    .catch(error => {
+                        showError('自定义测试失败: ' + error.message);
+                    });
+            }
+        }
+
+        // === 视频处理相关函数 ===
+        
+        // 处理视频文件上传
+        async function handleVideoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // 验证文件类型
+            const allowedTypes = ['video/mp4', 'video/avi', 'video/mov', 'video/quicktime', 'video/x-msvideo', 'video/webm', 'video/x-matroska'];
+            if (!allowedTypes.includes(file.type)) {
+                showError('不支持的文件格式，请上传 MP4, AVI, MOV, MKV 或 WEBM 格式的视频文件');
+                return;
+            }
+            
+            // 验证文件大小 (100MB)
+            if (file.size > 100 * 1024 * 1024) {
+                showError('文件大小超过限制，请上传小于100MB的视频文件');
+                return;
+            }
+            
+            try {
+                await uploadAndProcessVideo(file);
+            } catch (error) {
+                showError('视频处理失败: ' + error.message);
+            }
+        }
+        
+        // 上传并处理视频
+        async function uploadAndProcessVideo(file) {
+            const uploadArea = document.getElementById('uploadArea');
+            const uploadProgress = document.getElementById('uploadProgress');
+            const videoResults = document.getElementById('videoResults');
+            const progressText = document.getElementById('progressText');
+            const progressPercent = document.getElementById('progressPercent');
+            const progressBar = document.getElementById('progressBar');
+            
+            // 显示上传进度
+            uploadArea.style.display = 'none';
+            uploadProgress.style.display = 'block';
+            videoResults.style.display = 'none';
+            
+            try {
+                // 创建FormData
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // 上传文件
+                const uploadResponse = await uploadVideoWithProgress(formData, (progress) => {
+                    const percent = Math.round(progress * 30); // 上传占30%
+                    progressText.textContent = '正在上传视频...';
+                    progressPercent.textContent = `${percent}%`;
+                    progressBar.style.width = `${percent}%`;
+                });
+                
+                if (!uploadResponse.success) {
+                    throw new Error(uploadResponse.message || '上传失败');
+                }
+                
+                const taskId = uploadResponse.task_id;
+                
+                // 轮询处理结果
+                progressText.textContent = '正在处理视频...';
+                const result = await pollVideoProcessingResult(taskId, (progress) => {
+                    const percent = Math.round(30 + progress * 70); // 处理占70%
+                    progressPercent.textContent = `${percent}%`;
+                    progressBar.style.width = `${percent}%`;
+                });
+                
+                // 显示结果
+                displayVideoResult(result);
+                
+            } catch (error) {
+                throw error;
+            } finally {
+                // 重置UI
+                uploadArea.style.display = 'block';
+                uploadProgress.style.display = 'none';
+                document.getElementById('videoFile').value = '';
+            }
+        }
+        
+        // 带进度的视频上传
+        function uploadVideoWithProgress(formData, onProgress) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                
+                xhr.upload.addEventListener('progress', (event) => {
+                    if (event.lengthComputable && onProgress) {
+                        const progress = event.loaded / event.total;
+                        onProgress(progress);
+                    }
+                });
+                
+                xhr.addEventListener('load', () => {
+                    if (xhr.status === 200) {
+                        try {
+                            const result = JSON.parse(xhr.responseText);
+                            resolve(result);
+                        } catch (e) {
+                            reject(new Error('响应格式错误'));
+                        }
+                    } else {
+                        try {
+                            const errorData = JSON.parse(xhr.responseText);
+                            reject(new Error(errorData.detail || `上传失败: ${xhr.status}`));
+                        } catch (e) {
+                            reject(new Error(`上传失败: ${xhr.status}`));
+                        }
+                    }
+                });
+                
+                xhr.addEventListener('error', () => {
+                    reject(new Error('网络错误'));
+                });
+                
+                xhr.open('POST', `${API_BASE}/enhanced-cecsl/upload-video`);
+                xhr.send(formData);
+            });
+        }
+        
+        // 轮询视频处理结果
+        async function pollVideoProcessingResult(taskId, onProgress) {
+            const maxAttempts = 60; // 最多轮询60次 (2分钟)
+            let attempts = 0;
+            
+            while (attempts < maxAttempts) {
+                try {
+                    const response = await fetch(`${API_BASE}/enhanced-cecsl/video-status/${taskId}`);
+                    
+                    if (!response.ok) {
+                        if (response.status === 404) {
+                            throw new Error('处理任务不存在');
+                        }
+                        throw new Error(`获取状态失败: ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    
+                    // 更新进度
+                    if (onProgress && result.progress !== undefined) {
+                        onProgress(result.progress);
+                    }
+                    
+                    // 检查是否完成
+                    if (result.status === 'completed') {
+                        return result.result;
+                    } else if (result.status === 'error') {
+                        throw new Error(result.error || '处理过程中发生错误');
+                    }
+                    
+                    // 等待2秒后继续轮询
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    attempts++;
+                    
+                } catch (error) {
+                    throw error;
+                }
+            }
+            
+            throw new Error('处理超时，请稍后重试');
+        }
+        
+        // 显示视频处理结果
+        function displayVideoResult(result) {
+            const videoResults = document.getElementById('videoResults');
+            const videoResultContent = document.getElementById('videoResultContent');
+            
+            if (result && result.text) {
+                videoResultContent.innerHTML = `
+                    <div class="result-item">
+                        <span class="result-label">识别文本:</span>
+                        <span class="result-value">${result.text}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">置信度:</span>
+                        <span class="result-value">${(result.confidence * 100).toFixed(2)}%</span>
+                    </div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" style="width: ${result.confidence * 100}%;"></div>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">推理时间:</span>
+                        <span class="result-value">${(result.inference_time * 1000).toFixed(2)}ms</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">处理时间:</span>
+                        <span class="result-value">${new Date(result.timestamp).toLocaleString()}</span>
+                    </div>
+                    ${result.gloss_sequence && result.gloss_sequence.length > 0 ? `
+                        <div class="result-item">
+                            <span class="result-label">手语序列:</span>
+                            <span class="result-value">${result.gloss_sequence.join(', ')}</span>
+                        </div>
+                    ` : ''}
+                `;
+                
+                // 添加到测试历史
+                addToHistory({
+                    ...result,
+                    type: 'video'
+                });
+                
+            } else {
+                videoResultContent.innerHTML = `
+                    <div class="error-message">
+                        处理完成但无法获取识别结果
+                    </div>
+                `;
+            }
+            
+            videoResults.style.display = 'block';
+        }
+        
+        // 添加拖拽上传支持
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadArea = document.getElementById('uploadArea');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, unhighlight, false);
+            });
+            
+            function highlight(e) {
+                uploadArea.style.borderColor = '#667eea';
+                uploadArea.style.backgroundColor = '#f8f9ff';
+            }
+            
+            function unhighlight(e) {
+                uploadArea.style.borderColor = '#d1d5db';
+                uploadArea.style.backgroundColor = 'transparent';
+            }
+            
+            uploadArea.addEventListener('drop', handleDrop, false);
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                
+                if (files.length > 0) {
+                    const file = files[0];
+                    document.getElementById('videoFile').files = files;
+                    handleVideoUpload({ target: { files: [file] } });
+                }
+            }
+        });
+
+        // 定期刷新服务状态
+        setInterval(checkServiceStatus, 30000); // 每30秒检查一次
+    </script>
+</body>
+</html>

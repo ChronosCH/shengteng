@@ -39,7 +39,24 @@ export class WebSocketService {
   private compressionEnabled = true
   private batchSize = 1 // 批处理大小
 
-  constructor(private url: string = 'ws://localhost:8000/ws/sign-recognition') {}
+  constructor(private url?: string) {
+    if (!this.url) {
+      const envUrl = (import.meta as any)?.env?.VITE_WS_URL
+      if (envUrl) {
+        this.url = envUrl
+      } else if (typeof window !== 'undefined' && window.location) {
+        const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+        // 在 Vite 开发端口 5173 时，直接连后端 8001，绕过代理
+        if (window.location.port === '5173') {
+          this.url = `${wsProto}://${window.location.hostname}:8001/ws/sign-recognition`
+        } else {
+          this.url = `${wsProto}://${window.location.host}/ws/sign-recognition`
+        }
+      } else {
+        this.url = 'ws://localhost:8001/ws/sign-recognition'
+      }
+    }
+  }
 
   /**
    * 连接WebSocket
@@ -52,7 +69,7 @@ export class WebSocketService {
     this.isConnecting = true
 
     try {
-      this.socket = new WebSocket(this.url)
+      this.socket = new WebSocket(this.url!)
 
       this.socket.onopen = () => {
         console.log('WebSocket连接已建立')
@@ -74,11 +91,6 @@ export class WebSocketService {
         console.log('WebSocket连接已关闭:', event.code, event.reason)
         this.isConnecting = false
         this.emit('disconnect')
-        
-        // 自动重连
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-          this.scheduleReconnect()
-        }
       }
 
       this.socket.onerror = (error) => {
@@ -310,5 +322,5 @@ export class WebSocketService {
   }
 }
 
-// 创建全局WebSocket服务实例
+// 创建全局WebSocket服务实例（使用动态地址）
 export const websocketService = new WebSocketService()

@@ -46,9 +46,9 @@ class Settings(BaseSettings):
     MEDIAPIPE_STATIC_IMAGE_MODE: bool = False
     MEDIAPIPE_MAX_NUM_HANDS: int = Field(default=2, ge=1, le=4)
     
-    # CSLR模型设置
-    CSLR_MODEL_PATH: str = "models/cslr_transformer.mindir"
-    CSLR_VOCAB_PATH: str = "backend/models/vocab.json"
+    # CSLR模型设置 - 更新为新训练的模型
+    CSLR_MODEL_PATH: str = "training/output/enhanced_cecsl_final_model.ckpt"
+    CSLR_VOCAB_PATH: str = "training/output/enhanced_vocab.json"
     CSLR_CONFIDENCE_THRESHOLD: float = Field(default=0.6, ge=0.1, le=1.0)
     CSLR_MAX_SEQUENCE_LENGTH: int = Field(default=100, ge=10, le=500)
     CSLR_ENABLE_CACHE: bool = True

@@ -223,7 +223,12 @@ tmp/
 *.tmp
 
 # 上传文件（通常不需要版本控制）
-uploads/*/
+uploads/
+uploads/*
+
+# 工具文件夹（通常不需要版本控制）
+tools/
+tools/*
 
 # Docker 相关（可选）
 .dockerignore

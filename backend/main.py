@@ -17,22 +17,22 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from api.websocket import WebSocketManager
-from services.mediapipe_service import MediaPipeService
-from services.cslr_service import CSLRService
-from services.diffusion_slp_service import DiffusionSLPService, DiffusionConfig, EmotionType, SigningSpeed
-from services.privacy_service import PrivacyService, AnonymizationConfig, AnonymizationLevel, DataType
-from services.multimodal_sensor_service import MultimodalSensorService, SensorConfig, FusionMode
-from services.haptic_service import HapticService, HapticPattern, HapticIntensity
-from services.federated_learning_service import FederatedLearningService, ClientRole, AggregationMethod
-from services.sign_recognition_service import SignRecognitionService
-from utils.config import Settings
-from utils.logger import setup_logger
-from utils.database import db_manager
-from utils.security import security_manager, UserToken
-from utils.cache import cache_manager
-from utils.monitoring import performance_monitor
-from utils.file_manager import file_manager
+# 简化导入，只导入核心功能
+try:
+    from backend.services.enhanced_cecsl_service import EnhancedCECSLService
+except ImportError:
+    EnhancedCECSLService = None
+
+try:
+    from backend.services.sign_recognition_service import SignRecognitionService
+except ImportError:
+    SignRecognitionService = None
+
+# 基础设置
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from backend.utils.file_manager import file_manager
 
 # 配置日志
 logger = setup_logger(__name__)
@@ -43,6 +43,7 @@ settings = Settings()
 # 全局服务实例
 mediapipe_service: MediaPipeService = None
 cslr_service: CSLRService = None
+enhanced_cecsl_service: EnhancedCECSLService = None
 diffusion_slp_service: DiffusionSLPService = None
 privacy_service: PrivacyService = None
 multimodal_sensor_service: MultimodalSensorService = None
@@ -55,7 +56,7 @@ default_sign_recognition_service: Optional[SignRecognitionService] = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    global mediapipe_service, cslr_service, diffusion_slp_service, privacy_service, multimodal_sensor_service, haptic_service, federated_learning_service, websocket_manager, default_sign_recognition_service
+    global mediapipe_service, cslr_service, enhanced_cecsl_service, diffusion_slp_service, privacy_service, multimodal_sensor_service, haptic_service, federated_learning_service, websocket_manager, default_sign_recognition_service
 
     logger.info("正在启动 SignAvatar Web 后端服务...")
 
@@ -68,6 +69,12 @@ async def lifespan(app: FastAPI):
         # 初始化AI服务
         mediapipe_service = MediaPipeService()
         cslr_service = CSLRService()
+        
+        # 初始化增强版CE-CSL服务
+        enhanced_cecsl_service = EnhancedCECSLService(
+            model_path=settings.CSLR_MODEL_PATH,
+            vocab_path=settings.CSLR_VOCAB_PATH
+        )
         diffusion_slp_service = DiffusionSLPService()
         privacy_service = PrivacyService()
         multimodal_sensor_service = MultimodalSensorService()
@@ -77,14 +84,15 @@ async def lifespan(app: FastAPI):
 
         # 预加载模型
         await cslr_service.load_model()
+        await enhanced_cecsl_service.initialize()  # 初始化增强版服务
         await diffusion_slp_service.initialize()
         await privacy_service.initialize()
         await multimodal_sensor_service.initialize()
         await haptic_service.initialize()
         await federated_learning_service.initialize()
 
-        # 初始化手语识别服务
-        sign_recognition_service = SignRecognitionService(mediapipe_service, cslr_service)
+        # 初始化手语识别服务（使用增强版服务）
+        sign_recognition_service = SignRecognitionService(mediapipe_service, enhanced_cecsl_service)
         default_sign_recognition_service = sign_recognition_service
 
         logger.info("所有服务初始化完成")
@@ -100,6 +108,8 @@ async def lifespan(app: FastAPI):
         # 清理AI服务
         if cslr_service:
             await cslr_service.cleanup()
+        if enhanced_cecsl_service:
+            await enhanced_cecsl_service.cleanup()
         if diffusion_slp_service:
             await diffusion_slp_service.cleanup()
         if privacy_service:
@@ -285,6 +295,18 @@ class VideoRecognitionStatusResponse(BaseModel):
 class VideoRecognitionResultResponse(BaseModel):
     status: str
     result: Optional[Dict] = None
+
+
+class EnhancedCECSLTestRequest(BaseModel):
+    landmarks: List[List[float]]
+    description: Optional[str] = None
+
+
+class EnhancedCECSLTestResponse(BaseModel):
+    success: bool
+    message: str
+    prediction: Optional[Dict] = None
+    stats: Optional[Dict] = None
 
 
 # API路由
@@ -1378,6 +1400,179 @@ async def get_sign_result(task_id: str, current_user: dict = Depends(security_ma
     if result.get("status") == "not_found":
         raise HTTPException(status_code=404, detail="Task not found")
     return VideoRecognitionResultResponse(status=result.get("status"), result=result.get("result"))
+
+
+@app.post("/api/enhanced-cecsl/test", response_model=EnhancedCECSLTestResponse)
+async def test_enhanced_cecsl_model(request: EnhancedCECSLTestRequest):
+    """测试增强版CE-CSL手语识别模型"""
+    try:
+        if not enhanced_cecsl_service or not enhanced_cecsl_service.is_loaded:
+            raise HTTPException(
+                status_code=503, 
+                detail="增强版CE-CSL服务未就绪"
+            )
+        
+        # 使用增强版服务进行预测
+        result = await enhanced_cecsl_service.predict_from_landmarks(request.landmarks)
+        
+        # 获取服务统计信息
+        stats = enhanced_cecsl_service.get_stats()
+        
+        return EnhancedCECSLTestResponse(
+            success=True,
+            message="预测成功",
+            prediction={
+                "text": result.text,
+                "confidence": result.confidence,
+                "gloss_sequence": result.gloss_sequence,
+                "inference_time": result.inference_time,
+                "status": result.status,
+                "error": result.error
+            },
+            stats=stats
+        )
+        
+    except Exception as e:
+        logger.error(f"增强版CE-CSL预测失败: {e}")
+        return EnhancedCECSLTestResponse(
+            success=False,
+            message=f"预测失败: {str(e)}",
+            prediction=None,
+            stats=None
+        )
+
+
+@app.get("/api/enhanced-cecsl/stats")
+async def get_enhanced_cecsl_stats():
+    """获取增强版CE-CSL服务统计信息"""
+    try:
+        if not enhanced_cecsl_service:
+            raise HTTPException(
+                status_code=503, 
+                detail="增强版CE-CSL服务未就绪"
+            )
+        
+        stats = enhanced_cecsl_service.get_stats()
+        return {
+            "success": True,
+            "stats": stats,
+            "model_info": {
+                "model_path": str(enhanced_cecsl_service.model_path),
+                "vocab_path": str(enhanced_cecsl_service.vocab_path),
+                "vocab_size": len(enhanced_cecsl_service.vocab) if enhanced_cecsl_service.vocab else 0,
+                "is_loaded": enhanced_cecsl_service.is_loaded
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"获取增强版CE-CSL统计信息失败: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"获取统计信息失败: {str(e)}"
+        )
+
+
+@app.post("/api/enhanced-cecsl/upload-video")
+async def upload_video_for_enhanced_cecsl(
+    file: UploadFile,
+    current_user: dict = Depends(security_manager.get_current_active_user)
+):
+    """上传视频文件进行增强版CE-CSL手语识别"""
+    try:
+        # 验证是视频文件
+        if not file.filename or not file.filename.lower().endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm')):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="请上传视频文件 (mp4, avi, mov, mkv, webm)"
+            )
+        
+        # 验证文件大小（限制为100MB）
+        file_size = 0
+        temp_content = await file.read()
+        file_size = len(temp_content)
+        
+        # 重置文件指针
+        await file.seek(0)
+        
+        if file_size > 100 * 1024 * 1024:  # 100MB
+            raise HTTPException(
+                status_code=413, 
+                detail="文件大小超过限制（最大100MB）"
+            )
+        
+        # 保存文件
+        file_info = await file_manager.save_file(
+            file=file,
+            user_id=current_user["id"],
+            metadata={
+                "purpose": "enhanced_cecsl_recognition",
+                "uploaded_by": current_user["username"]
+            }
+        )
+        
+        # 如果有增强版CE-CSL服务，启动处理任务
+        if enhanced_cecsl_service and enhanced_cecsl_service.is_loaded:
+            # 启动异步视频处理（使用现有的服务架构）
+            task_id = await default_sign_recognition_service.start_video_recognition(
+                file_info["file_path"],
+                service_type="enhanced_cecsl"
+            )
+            
+            return {
+                "success": True,
+                "task_id": task_id,
+                "message": "视频上传成功，正在使用增强版CE-CSL模型处理中",
+                "status": "uploaded",
+                "file_hash": file_info["file_hash"]
+            }
+        else:
+            return {
+                "success": False,
+                "message": "增强版CE-CSL服务未就绪",
+                "file_hash": file_info["file_hash"]
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"增强版CE-CSL视频上传失败: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"视频上传失败: {str(e)}"
+        )
+
+
+@app.get("/api/enhanced-cecsl/video-status/{task_id}")
+async def get_enhanced_cecsl_video_status(
+    task_id: str,
+    current_user: dict = Depends(security_manager.get_current_active_user)
+):
+    """获取增强版CE-CSL视频处理状态"""
+    try:
+        if not default_sign_recognition_service:
+            raise HTTPException(status_code=503, detail="识别服务未就绪")
+        
+        status_data = await default_sign_recognition_service.get_status(task_id)
+        
+        if status_data.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="任务不存在")
+        
+        return {
+            "task_id": task_id,
+            "status": status_data.get("status"),
+            "progress": status_data.get("progress"),
+            "result": status_data.get("result"),
+            "error": status_data.get("error")
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取增强版CE-CSL视频状态失败: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"获取视频状态失败: {str(e)}"
+        )
 
 
 # 挂载识别结果静态目录 (SRT 等)
