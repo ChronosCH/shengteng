@@ -1,6 +1,7 @@
 """
-简化版SignAvatar Web Backend - 专注于增强版CE-CSL功能
-实时手语识别系统后端服务
+SignAvatar Web Backend - Integrated Main Application
+集成版实时手语识别与虚拟人播报系统后端服务
+合并了 main.py 和 main_simple.py 的功能
 """
 
 import asyncio
@@ -9,12 +10,13 @@ import os
 import json
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, List, Optional
-import numpy as np
 
+import numpy as np
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Depends, status, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
@@ -23,35 +25,6 @@ from pydantic import BaseModel
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s:%(message)s')
 logger = logging.getLogger(__name__)
-
-# 数据模型
-class EnhancedCECSLTestRequest(BaseModel):
-    landmarks: List[List[float]]
-    description: Optional[str] = None
-
-class EnhancedCECSLTestResponse(BaseModel):
-    success: bool
-    message: str
-    prediction: Optional[Dict] = None
-    stats: Optional[Dict] = None
-
-class VideoUploadResponse(BaseModel):
-    success: bool
-    task_id: str
-    message: str
-    status: str = "uploaded"
-
-class VideoStatusResponse(BaseModel):
-    task_id: str
-    status: str  # "processing", "completed", "error"
-    progress: Optional[float] = None
-    result: Optional[Dict] = None
-    error: Optional[str] = None
-
-class FileUploadResponse(BaseModel):
-    success: bool
-    message: str
-    data: Optional[Dict] = None
 
 # 简化版增强CE-CSL服务
 class SimpleEnhancedCECSLService:
@@ -328,11 +301,32 @@ class FileManager:
 enhanced_cecsl_service = SimpleEnhancedCECSLService()
 file_manager = FileManager()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    logger.info("正在启动 SignAvatar Web 后端服务...")
+    
+    try:
+        # 初始化服务
+        logger.info(f"增强版CE-CSL服务: {'可用' if enhanced_cecsl_service.is_loaded else '不可用'}")
+        logger.info("服务初始化完成")
+        yield
+    except Exception as e:
+        logger.error(f"服务初始化失败: {e}")
+        raise
+    finally:
+        # 清理资源
+        logger.info("正在关闭服务...")
+        logger.info("服务关闭完成")
+
 # 创建FastAPI应用
 app = FastAPI(
-    title="SignAvatar Enhanced CE-CSL Backend",
-    description="增强版CE-CSL手语识别后端服务",
-    version="1.0.0"
+    title="SignAvatar Web API (Integrated)",
+    description="集成版实时手语识别与虚拟人播报系统 API",
+    version="2.0.0",
+    lifespan=lifespan,
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
 )
 
 # CORS中间件
@@ -344,26 +338,92 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 根路径
-@app.get("/")
+# 数据模型
+class HealthResponse(BaseModel):
+    status: str
+    message: str
+    services: Dict[str, str]
+
+class LandmarkData(BaseModel):
+    landmarks: List[List[float]]
+    timestamp: float
+    frame_id: int
+
+class EnhancedCECSLTestRequest(BaseModel):
+    landmarks: List[List[float]]
+    description: Optional[str] = None
+
+class EnhancedCECSLTestResponse(BaseModel):
+    success: bool
+    message: str
+    prediction: Optional[Dict] = None
+    stats: Optional[Dict] = None
+
+class VideoUploadResponse(BaseModel):
+    success: bool
+    task_id: str
+    message: str
+    status: str = "uploaded"
+
+class VideoStatusResponse(BaseModel):
+    task_id: str
+    status: str  # "processing", "completed", "error"
+    progress: Optional[float] = None
+    result: Optional[Dict] = None
+    error: Optional[str] = None
+
+class FileUploadResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[Dict] = None
+
+# API路由
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    return {
-        "message": "SignAvatar Enhanced CE-CSL Backend",
-        "version": "1.0.0",
-        "status": "running",
-        "enhanced_cecsl_loaded": enhanced_cecsl_service.is_loaded
+    """根路径 - 返回简单的状态页面"""
+    return f"""
+    <html>
+        <head>
+            <title>SignAvatar Web API (Integrated)</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                .status {{ color: #4CAF50; font-weight: bold; }}
+                .info {{ background: #f5f5f5; padding: 20px; border-radius: 8px; }}
+            </style>
+        </head>
+        <body>
+            <h1>🤖 SignAvatar Web API (集成版)</h1>
+            <p class="status">✅ 服务运行正常</p>
+            <div class="info">
+                <h3>可用端点:</h3>
+                <ul>
+                    <li><a href="/api/docs">API 文档 (Swagger)</a></li>
+                    <li><a href="/api/health">健康检查</a></li>
+                    <li><a href="/ws/sign-recognition">WebSocket 连接</a></li>
+                </ul>
+                <h3>增强版CE-CSL服务:</h3>
+                <p>状态: {'✅ 可用' if enhanced_cecsl_service.is_loaded else '❌ 不可用'}</p>
+                <p>词汇量: {len(enhanced_cecsl_service.vocab)}</p>
+            </div>
+        </body>
+    </html>
+    """
+
+@app.get("/api/health", response_model=HealthResponse)
+async def health_check():
+    """健康检查端点"""
+    services_status = {
+        "enhanced_cecsl": "ready" if enhanced_cecsl_service.is_loaded else "not_loaded",
+        "file_manager": "ready",
     }
 
-# 健康检查
-@app.get("/api/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "message": "增强版CE-CSL服务运行正常",
-        "services": {
-            "enhanced_cecsl": "ready" if enhanced_cecsl_service.is_loaded else "not_ready"
-        }
-    }
+    all_ready = all(status == "ready" for status in services_status.values())
+
+    return HealthResponse(
+        status="healthy" if all_ready else "degraded",
+        message="服务正常运行" if all_ready else "部分服务未就绪",
+        services=services_status
+    )
 
 # 增强版CE-CSL测试接口
 @app.post("/api/enhanced-cecsl/test", response_model=EnhancedCECSLTestResponse)
@@ -523,7 +583,7 @@ async def websocket_endpoint(websocket: WebSocket):
             "type": "connection_established",
             "payload": {
                 "message": "连接成功",
-                "server": "Enhanced CE-CSL Backend",
+                "server": "SignAvatar Integrated Backend",
                 "timestamp": time.time()
             }
         })
@@ -628,15 +688,30 @@ async def websocket_test_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"WebSocket测试连接错误: {e}")
 
+# 挂载静态文件目录
+if not os.path.exists("uploads"):
+    os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 # 允许直接运行该文件以启动服务
 if __name__ == "__main__":
-    # 使用环境变量 PORT 可覆盖默认端口 8001
-    port = int(os.getenv("PORT", "8001"))
+    import os
+    
+    # 使用环境变量 PORT 可覆盖默认端口
+    port = int(os.getenv("PORT", "8000"))
+    host = os.getenv("HOST", "0.0.0.0")
+    debug = os.getenv("DEBUG", "true").lower() == "true"
+    
+    logger.info(f"启动服务器: http://{host}:{port}")
+    logger.info(f"调试模式: {debug}")
+    logger.info(f"增强版CE-CSL服务: {'可用' if enhanced_cecsl_service.is_loaded else '不可用'}")
+    
     # 运行 Uvicorn 服务器
     uvicorn.run(
-        "main_simple:app",
-        host="0.0.0.0",
+        "main:app",
+        host=host,
         port=port,
-        reload=False,
-        log_level="info"
+        reload=debug,
+        log_level="info" if debug else "warning",
+        access_log=debug,
     )

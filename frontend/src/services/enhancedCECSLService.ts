@@ -63,7 +63,7 @@ class EnhancedCECSLService {
   private baseUrl: string
 
   constructor() {
-    this.baseUrl = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8001'
+    this.baseUrl = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8000'
   }
 
   /**
