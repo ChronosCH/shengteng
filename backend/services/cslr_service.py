@@ -385,7 +385,20 @@ class CSLRService:
         time.sleep(0.02)  # 模拟推理时间
         T = input_data.shape[1]
         vocab_size = len(self.vocab)
+        
+        # 创建更真实的概率分布
         prediction = np.random.rand(1, T, vocab_size).astype(np.float32)
+        
+        # 为了模拟更真实的模型输出，增强某些类别的概率
+        for t in range(T):
+            # 每个时间步随机选择1-3个主要类别
+            num_main_classes = np.random.randint(1, 4)
+            main_classes = np.random.choice(vocab_size, num_main_classes, replace=False)
+            
+            # 给主要类别增加概率权重
+            for cls in main_classes:
+                prediction[0, t, cls] += np.random.uniform(2.0, 5.0)
+        
         return np.exp(prediction) / np.sum(np.exp(prediction), axis=-1, keepdims=True)
     
     def _ctc_decode(self, prediction: np.ndarray) -> Dict:
@@ -400,15 +413,21 @@ class CSLRService:
             # 移除重复和空白标记
             decoded_ids = []
             prev_id = -1
+            selected_probs = []  # 记录选中的概率
             
-            for id in predicted_ids:
+            for i, id in enumerate(predicted_ids):
                 if id != prev_id and id != self.ctc_config["blank_id"]:
                     decoded_ids.append(id)
+                    selected_probs.append(prediction[0, i, id])  # 记录该时刻该类别的概率
                 prev_id = id
             
-            # 计算平均置信度
-            max_probs = np.max(prediction[0], axis=-1)
-            confidence = np.mean(max_probs)
+            # 计算更合理的置信度 - 使用选中词汇的概率
+            if selected_probs:
+                confidence = np.mean(selected_probs)
+            else:
+                # 如果没有选中任何词汇，使用所有时刻最大概率的平均值
+                max_probs = np.max(prediction[0], axis=-1)
+                confidence = np.mean(max_probs)
             
             return {
                 "decoded_ids": decoded_ids,
@@ -594,8 +613,19 @@ class CSLRService:
         T = input_data.shape[1]
         vocab_size = len(self.vocab)
         
-        # 创建随机概率分布
+        # 创建更真实的概率分布，不是完全随机
         prediction = np.random.rand(1, T, vocab_size).astype(np.float32)
+        
+        # 为了模拟更真实的模型输出，增强某些类别的概率
+        # 随机选择几个"主要"类别，给它们更高的概率
+        for t in range(T):
+            # 每个时间步随机选择1-3个主要类别
+            num_main_classes = np.random.randint(1, 4)
+            main_classes = np.random.choice(vocab_size, num_main_classes, replace=False)
+            
+            # 给主要类别增加概率权重
+            for cls in main_classes:
+                prediction[0, t, cls] += np.random.uniform(2.0, 5.0)
         
         # 应用softmax
         prediction = np.exp(prediction) / np.sum(np.exp(prediction), axis=-1, keepdims=True)
