@@ -16,107 +16,19 @@ import {
   Divider,
 } from '@mui/material'
 import {
-  PanTool,
   Fingerprint,
   TouchApp,
   Gesture,
 } from '@mui/icons-material'
 
 const HandSignDemo: React.FC = () => {
-  const [selectedDemo, setSelectedDemo] = useState<string>('overview')
+  const [selectedDemo, setSelectedDemo] = useState<string>('joints')
 
   const demoSections = [
-    { id: 'overview', label: '总览', icon: <PanTool /> },
     { id: 'joints', label: '关节控制', icon: <Fingerprint /> },
     { id: 'gestures', label: '手语预设', icon: <TouchApp /> },
     { id: 'comparison', label: '对比', icon: <Gesture /> },
   ]
-
-  const renderOverview = () => (
-    <Box>
-      <Typography variant="h5" gutterBottom>
-        手语小人精细化改进总览
-      </Typography>
-      
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" color="error" gutterBottom>
-                改进前的问题
-              </Typography>
-              <Box sx={{ textAlign: 'center', mb: 2 }}>
-                <Box
-                  sx={{
-                    width: 60,
-                    height: 100,
-                    bgcolor: 'grey.300',
-                    mx: 'auto',
-                    mb: 1,
-                    borderRadius: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  <Typography variant="caption">简单方块</Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  手臂只是简单的几何体
-                </Typography>
-              </Box>
-              <Typography variant="body2" paragraph>
-                • 无法表现手指细节
-              </Typography>
-              <Typography variant="body2" paragraph>
-                • 缺乏关节控制
-              </Typography>
-              <Typography variant="body2">
-                • 不适合手语识别
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} md={6}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" color="success.main" gutterBottom>
-                改进后的优势
-              </Typography>
-              <Box sx={{ textAlign: 'center', mb: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5, mb: 1 }}>
-                  {[1,2,3,4,5].map(i => (
-                    <Box
-                      key={i}
-                      sx={{
-                        width: 8,
-                        height: 40,
-                        bgcolor: 'primary.main',
-                        borderRadius: 1,
-                      }}
-                    />
-                  ))}
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  精细的手指模型
-                </Typography>
-              </Box>
-              <Typography variant="body2" paragraph>
-                • 21个手部关键点
-              </Typography>
-              <Typography variant="body2" paragraph>
-                • 独立的手指关节
-              </Typography>
-              <Typography variant="body2">
-                • 专业手语支持
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-    </Box>
-  )
 
   const renderJoints = () => (
     <Box>
@@ -313,7 +225,7 @@ const HandSignDemo: React.FC = () => {
       case 'joints': return renderJoints()
       case 'gestures': return renderGestures()
       case 'comparison': return renderComparison()
-      default: return renderOverview()
+      default: return renderJoints()
     }
   }
 

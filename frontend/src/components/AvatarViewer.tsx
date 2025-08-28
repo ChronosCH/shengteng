@@ -22,6 +22,7 @@ import WebXRPanel from './WebXRPanel'
 import { SignSequence } from '../services/diffusionService'
 import { getSignPreset } from './SignLanguagePresets'
 import ImprovedAvatar from './avatar/ImprovedAvatar'
+import ThreeDErrorBoundary, { SimpleAvatarFallback } from './ThreeDErrorBoundary'
 
 interface HandKeypoint {
   x: number
@@ -226,14 +227,23 @@ const AvatarViewer: React.FC<AvatarViewerProps> = ({
             </Typography>
           </Box>
         }>
-          {/* 仅保留改进版 Avatar */}
-          <Box sx={{position:'absolute', inset:0}}>
-            <ImprovedAvatar
-              isActive={isActive}
-              leftHandKeypoints={leftHandKeypoints || autoHandKeypoints.left}
-              rightHandKeypoints={rightHandKeypoints || autoHandKeypoints.right}
-            />
-          </Box>
+          {/* 使用错误边界包装3D组件 */}
+          <ThreeDErrorBoundary 
+            fallback={
+              <SimpleAvatarFallback 
+                text={text} 
+                isActive={isActive} 
+              />
+            }
+          >
+            <Box sx={{position:'absolute', inset:0}}>
+              <ImprovedAvatar
+                isActive={isActive}
+                leftHandKeypoints={leftHandKeypoints || autoHandKeypoints.left}
+                rightHandKeypoints={rightHandKeypoints || autoHandKeypoints.right}
+              />
+            </Box>
+          </ThreeDErrorBoundary>
 
           {/* 风格指示器改为固定显示 */}
           <Box

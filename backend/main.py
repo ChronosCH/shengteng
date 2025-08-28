@@ -1,7 +1,6 @@
 """
-SignAvatar Web Backend - Integrated Main Application
-集成版实时手语识别与虚拟人播报系统后端服务
-合并了 main.py 和 main_simple.py 的功能
+手语学习训练系统 - 集成版主应用
+整合手语识别与学习训练功能的完整后端服务
 """
 
 import asyncio
@@ -26,6 +25,16 @@ from pydantic import BaseModel
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s:%(message)s')
 logger = logging.getLogger(__name__)
+
+# 导入学习训练服务
+try:
+    from services.learning_training_service import LearningTrainingService
+    from api.learning_routes import router as learning_router
+    LEARNING_AVAILABLE = True
+    logger.info("✅ 学习训练功能已导入")
+except ImportError as e:
+    logger.warning(f"⚠️ 学习训练功能导入失败: {e}")
+    LEARNING_AVAILABLE = False
 
 # 简化版增强CE-CSL服务
 class SimpleEnhancedCECSLService:
@@ -371,29 +380,44 @@ class FileManager:
 # 全局服务实例
 enhanced_cecsl_service = SimpleEnhancedCECSLService()
 file_manager = FileManager()
+learning_service = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    logger.info("正在启动 SignAvatar Web 后端服务...")
+    global learning_service
+    
+    logger.info("🚀 启动手语学习训练系统...")
     
     try:
-        # 初始化服务
-        logger.info(f"增强版CE-CSL服务: {'可用' if enhanced_cecsl_service.is_loaded else '不可用'}")
-        logger.info("服务初始化完成")
+        # 初始化手语识别服务
+        logger.info(f"手语识别服务: {'✅ 可用' if enhanced_cecsl_service.is_loaded else '❌ 不可用'}")
+        
+        # 初始化学习训练服务
+        if LEARNING_AVAILABLE:
+            learning_service = LearningTrainingService()
+            await learning_service.initialize()
+            app.state.learning_service = learning_service
+            logger.info("✅ 学习训练服务初始化完成")
+        else:
+            logger.warning("⚠️ 学习训练服务不可用")
+        
+        logger.info("✅ 系统初始化完成")
         yield
     except Exception as e:
-        logger.error(f"服务初始化失败: {e}")
+        logger.error(f"❌ 服务初始化失败: {e}")
         raise
     finally:
         # 清理资源
-        logger.info("正在关闭服务...")
-        logger.info("服务关闭完成")
+        logger.info("🔄 正在关闭服务...")
+        if learning_service:
+            await learning_service.close()
+        logger.info("✅ 服务关闭完成")
 
 # 创建FastAPI应用
 app = FastAPI(
-    title="SignAvatar Web API (Integrated)",
-    description="集成版实时手语识别与虚拟人播报系统 API",
+    title="手语学习训练系统",
+    description="集成手语识别与学习训练功能的完整系统",
     version="2.0.0",
     lifespan=lifespan,
     docs_url="/api/docs",
@@ -403,11 +427,15 @@ app = FastAPI(
 # CORS中间件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 注册学习训练路由
+if LEARNING_AVAILABLE:
+    app.include_router(learning_router, prefix="/api/learning", tags=["学习训练"])
 
 # 数据模型
 class HealthResponse(BaseModel):
@@ -451,30 +479,78 @@ class FileUploadResponse(BaseModel):
 # API路由
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """根路径 - 返回简单的状态页面"""
+    """根路径 - 返回系统状态页面"""
+    learning_status = "✅ 可用" if LEARNING_AVAILABLE and learning_service else "❌ 不可用"
+    recognition_status = "✅ 可用" if enhanced_cecsl_service.is_loaded else "❌ 不可用"
+    
     return f"""
     <html>
         <head>
-            <title>SignAvatar Web API (Integrated)</title>
+            <title>手语学习训练系统</title>
             <style>
-                body {{ font-family: Arial, sans-serif; margin: 40px; }}
-                .status {{ color: #4CAF50; font-weight: bold; }}
-                .info {{ background: #f5f5f5; padding: 20px; border-radius: 8px; }}
+                body {{ font-family: 'Microsoft YaHei', Arial, sans-serif; margin: 40px; background: #f5f5f5; }}
+                .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                .status {{ color: #4CAF50; font-weight: bold; font-size: 18px; }}
+                .info {{ background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 15px 0; }}
+                .feature {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin: 10px 0; }}
+                h1 {{ color: #333; text-align: center; margin-bottom: 30px; }}
+                h3 {{ color: #555; border-bottom: 2px solid #667eea; padding-bottom: 10px; }}
+                a {{ color: #667eea; text-decoration: none; }}
+                a:hover {{ text-decoration: underline; }}
+                .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }}
             </style>
         </head>
         <body>
-            <h1>🤖 SignAvatar Web API (集成版)</h1>
-            <p class="status">✅ 服务运行正常</p>
-            <div class="info">
-                <h3>可用端点:</h3>
-                <ul>
-                    <li><a href="/api/docs">API 文档 (Swagger)</a></li>
-                    <li><a href="/api/health">健康检查</a></li>
-                    <li><a href="/ws/sign-recognition">WebSocket 连接</a></li>
-                </ul>
-                <h3>增强版CE-CSL服务:</h3>
-                <p>状态: {'✅ 可用' if enhanced_cecsl_service.is_loaded else '❌ 不可用'}</p>
-                <p>词汇量: {len(enhanced_cecsl_service.vocab)}</p>
+            <div class="container">
+                <h1>🎓 手语学习训练系统</h1>
+                <p class="status">🌟 服务运行正常</p>
+                
+                <div class="info">
+                    <h3>🔧 系统状态</h3>
+                    <div class="grid">
+                        <div>
+                            <strong>学习训练服务:</strong> {learning_status}<br>
+                            <strong>手语识别服务:</strong> {recognition_status}
+                        </div>
+                        <div>
+                            <strong>版本:</strong> 2.0.0<br>
+                            <strong>词汇量:</strong> {len(enhanced_cecsl_service.vocab)}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="feature">
+                    <h3>🎯 核心功能</h3>
+                    <div class="grid">
+                        <div>
+                            • 系统化学习路径<br>
+                            • 互动式手语练习<br>
+                            • 实时进度跟踪
+                        </div>
+                        <div>
+                            • 成就系统激励<br>
+                            • 个性化推荐<br>
+                            • 手语识别技术
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="info">
+                    <h3>🌐 可用端点</h3>
+                    <ul>
+                        <li><a href="/api/docs">📚 API 文档 (Swagger)</a></li>
+                        <li><a href="/api/health">💓 健康检查</a></li>
+                        <li><a href="/api/learning/modules">📖 学习模块</a></li>
+                        <li><a href="/ws/sign-recognition">🔗 WebSocket 连接</a></li>
+                    </ul>
+                </div>
+                
+                <div class="info">
+                    <h3>🚀 快速开始</h3>
+                    <p>1. 访问 <a href="http://localhost:5173/learning">学习平台</a> 开始学习</p>
+                    <p>2. 查看 <a href="/api/docs">API文档</a> 了解接口使用</p>
+                    <p>3. 连接 WebSocket 进行实时手语识别</p>
+                </div>
             </div>
         </body>
     </html>
@@ -484,17 +560,50 @@ async def root():
 async def health_check():
     """健康检查端点"""
     services_status = {
-        "enhanced_cecsl": "ready" if enhanced_cecsl_service.is_loaded else "not_loaded",
+        "learning_training": "ready" if LEARNING_AVAILABLE and learning_service else "not_available",
+        "sign_recognition": "ready" if enhanced_cecsl_service.is_loaded else "not_loaded",
         "file_manager": "ready",
     }
 
     all_ready = all(status == "ready" for status in services_status.values())
+    partial_ready = any(status == "ready" for status in services_status.values())
 
     return HealthResponse(
-        status="healthy" if all_ready else "degraded",
-        message="服务正常运行" if all_ready else "部分服务未就绪",
+        status="healthy" if all_ready else "partial" if partial_ready else "unhealthy",
+        message="所有服务正常运行" if all_ready else "部分服务可用" if partial_ready else "服务异常",
         services=services_status
-    )
+)
+
+@app.get("/api/status")
+async def api_status():
+    """API状态检查"""
+    try:
+        status_info = {
+            "status": "active",
+            "timestamp": time.time(),
+            "services": {
+                "learning_training": LEARNING_AVAILABLE and learning_service is not None,
+                "sign_recognition": enhanced_cecsl_service.is_loaded,
+                "file_manager": True
+            }
+        }
+        
+        # 添加学习服务统计
+        if LEARNING_AVAILABLE and learning_service:
+            try:
+                learning_stats = await learning_service.get_system_stats()
+                status_info["learning_stats"] = learning_stats
+            except Exception as e:
+                logger.warning(f"获取学习统计失败: {e}")
+        
+        # 添加识别服务统计
+        if enhanced_cecsl_service.is_loaded:
+            status_info["recognition_stats"] = enhanced_cecsl_service.get_stats()
+        
+        return status_info
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"状态检查失败: {str(e)}")
 
 # 增强版CE-CSL测试接口
 @app.post("/api/enhanced-cecsl/test", response_model=EnhancedCECSLTestResponse)
@@ -654,7 +763,8 @@ async def websocket_endpoint(websocket: WebSocket):
             "type": "connection_established",
             "payload": {
                 "message": "连接成功",
-                "server": "SignAvatar Integrated Backend",
+                "server": "手语学习训练系统",
+                "version": "2.0.0",
                 "timestamp": time.time()
             }
         })
@@ -699,6 +809,46 @@ async def websocket_endpoint(websocket: WebSocket):
                             "type": "error",
                             "payload": {
                                 "message": "缺少关键点数据或服务未就绪",
+                                "timestamp": time.time()
+                            }
+                        })
+                
+                elif message_type == "learning_progress":
+                    # 处理学习进度更新
+                    if LEARNING_AVAILABLE and learning_service:
+                        try:
+                            user_id = payload.get("user_id", "default")
+                            progress_data = payload.get("progress", {})
+                            
+                            # 更新学习进度
+                            await learning_service.update_user_progress(
+                                user_id, 
+                                progress_data.get("module_id"),
+                                progress_data.get("lesson_id"), 
+                                progress_data
+                            )
+                            
+                            await websocket.send_json({
+                                "type": "progress_updated",
+                                "payload": {
+                                    "message": "学习进度已更新",
+                                    "timestamp": time.time()
+                                }
+                            })
+                        except Exception as e:
+                            logger.error(f"学习进度更新失败: {e}")
+                            await websocket.send_json({
+                                "type": "error",
+                                "payload": {
+                                    "message": f"进度更新失败: {str(e)}",
+                                    "timestamp": time.time()
+                                }
+                            })
+                    else:
+                        await websocket.send_json({
+                            "type": "error",
+                            "payload": {
+                                "message": "学习服务不可用",
                                 "timestamp": time.time()
                             }
                         })

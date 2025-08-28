@@ -34,6 +34,7 @@ import SafeFade from '../components/SafeFade'
 import VideoCapture from '../components/VideoCapture'
 import SubtitleDisplay from '../components/SubtitleDisplay'
 import AvatarViewer from '../components/AvatarViewer'
+import ThreeDErrorBoundary from '../components/ThreeDErrorBoundary'
 import { useSignLanguageRecognition } from '../hooks/useSignLanguageRecognition'
 import VideoFileRecognition from '../components/VideoFileRecognition'
 import EnhancedVideoRecognition from '../components/EnhancedVideoRecognition'
@@ -491,22 +492,23 @@ function RecognitionPage() {
                   position: 'relative',
                 }}
               >
-                <ErrorBoundary>
-                  {isConnected ? (
-                    <AvatarViewer
-                      text={currentText}
-                      isActive={isRecognizing}
-                    />
-                  ) : (
-                    <Box sx={{ textAlign: 'center', color: 'text.secondary', p: 4 }}>
-                      <Avatar
-                        sx={{
-                          width: 80,
-                          height: 80,
-                          mx: 'auto',
-                          mb: 3,
-                          backgroundColor: 'rgba(255, 218, 185, 0.3)',
-                          color: 'text.secondary',
+                <ThreeDErrorBoundary>
+                  <ErrorBoundary>
+                    {isConnected ? (
+                      <AvatarViewer
+                        text={currentText}
+                        isActive={isRecognizing}
+                      />
+                    ) : (
+                      <Box sx={{ textAlign: 'center', color: 'text.secondary', p: 4 }}>
+                        <Avatar
+                          sx={{
+                            width: 80,
+                            height: 80,
+                            mx: 'auto',
+                            mb: 3,
+                            backgroundColor: 'rgba(255, 218, 185, 0.3)',
+                            color: 'text.secondary',
                         }}
                       >
                         <Settings sx={{ fontSize: 40 }} />
@@ -519,7 +521,8 @@ function RecognitionPage() {
                       </Typography>
                     </Box>
                   )}
-                </ErrorBoundary>
+                  </ErrorBoundary>
+                </ThreeDErrorBoundary>
               </Box>
             </Paper>
           </SafeFade>
