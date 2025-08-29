@@ -37,7 +37,9 @@ import AvatarViewer from '../components/AvatarViewer'
 import ThreeDErrorBoundary from '../components/ThreeDErrorBoundary'
 import { useSignLanguageRecognition } from '../hooks/useSignLanguageRecognition'
 import VideoFileRecognition from '../components/VideoFileRecognition'
-import EnhancedVideoRecognition from '../components/EnhancedVideoRecognition'
+// 已移除增强版CE-CSL模拟组件
+// import EnhancedVideoRecognition from '../components/EnhancedVideoRecognition'
+import ContinuousVideoRecognition from '../components/ContinuousVideoRecognition'
 
 function RecognitionPage() {
   const [isConnected, setIsConnected] = useState(false)
@@ -584,9 +586,11 @@ function RecognitionPage() {
             </SafeFade>
           </Grid>
 
+          {/* 已移除模拟识别卡片，仅保留真实连续识别 */}
+          
           <Grid item xs={12} md={12}>
-            <SafeFade in={isMounted} timeout={2200} key="enhanced-video-recognition">
-              <EnhancedVideoRecognition onResult={(r)=>console.log('enhanced cecsl result', r)} />
+            <SafeFade in={isMounted} timeout={2400} key="continuous-video-recognition">
+              <ContinuousVideoRecognition onResult={(r)=>console.log('continuous recognition result', r)} />
             </SafeFade>
           </Grid>
         </Grid>

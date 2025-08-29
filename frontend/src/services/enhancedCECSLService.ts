@@ -300,3 +300,6 @@ class EnhancedCECSLService {
 }
 
 export default new EnhancedCECSLService()
+
+// 已下线：增强版 CE-CSL 模拟服务。保留此文件作为占位以避免历史导入报错。
+// 如需使用真实的连续手语识别，请改用 continuousSignRecognitionService。

@@ -282,19 +282,33 @@ class CSLRService:
                     status="model_not_loaded", error="模型未加载"
                 )
             
-            # 添加到序列缓冲区
-            with self._buffer_lock:
-                self.sequence_buffer.append(landmarks_sequence)
-                
-                # 检查序列长度
-                if len(self.sequence_buffer) < 10:
-                    return PredictionResult(
-                        text="", confidence=0.0, gloss_sequence=[],
-                        inference_time=0.0, timestamp=time.time(),
-                        status="insufficient_frames"
-                    )
+            # 使用传入的窗口序列进行长度检查（避免依赖缓冲区）
+            if landmarks_sequence is None or len(landmarks_sequence) < 10:
+                return PredictionResult(
+                    text="", confidence=0.0, gloss_sequence=[],
+                    inference_time=0.0, timestamp=time.time(),
+                    status="insufficient_frames"
+                )
             
-            # 检查缓存
+            # 准备输入数据（直接由传入序列构造）
+            try:
+                input_array = np.array(landmarks_sequence, dtype=np.float32)  # (T, 543*3)
+                # 限长
+                max_length = self.config.max_sequence_length
+                if input_array.shape[0] > max_length:
+                    input_array = input_array[-max_length:]
+                # 添加batch维度: (1, T, 543*3)
+                input_array = np.expand_dims(input_array, axis=0)
+            except Exception as e:
+                self.stats["errors"] += 1
+                logger.error(f"输入数据构造失败: {e}")
+                return PredictionResult(
+                    text="", confidence=0.0, gloss_sequence=[],
+                    inference_time=time.time() - start_time, timestamp=time.time(),
+                    status="error", error=f"输入数据构造失败: {e}"
+                )
+            
+            # 缓存（基于传入窗口）
             cache_key = self._generate_cache_key(landmarks_sequence)
             if self.cache:
                 cached_result = self.cache.get(cache_key)
@@ -304,17 +318,14 @@ class CSLRService:
                 else:
                     self.stats["cache_misses"] += 1
             
-            # 准备输入数据
-            input_data = self._prepare_input_data()
-            
             # 模型推理
             if self.config.use_threading and self.executor:
-                prediction = await self._threaded_inference(input_data)
+                prediction = await self._threaded_inference(input_array)
             else:
                 if MINDSPORE_AVAILABLE and self.model != "mock_model":
-                    prediction = await self._mindspore_inference(input_data)
+                    prediction = await self._mindspore_inference(input_array)
                 else:
-                    prediction = await self._mock_inference(input_data)
+                    prediction = await self._mock_inference(input_array)
             
             # CTC解码
             decoded_result = self._ctc_decode(prediction)
