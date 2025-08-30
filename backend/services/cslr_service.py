@@ -190,16 +190,36 @@ class CSLRService:
         """加载词汇表"""
         try:
             with open(self.config.vocab_path, 'r', encoding='utf-8') as f:
-                self.vocab = json.load(f)
-            
+                data = json.load(f)
+            # 兼容两种格式：
+            # 1) 直接映射 { token: id, ... }
+            # 2) 带有 'word2idx' 字段 { "word2idx": { token: id, ... }, ... }
+            if isinstance(data, dict) and 'word2idx' in data and isinstance(data['word2idx'], dict):
+                self.vocab = data['word2idx']
+            elif isinstance(data, dict):
+                self.vocab = data
+            else:
+                raise ValueError("不支持的词表格式：应为字典或包含 word2idx 的字典")
+            # 将键保持为字符串，值为整数
+            cleaned_vocab = {}
+            for k, v in self.vocab.items():
+                try:
+                    cleaned_vocab[str(k)] = int(v)
+                except Exception:
+                    # 跳过非法项
+                    continue
+            self.vocab = cleaned_vocab
+            # 生成反向映射
             self.reverse_vocab = {v: k for k, v in self.vocab.items()}
             logger.info(f"词汇表加载成功，包含 {len(self.vocab)} 个词汇")
-            
         except FileNotFoundError:
             logger.warning("词汇表文件不存在，创建默认词汇表")
             await self._create_default_vocabulary()
         except json.JSONDecodeError as e:
             logger.error(f"词汇表文件格式错误: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"加载词汇表失败: {e}")
             raise
     
     async def _create_default_vocabulary(self) -> None:

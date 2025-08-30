@@ -14,6 +14,19 @@ from pydantic_settings import BaseSettings
 # 使用标准库logging，避免循环导入
 logger = logging.getLogger(__name__)
 
+# 仓库根目录（backend 位于仓库根目录下）
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+def resolve_to_root(path_str: str) -> str:
+    """将给定路径解析为仓库根目录下的绝对路径（若已为绝对路径则保持不变）"""
+    try:
+        p = Path(path_str)
+        if not p.is_absolute():
+            p = PROJECT_ROOT / p
+        return str(p)
+    except Exception:
+        return path_str
+
 
 class Settings(BaseSettings):
     """应用配置 - 增强版"""
@@ -25,8 +38,8 @@ class Settings(BaseSettings):
     DEBUG: bool = Field(default=True)
     
     # 服务器设置
-    HOST: str = "0.0.0.0"
-    PORT: int = Field(default=8000, ge=1, le=65535)
+    HOST: str = "127.0.0.1"  # Windows 上更安全的默认值
+    PORT: int = Field(default=8001, ge=1, le=65535)
     WORKERS: int = Field(default=1, ge=1, le=16)
     
     # CORS设置
@@ -48,13 +61,14 @@ class Settings(BaseSettings):
     
     # CSLR模型设置 - 更新为新训练的模型
     CSLR_MODEL_PATH: str = "training/output/enhanced_cecsl_final_model.ckpt"
-    CSLR_VOCAB_PATH: str = "training/output/enhanced_vocab.json"
+    CSLR_VOCAB_PATH: str = "training/output/enhanced_vocab.json"  # 使用训练输出的词表
     CSLR_CONFIDENCE_THRESHOLD: float = Field(default=0.6, ge=0.1, le=1.0)
     CSLR_MAX_SEQUENCE_LENGTH: int = Field(default=100, ge=10, le=500)
     CSLR_ENABLE_CACHE: bool = True
     CSLR_CACHE_SIZE: int = Field(default=1000, ge=100, le=10000)
 
-    # Diffusion SLP模型设置
+    # Diffusion SLP模型设置（可选）
+    ENABLE_DIFFUSION: bool = False
     DIFFUSION_MODEL_PATH: str = "models/diffusion_slp.mindir"
     DIFFUSION_TEXT_ENCODER_PATH: str = "models/text_encoder.mindir"
     DIFFUSION_MAX_SEQUENCE_LENGTH: int = Field(default=200, ge=50, le=1000)
@@ -64,33 +78,8 @@ class Settings(BaseSettings):
     DIFFUSION_CACHE_SIZE: int = Field(default=500, ge=50, le=5000)
     USE_ASCEND: bool = False
 
-    # 隐私保护设置
-    DIFFUSION_ANONYMIZATION_MODEL_PATH: str = "models/diffusion_anonymization.mindir"
-    PRIVACY_DEFAULT_LEVEL: str = Field(default="medium", pattern="^(low|medium|high)$")
-    PRIVACY_CACHE_SIZE: int = Field(default=50, ge=10, le=500)
-    PRIVACY_MAX_FILE_SIZE: int = Field(default=100, ge=1, le=1000)  # MB
-    PRIVACY_ENABLE_DIFFERENTIAL: bool = True
-    PRIVACY_NOISE_MULTIPLIER: float = Field(default=1.0, ge=0.1, le=10.0)
-
-    # 多模态传感器设置
-    MULTIMODAL_FUSION_MODEL_PATH: str = "models/multimodal_fusion.mindir"
-    EMG_DEVICE_PORT: str = "/dev/ttyUSB0"
-    IMU_DEVICE_PORT: str = "/dev/ttyUSB1"
-    EMG_CHANNELS: int = Field(default=16, ge=8, le=64)
-    EMG_SAMPLING_RATE: int = Field(default=1000, ge=200, le=5000)  # Hz
-    IMU_SAMPLING_RATE: int = Field(default=100, ge=10, le=1000)   # Hz
-    SENSOR_BUFFER_SIZE: int = Field(default=1000, ge=100, le=10000)
-    SENSOR_TIMEOUT: float = Field(default=1.0, ge=0.1, le=10.0)  # 秒
-
-    # 触觉反馈设置
-    HAPTIC_DEVICE_PORT: str = "/dev/ttyUSB2"
-    BRAILLE_DEVICE_PORT: str = "/dev/ttyUSB3"
-    HAPTIC_ACTUATORS: int = Field(default=16, ge=8, le=64)
-    BRAILLE_CELLS: int = Field(default=8, ge=4, le=40)
-    HAPTIC_MESSAGE_QUEUE_SIZE: int = Field(default=100, ge=10, le=1000)
-    HAPTIC_DEVICE_TIMEOUT: float = Field(default=2.0, ge=0.5, le=10.0)
-
-    # 联邦学习设置
+    # 联邦学习设置（可选）
+    ENABLE_FEDERATED: bool = False
     FEDERATED_MODEL_PATH: str = "models/federated_slr.mindir"
     FL_DIFFERENTIAL_PRIVACY: bool = True
     FL_NOISE_MULTIPLIER: float = Field(default=1.0, ge=0.1, le=10.0)
@@ -180,13 +169,22 @@ class Settings(BaseSettings):
             logger.warning("CORS配置包含通配符，可能存在安全风险")
         return v
     
-    @validator('CSLR_MODEL_PATH', 'DIFFUSION_MODEL_PATH', 'FEDERATED_MODEL_PATH')
-    def validate_model_paths(cls, v):
-        if not Path(v).parent.exists():
-            logger.warning(f"模型目录不存在: {Path(v).parent}")
-            # 创建模型目录
-            Path(v).parent.mkdir(parents=True, exist_ok=True)
-        return v
+    @validator('CSLR_MODEL_PATH', 'DIFFUSION_MODEL_PATH', 'FEDERATED_MODEL_PATH', 'CSLR_VOCAB_PATH', pre=True)
+    def normalize_paths(cls, v):
+        # 统一解析为仓库根目录下的绝对路径
+        return resolve_to_root(v)
+    
+    @validator('CSLR_MODEL_PATH', 'DIFFUSION_MODEL_PATH', 'FEDERATED_MODEL_PATH', 'CSLR_VOCAB_PATH')
+    def ensure_parent_dir(cls, v):
+        p = Path(v)
+        if not p.parent.exists():
+            logger.warning(f"模型/资源目录不存在: {p.parent}，已自动创建")
+            p.parent.mkdir(parents=True, exist_ok=True)
+        return str(p)
+    
+    @validator('UPLOAD_DIR', 'TEMP_DIR', pre=True)
+    def normalize_dirs(cls, v):
+        return resolve_to_root(v)
     
     @validator('UPLOAD_DIR', 'TEMP_DIR')
     def validate_directories(cls, v):
@@ -323,28 +321,27 @@ class Settings(BaseSettings):
             if not self.SESSION_COOKIE_SECURE:
                 warnings.append("生产环境应启用安全Cookie")
         
-        # 模型文件检查
-        model_paths = [
-            self.CSLR_MODEL_PATH,
-            self.DIFFUSION_MODEL_PATH,
-            self.FEDERATED_MODEL_PATH,
-        ]
+        # 必需模型检查（仅检查 CSLR 模型）
+        if not Path(self.CSLR_MODEL_PATH).exists():
+            warnings.append(f"模型文件不存在: {self.CSLR_MODEL_PATH}")
         
-        for path in model_paths:
-            if not Path(path).exists():
-                warnings.append(f"模型文件不存在: {path}")
+        # 可选模型检查，仅在启用时检查
+        if self.ENABLE_DIFFUSION and not Path(self.DIFFUSION_MODEL_PATH).exists():
+            warnings.append(f"Diffusion 模型文件不存在: {self.DIFFUSION_MODEL_PATH}")
+        if self.ENABLE_FEDERATED and not Path(self.FEDERATED_MODEL_PATH).exists():
+            warnings.append(f"联邦学习模型文件不存在: {self.FEDERATED_MODEL_PATH}")
         
         # 设备端口检查 (Linux环境)
         if os.name == 'posix':
             device_ports = [
-                self.EMG_DEVICE_PORT,
-                self.IMU_DEVICE_PORT,
-                self.HAPTIC_DEVICE_PORT,
-                self.BRAILLE_DEVICE_PORT,
+                getattr(self, 'EMG_DEVICE_PORT', '/dev/ttyUSB0'),
+                getattr(self, 'IMU_DEVICE_PORT', '/dev/ttyUSB1'),
+                getattr(self, 'HAPTIC_DEVICE_PORT', '/dev/ttyUSB2'),
+                getattr(self, 'BRAILLE_DEVICE_PORT', '/dev/ttyUSB3'),
             ]
             
             for port in device_ports:
-                if port.startswith('/dev/') and not Path(port).exists():
+                if isinstance(port, str) and port.startswith('/dev/') and not Path(port).exists():
                     warnings.append(f"设备端口不存在: {port}")
         
         return warnings
@@ -401,8 +398,8 @@ class ConfigManager:
                 default_config = """# SignAvatar Web 配置文件
 DEBUG=true
 SECRET_KEY=your-secret-key-here-change-in-production
-HOST=0.0.0.0
-PORT=8000
+HOST=127.0.0.1
+PORT=8001
 ENVIRONMENT=development
 
 # 数据库配置
@@ -492,8 +489,8 @@ LOG_LEVEL=INFO
             "metrics_enabled": self._settings.ENABLE_METRICS,
             "models_configured": {
                 "cslr": Path(self._settings.CSLR_MODEL_PATH).exists(),
-                "diffusion": Path(self._settings.DIFFUSION_MODEL_PATH).exists(),
-                "federated": Path(self._settings.FEDERATED_MODEL_PATH).exists(),
+                "diffusion": Path(self._settings.DIFFUSION_MODEL_PATH).exists() if self._settings.ENABLE_DIFFUSION else False,
+                "federated": Path(self._settings.FEDERATED_MODEL_PATH).exists() if self._settings.ENABLE_FEDERATED else False,
             }
         }
 

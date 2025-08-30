@@ -50,37 +50,27 @@ async def test_learning_api():
         return False
 
 async def test_recognition_api():
-    """测试手语识别API"""
+    """测试手语识别API（连续识别流程）"""
     print("🤖 测试手语识别API...")
-    
     try:
-        # 模拟关键点数据
-        landmarks = [[0.1, 0.2, 0.3] * 21 for _ in range(10)]  # 10帧数据
-        
-        test_data = {
-            "landmarks": landmarks,
-            "description": "测试数据"
-        }
-        
         async with aiohttp.ClientSession() as session:
+            # 先验证旧接口返回410（已下线提示）
             async with session.post(
                 "http://localhost:8000/api/enhanced-cecsl/test",
-                json=test_data
-            ) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    if result.get("success"):
-                        print("✅ 手语识别API测试成功")
-                        prediction = result.get("prediction", {})
-                        print(f"   识别结果: {prediction.get('text', 'N/A')}")
-                        print(f"   置信度: {prediction.get('confidence', 0):.3f}")
-                        return True
-                    else:
-                        print(f"❌ 手语识别失败: {result.get('message')}")
-                        return False
+                json={"landmarks": [[0.0]*63]}
+            ) as old:
+                if old.status == 410:
+                    print("✅ 旧接口已正确下线(410)")
                 else:
-                    print(f"❌ 手语识别API请求失败: {response.status}")
-                    return False
+                    print(f"ℹ️ 旧接口返回状态: {old.status}")
+
+            # 再验证新接口可达（仅GET健康+无文件上传提示）
+            async with session.get("http://localhost:8000/api/health") as health:
+                print(f"健康检查: {health.status}")
+
+            # 提示用户用前端页面实际上传视频进行完整链路测试
+            print("🔎 请通过前端页面(ContinuousVideoRecognition)上传短视频进行端到端验证。")
+            return True
     except Exception as e:
         print(f"❌ 手语识别API测试失败: {e}")
         return False

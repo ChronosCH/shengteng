@@ -8,24 +8,27 @@ from typing import List, Dict, Any, Optional
 import logging
 from datetime import datetime
 
-from ..services.learning_training_service import LearningTrainingService, DifficultyLevel, LearningType
-from ..utils.auth import get_current_user
+from ..services.learning_training_service import LearningTrainingService, DifficultyLevel
+from ..utils.security import SecurityManager
 
 logger = logging.getLogger(__name__)
 
-# 初始化路由和服务
-router = APIRouter(prefix="/api/learning", tags=["学习训练"])
+# 初始化路由和服务（main 中会再挂载前缀）
+router = APIRouter(tags=["学习训练"])
 learning_service = LearningTrainingService()
+security_manager = SecurityManager()
+get_current_user = security_manager.get_current_user
 
 @router.get("/modules", response_model=List[Dict[str, Any]])
 async def get_learning_modules(
-    user_id: str = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     difficulty: Optional[str] = Query(None, description="难度筛选"),
     category: Optional[str] = Query(None, description="分类筛选"),
     search: Optional[str] = Query(None, description="搜索关键词")
 ):
     """获取学习模块列表"""
     try:
+        user_id = str(current_user.get("id") or current_user.get("user_id") or "guest")
         modules = await learning_service.get_learning_modules(user_id)
         
         # 应用筛选条件
@@ -56,10 +59,11 @@ async def get_learning_modules(
 @router.get("/modules/{module_id}/lessons", response_model=List[Dict[str, Any]])
 async def get_module_lessons(
     module_id: str,
-    user_id: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """获取模块的课程列表"""
     try:
+        # user_id = str(current_user.get("id") or current_user.get("user_id") or "guest")
         lessons = await learning_service.get_module_lessons(module_id)
         return lessons
     except Exception as e:
@@ -71,13 +75,13 @@ async def complete_lesson(
     lesson_id: str,
     score: float = 100.0,
     time_spent: int = 0,
-    user_id: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """完成课程"""
     try:
         if not 0 <= score <= 100:
             raise HTTPException(status_code=400, detail="分数必须在0-100之间")
-        
+        user_id = str(current_user.get("id") or current_user.get("user_id") or "guest")
         result = await learning_service.complete_lesson(user_id, lesson_id, score, time_spent)
         
         if not result.get("success"):
@@ -91,9 +95,10 @@ async def complete_lesson(
         raise HTTPException(status_code=500, detail="完成课程失败")
 
 @router.get("/progress", response_model=Dict[str, Any])
-async def get_user_progress(user_id: str = Depends(get_current_user)):
+async def get_user_progress(current_user: dict = Depends(get_current_user)):
     """获取用户学习进度"""
     try:
+        user_id = str(current_user.get("id") or current_user.get("user_id") or "guest")
         progress = await learning_service.get_user_progress(user_id)
         stats = await learning_service.get_learning_stats(user_id)
         return {
@@ -105,9 +110,10 @@ async def get_user_progress(user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="获取用户进度失败")
 
 @router.get("/achievements", response_model=List[Dict[str, Any]])
-async def get_user_achievements(user_id: str = Depends(get_current_user)):
+async def get_user_achievements(current_user: dict = Depends(get_current_user)):
     """获取用户成就"""
     try:
+        user_id = str(current_user.get("id") or current_user.get("user_id") or "guest")
         achievements = await learning_service.get_user_achievements(user_id)
         return achievements
     except Exception as e:
@@ -115,9 +121,10 @@ async def get_user_achievements(user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="获取用户成就失败")
 
 @router.get("/daily-tasks", response_model=List[Dict[str, Any]])
-async def get_daily_tasks(user_id: str = Depends(get_current_user)):
+async def get_daily_tasks(current_user: dict = Depends(get_current_user)):
     """获取每日任务"""
     try:
+        user_id = str(current_user.get("id") or current_user.get("user_id") or "guest")
         tasks = await learning_service.get_daily_tasks(user_id)
         return tasks
     except Exception as e:
@@ -127,10 +134,11 @@ async def get_daily_tasks(user_id: str = Depends(get_current_user)):
 @router.post("/daily-tasks/{task_type}/complete")
 async def complete_daily_task(
     task_type: str,
-    user_id: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """完成每日任务"""
     try:
+        user_id = str(current_user.get("id") or current_user.get("user_id") or "guest")
         result = await learning_service.complete_daily_task(user_id, task_type)
         
         if not result.get("success"):
@@ -147,7 +155,7 @@ async def complete_daily_task(
 async def search_learning_content(
     query: str = Query(..., description="搜索关键词"),
     content_type: str = Query("all", description="内容类型: all, modules, lessons, achievements"),
-    user_id: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """搜索学习内容"""
     try:
@@ -163,7 +171,7 @@ async def search_learning_content(
         raise HTTPException(status_code=500, detail="搜索学习内容失败")
 
 @router.get("/learning-paths", response_model=List[Dict[str, Any]])
-async def get_learning_paths(user_id: str = Depends(get_current_user)):
+async def get_learning_paths(current_user: dict = Depends(get_current_user)):
     """获取学习路径"""
     try:
         # 这里返回预定义的学习路径
@@ -232,9 +240,10 @@ async def get_learning_paths(user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="获取学习路径失败")
 
 @router.get("/statistics", response_model=Dict[str, Any])
-async def get_learning_statistics(user_id: str = Depends(get_current_user)):
+async def get_learning_statistics(current_user: dict = Depends(get_current_user)):
     """获取学习统计数据"""
     try:
+        user_id = str(current_user.get("id") or current_user.get("user_id") or "guest")
         stats = await learning_service.get_learning_stats(user_id)
         
         # 添加额外的统计信息
@@ -265,9 +274,10 @@ async def get_learning_statistics(user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="获取学习统计失败")
 
 @router.get("/recommendations", response_model=Dict[str, Any])
-async def get_learning_recommendations(user_id: str = Depends(get_current_user)):
+async def get_learning_recommendations(current_user: dict = Depends(get_current_user)):
     """获取个性化学习推荐"""
     try:
+        user_id = str(current_user.get("id") or current_user.get("user_id") or "guest")
         # 获取用户进度
         user_progress = await learning_service.get_user_progress(user_id)
         
@@ -307,13 +317,13 @@ async def submit_learning_feedback(
     module_id: str,
     rating: float,
     comment: str = "",
-    user_id: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """提交学习反馈"""
     try:
         if not 1 <= rating <= 5:
             raise HTTPException(status_code=400, detail="评分必须在1-5之间")
-        
+        user_id = str(current_user.get("id") or current_user.get("user_id") or "guest")
         # 这里可以保存用户反馈到数据库
         feedback_data = {
             "user_id": user_id,
@@ -337,7 +347,7 @@ async def submit_learning_feedback(
 async def get_learning_leaderboard(
     period: str = Query("weekly", description="排行榜周期: daily, weekly, monthly"),
     limit: int = Query(10, description="返回数量限制"),
-    user_id: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """获取学习排行榜"""
     try:

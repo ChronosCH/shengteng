@@ -14,6 +14,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, List, Optional
 
+# 将仓库根目录加入 sys.path，避免相对导入问题
+import sys as _sys
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_BACKEND_DIR = _PROJECT_ROOT / "backend"
+for _p in (str(_PROJECT_ROOT), str(_BACKEND_DIR)):
+    if _p not in _sys.path:
+        _sys.path.insert(0, _p)
+
 import numpy as np
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Depends, status, UploadFile, File, BackgroundTasks
@@ -27,12 +35,12 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s:%(message
 logger = logging.getLogger(__name__)
 
 # 新增导入
-from utils.file_manager import FileManager
+from backend.utils.file_manager import FileManager
 
 # 导入学习训练服务
 try:
-    from services.learning_training_service import LearningTrainingService
-    from api.learning_routes import router as learning_router
+    from backend.services.learning_training_service import LearningTrainingService
+    from backend.api.learning_routes import router as learning_router
     LEARNING_AVAILABLE = True
     logger.info("✅ 学习训练功能已导入")
 except ImportError as e:
@@ -41,9 +49,9 @@ except ImportError as e:
 
 # 导入连续手语识别服务
 try:
-    from services.sign_recognition_service import SignRecognitionService
-    from services.mediapipe_service import MediaPipeService
-    from services.cslr_service import CSLRService
+    from backend.services.sign_recognition_service import SignRecognitionService
+    from backend.services.mediapipe_service import MediaPipeService
+    from backend.services.cslr_service import CSLRService
     SIGN_RECOGNITION_AVAILABLE = True
     logger.info("✅ 连续手语识别功能已导入")
 except ImportError as e:
@@ -87,7 +95,12 @@ async def lifespan(app: FastAPI):
         # 初始化学习训练服务
         if LEARNING_AVAILABLE:
             learning_service = LearningTrainingService()
-            await learning_service.initialize()
+            # 可选的初始化钩子
+            if hasattr(learning_service, "initialize") and callable(getattr(learning_service, "initialize")):
+                try:
+                    await learning_service.initialize()
+                except Exception as e:
+                    logger.warning(f"学习训练服务初始化钩子执行失败: {e}")
             app.state.learning_service = learning_service
             logger.info("✅ 学习训练服务初始化完成")
         else:
@@ -101,8 +114,11 @@ async def lifespan(app: FastAPI):
     finally:
         # 清理资源
         logger.info("🔄 正在关闭服务...")
-        if learning_service:
-            await learning_service.close()
+        if learning_service and hasattr(learning_service, "close") and callable(getattr(learning_service, "close")):
+            try:
+                await learning_service.close()
+            except Exception as e:
+                logger.warning(f"学习训练服务关闭钩子执行失败: {e}")
         logger.info("✅ 服务关闭完成")
 
 # 创建FastAPI应用
@@ -114,6 +130,15 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
+
+# 确保字幕输出目录存在并挂载为静态资源
+try:
+    import os as _os
+    from fastapi.staticfiles import StaticFiles as _StaticFiles
+    _os.makedirs("temp/sign_results", exist_ok=True)
+    app.mount("/sign_results", _StaticFiles(directory="temp/sign_results"), name="sign_results")
+except Exception as _e:
+    logger.warning(f"挂载字幕静态目录失败: {_e}")
 
 # CORS中间件
 app.add_middleware(
@@ -296,177 +321,197 @@ async def api_status():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"状态检查失败: {str(e)}")
 
-# 下面四个旧的增强版CE-CSL接口已下线，统一提示迁移到新的连续识别接口
-@app.post("/api/enhanced-cecsl/test")
-async def deprecated_enhanced_test():
-    raise HTTPException(status_code=410, detail="该接口已移除，请使用 /api/sign-recognition/upload-video 与 /api/sign-recognition/status/{task_id}")
-
-@app.get("/api/enhanced-cecsl/stats")
-async def deprecated_enhanced_stats():
-    raise HTTPException(status_code=410, detail="该接口已移除，请使用 /api/sign-recognition/stats")
-
-@app.post("/api/enhanced-cecsl/upload-video")
-async def deprecated_enhanced_upload_video():
-    raise HTTPException(status_code=410, detail="该接口已移除，请使用 /api/sign-recognition/upload-video")
-
-@app.get("/api/enhanced-cecsl/video-status/{task_id}")
-async def deprecated_enhanced_video_status(task_id: str):
-    raise HTTPException(status_code=410, detail="该接口已移除，请使用 /api/sign-recognition/status/{task_id}")
-
-# WebSocket端点 - 实时手语识别
+# 新增：WebSocket 实时识别端点，供前端 websocketService 连接
 @app.websocket("/ws/sign-recognition")
-async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket端点用于实时手语识别"""
+async def ws_sign_recognition(websocket: WebSocket):
+    """实时手语识别 WebSocket
+    接收消息格式:
+    - {"type":"landmarks","payload":{"landmarks": number[][], "timestamp": number, "frameId": number}}
+    - {"type":"batch","payload":{"messages": WebSocketMessage[] }}
+    - {"type":"config","payload": { 配置项 }}
+    响应消息:
+    - {"type":"connection_established", payload }
+    - {"type":"recognition_result","payload": { text, confidence, glossSequence, timestamp, frameId }}
+    - {"type":"config_updated","payload": {}}
+    - {"type":"error","payload": { message }}
+    """
     await websocket.accept()
-    logger.info("WebSocket连接已建立")
-    
+
+    # 发送连接确认
     try:
-        # 发送连接确认消息
         await websocket.send_json({
             "type": "connection_established",
-            "payload": {
-                "message": "连接成功",
-                "server": "手语学习训练系统",
-                "version": "2.0.0",
-                "timestamp": time.time()
-            }
+            "payload": {"timestamp": time.time()}
         })
-        
-        while True:
-            try:
-                # 接收客户端消息
-                data = await websocket.receive_json()
-                message_type = data.get("type")
-                payload = data.get("payload", {})
-                
-                if message_type == "landmarks":
-                    # 实时关键点识别在当前版本未开放，提示使用视频上传接口
-                    await websocket.send_json({
-                        "type": "error",
-                        "payload": {
-                            "message": "实时关键点识别暂未开放，请使用 /api/sign-recognition/upload-video 进行连续句子识别",
-                            "timestamp": time.time()
-                        }
-                    })
-                elif message_type == "learning_progress":
-                    # 处理学习进度更新
-                    if LEARNING_AVAILABLE and learning_service:
-                        try:
-                            user_id = payload.get("user_id", "default")
-                            progress_data = payload.get("progress", {})
-                            
-                            # 更新学习进度
-                            await learning_service.update_user_progress(
-                                user_id, 
-                                progress_data.get("module_id"),
-                                progress_data.get("lesson_id"), 
-                                progress_data
-                            )
-                            
-                            await websocket.send_json({
-                                "type": "progress_updated",
-                                "payload": {
-                                    "message": "学习进度已更新",
-                                    "timestamp": time.time()
-                                }
-                            })
-                        except Exception as e:
-                            logger.error(f"学习进度更新失败: {e}")
-                            await websocket.send_json({
-                                "type": "error",
-                                "payload": {
-                                    "message": f"进度更新失败: {str(e)}",
-                                    "timestamp": time.time()
-                                }
-                            })
-                    else:
-                        await websocket.send_json({
-                            "type": "error",
-                            "payload": {
-                                "message": "学习服务不可用",
-                                "timestamp": time.time()
-                            }
-                        })
-                
-                elif message_type == "config":
-                    # 处理配置更新
-                    logger.info(f"收到配置更新: {payload}")
-                    await websocket.send_json({
-                        "type": "config_updated",
-                        "payload": {
-                            "message": "配置已更新",
-                            "timestamp": time.time()
-                        }
-                    })
-                else:
-                    logger.warning(f"未知消息类型: {message_type}")
-                    
-            except WebSocketDisconnect:
-                logger.info("WebSocket客户端断开连接")
-                break
-            except Exception as e:
-                logger.error(f"WebSocket处理消息错误: {e}")
-                await websocket.send_json({
-                    "type": "error",
-                    "payload": {
-                        "message": f"处理消息时发生错误: {str(e)}",
-                        "timestamp": time.time()
-                    }
-                })
-                
-    except WebSocketDisconnect:
-        logger.info("WebSocket连接断开")
-    except Exception as e:
-        logger.error(f"WebSocket连接错误: {e}")
-    finally:
-        logger.info("WebSocket连接已关闭")
+    except Exception:
+        pass
 
-# 简单的WebSocket测试端点
-@app.websocket("/ws/test")
-async def websocket_test_endpoint(websocket: WebSocket):
-    """简单的WebSocket测试端点"""
+    # 获取推理服务
+    cslr = None
     try:
-        await websocket.accept()
-        logger.info("WebSocket测试连接已建立")
-        
-        await websocket.send_text("Hello from WebSocket!")
-        
-        while True:
+        if getattr(app.state, "sign_recognition_service", None):
+            cslr = app.state.sign_recognition_service.cslr_service
+    except Exception:
+        cslr = None
+
+    if not (SIGN_RECOGNITION_AVAILABLE and cslr):
+        await websocket.send_json({"type": "error", "payload": {"message": "连续手语识别服务不可用"}})
+        await websocket.close()
+        return
+
+    last_pred_ts = 0.0
+    min_interval = 0.3  # 最小推理间隔 (秒)
+    min_frames = max(8, min(32, getattr(cslr.config, "max_sequence_length", 64) // 4))
+
+    def _to_vec(points: List[List[float]]) -> List[float]:
+        """将关键点数组转换为固定长度向量(543*3)，不足则零填充，超出则截断"""
+        try:
+            flat: List[float] = []
+            for p in points:
+                if isinstance(p, (list, tuple)) and len(p) >= 3:
+                    flat.extend([float(p[0]), float(p[1]), float(p[2])])
+            # 统一到 543*3 维
+            target = 543 * 3
+            if len(flat) < target:
+                flat.extend([0.0] * (target - len(flat)))
+            elif len(flat) > target:
+                flat = flat[:target]
+            return flat
+        except Exception:
+            return []
+
+    async def _handle_landmarks(payload: Dict):
+        nonlocal last_pred_ts
+        points = payload.get("landmarks")
+        if not isinstance(points, list):
+            return
+        vec = _to_vec(points)
+        if not vec:
+            return
+        # 追加到序列缓冲
+        try:
+            with cslr._buffer_lock:
+                cslr.sequence_buffer.append(vec)
+        except Exception:
+            # 回退：直接维护本地缓冲（不建议，尽量使用服务内缓冲）
+            pass
+        now = time.time()
+        # 满足帧数且到达推理间隔再进行推理
+        if len(cslr.sequence_buffer) >= min_frames and (now - last_pred_ts) >= min_interval:
+            seq = list(cslr.sequence_buffer)
             try:
-                data = await websocket.receive_text()
-                logger.info(f"收到WebSocket消息: {data}")
-                await websocket.send_text(f"Echo: {data}")
-            except WebSocketDisconnect:
-                logger.info("WebSocket测试连接断开")
-                break
-                
+                pred = await cslr.predict(seq)
+                last_pred_ts = now
+                if getattr(pred, "status", "success") == "success":
+                    await websocket.send_json({
+                        "type": "recognition_result",
+                        "payload": {
+                            "text": pred.text,
+                            "confidence": float(pred.confidence),
+                            "glossSequence": pred.gloss_sequence,
+                            "timestamp": now,
+                            "frameId": payload.get("frameId")
+                        }
+                    })
+            except Exception as e:
+                logger.warning(f"实时推理失败: {e}")
+
+    async def _handle_config(cfg: Dict):
+        # 支持动态更新部分配置
+        try:
+            if not cfg:
+                return
+            if "confidence_threshold" in cfg and isinstance(cfg["confidence_threshold"], (int, float)):
+                cslr.config.confidence_threshold = float(cfg["confidence_threshold"])
+            if "cache_size" in cfg and isinstance(cfg["cache_size"], int) and cslr.cache:
+                cslr.cache.max_size = int(cfg["cache_size"])
+            if "ctc_config" in cfg and isinstance(cfg["ctc_config"], dict):
+                cslr.ctc_config.update({k: v for k, v in cfg["ctc_config"].items() if k in {"blank_id", "beam_width", "alpha", "beta"}})
+            await websocket.send_json({"type": "config_updated", "payload": {}})
+        except Exception as e:
+            await websocket.send_json({"type": "error", "payload": {"message": f"配置更新失败: {e}"}})
+
+    try:
+        while True:
+            msg = await websocket.receive_text()
+            try:
+                data = json.loads(msg)
+            except Exception:
+                continue
+            mtype = data.get("type")
+            payload = data.get("payload", {})
+            if mtype == "landmarks":
+                await _handle_landmarks(payload)
+            elif mtype == "batch" and isinstance(payload, dict) and isinstance(payload.get("messages"), list):
+                for m in payload.get("messages"):
+                    if isinstance(m, dict) and m.get("type") == "landmarks":
+                        await _handle_landmarks(m.get("payload", {}))
+            elif mtype == "config":
+                await _handle_config(payload)
+            elif mtype == "ping":
+                await websocket.send_json({"type": "pong", "payload": {"timestamp": time.time()}})
+            else:
+                # 忽略未知消息类型
+                pass
+    except WebSocketDisconnect:
+        logger.info("WebSocket 客户端断开")
     except Exception as e:
-        logger.error(f"WebSocket测试连接错误: {e}")
+        logger.error(f"WebSocket 错误: {e}")
+        try:
+            await websocket.send_json({"type": "error", "payload": {"message": str(e)}})
+        except Exception:
+            pass
+        finally:
+            try:
+                await websocket.close()
+            except Exception:
+                pass
 
-# 挂载静态文件目录
-if not os.path.exists("uploads"):
-    os.makedirs("uploads", exist_ok=True)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+# 新增：连续手语识别上传与状态查询端点
+@app.post("/api/sign-recognition/upload-video", response_model=VideoUploadResponse)
+async def sign_recognition_upload_video(file: UploadFile = File(...)):
+    if not (SIGN_RECOGNITION_AVAILABLE and sign_recognition_service):
+        raise HTTPException(status_code=503, detail="连续手语识别服务不可用")
+    if not file_manager:
+        raise HTTPException(status_code=503, detail="文件管理器未初始化")
+    file_info = await file_manager.save_file(file)
+    if file_info.get("file_type") != "video":
+        raise HTTPException(status_code=400, detail="请上传视频文件")
+    task_id = await sign_recognition_service.start_video_recognition(file_info["file_path"])
+    return VideoUploadResponse(success=True, task_id=task_id, message="上传成功，任务已开始", status="uploaded")
 
-# 允许直接运行该文件以启动服务
-if __name__ == "__main__":
-    import os
-    
-    # 使用环境变量 PORT 可覆盖默认端口
-    port = int(os.getenv("PORT", "8000"))
-    host = os.getenv("HOST", "0.0.0.0")
-    debug = os.getenv("DEBUG", "true").lower() == "true"
-    
-    logger.info(f"启动服务器: http://{host}:{port}")
-    logger.info(f"调试模式: {debug}")
-    logger.info(f"连续手语识别: {'可用' if (SIGN_RECOGNITION_AVAILABLE and sign_recognition_service) else '不可用'}")
-    
-    # 运行 Uvicorn 服务器
-    uvicorn.run(
-        "main:app",
-        host=host,
-        port=port,
-        reload=debug,
-        log_level="info" if debug else "warning",
-        access_log=debug,
+@app.get("/api/sign-recognition/status/{task_id}", response_model=VideoStatusResponse)
+async def sign_recognition_status(task_id: str):
+    if not (SIGN_RECOGNITION_AVAILABLE and sign_recognition_service):
+        raise HTTPException(status_code=503, detail="连续手语识别服务不可用")
+    task = await sign_recognition_service.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    return VideoStatusResponse(
+        task_id=task_id,
+        status=str(task.get("status", "processing")),
+        progress=float(task.get("progress", 0.0)) if task.get("progress") is not None else None,
+        result=task.get("result"),
+        error=task.get("error"),
     )
+
+if __name__ == "__main__":
+    import socket
+    import platform
+    # 固定监听地址与端口，避免环境变量覆盖
+    host = "127.0.0.1"
+    port = 37759
+    # Windows 下关闭 reload
+    is_windows = platform.system().lower().startswith("win")
+    reload_flag = False if is_windows else False
+
+    def _run_uvicorn(h: str, p: int, reload_: bool):
+        uvicorn.run(
+            "backend.main:app",
+            host=h,
+            port=p,
+            reload=reload_,
+        )
+
+    chosen_port = port
+    _run_uvicorn(host, chosen_port, reload_flag)
