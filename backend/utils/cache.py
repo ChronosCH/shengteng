@@ -41,7 +41,41 @@ class CacheManager:
         self.default_ttl = 3600  # 1小时
         
         logger.info("缓存管理器初始化完成")
-    
+
+    def _evict_if_needed(self):
+        """当内存缓存达到上限时进行清理/淘汰
+        规则：
+        1) 先移除已过期的条目
+        2) 若仍超过阈值，按过期时间升序淘汰一定比例（10%）或至少1条
+        """
+        try:
+            now = time.time()
+            # 1) 清理过期
+            expired_keys = [k for k, v in list(self.memory_cache.items()) if v.get('expire_time', now) < now]
+            for k in expired_keys:
+                self.memory_cache.pop(k, None)
+            if expired_keys:
+                self.cache_stats["evictions"] += len(expired_keys)
+            
+            # 2) 容量淘汰
+            current_size = len(self.memory_cache)
+            if current_size >= self.max_memory_cache_size:
+                # 计算需要额外淘汰的数量（超出部分 + 额外10% 缓冲）
+                buffer_evict = max(1, int(self.max_memory_cache_size * 0.1))
+                to_evict = (current_size - self.max_memory_cache_size) + buffer_evict
+                # 按过期时间排序（最早过期的优先淘汰）
+                sorted_items = sorted(self.memory_cache.items(), key=lambda kv: kv[1].get('expire_time', now))
+                evicted = 0
+                for k, _ in sorted_items:
+                    if evicted >= to_evict:
+                        break
+                    self.memory_cache.pop(k, None)
+                    evicted += 1
+                if evicted:
+                    self.cache_stats["evictions"] += evicted
+        except Exception as e:
+            logger.error(f"内存缓存淘汰失败: {e}")
+
     async def initialize(self):
         """初始化缓存连接"""
         if REDIS_AVAILABLE:

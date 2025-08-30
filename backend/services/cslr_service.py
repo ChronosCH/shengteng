@@ -248,14 +248,15 @@ class CSLRService:
             
             # 对于推理，我们使用模拟实现，因为真实的模型加载需要具体的模型文件
             logger.info("使用模拟推理模式（开发环境）")
-            self.model = None  # 模拟模型
+            # 重要：使用字符串哨兵，避免 None 触发错误的推理分支
+            self.model = "mock_model"  # 模拟模型
             
             logger.info(f"MindSpore 推理环境初始化成功")
             
         except Exception as e:
             logger.error(f"MindSpore 模型加载失败: {e}")
             # 降级到模拟模式
-            self.model = None
+            self.model = "mock_model"
             logger.info("降级到模拟推理模式")
     
     async def _load_mock_model(self) -> None:
@@ -342,7 +343,7 @@ class CSLRService:
             if self.config.use_threading and self.executor:
                 prediction = await self._threaded_inference(input_array)
             else:
-                if MINDSPORE_AVAILABLE and self.model != "mock_model":
+                if MINDSPORE_AVAILABLE and (self.model is not None) and (self.model != "mock_model"):
                     prediction = await self._mindspore_inference(input_array)
                 else:
                     prediction = await self._mock_inference(input_array)
@@ -393,7 +394,7 @@ class CSLRService:
         """线程池推理"""
         loop = asyncio.get_event_loop()
         
-        if MINDSPORE_AVAILABLE and self.model != "mock_model":
+        if MINDSPORE_AVAILABLE and (self.model is not None) and (self.model != "mock_model"):
             return await loop.run_in_executor(
                 self.executor, self._sync_mindspore_inference, input_data
             )
