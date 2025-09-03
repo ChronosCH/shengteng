@@ -481,38 +481,67 @@ class SignRecognitionService:
         if not ckpt_path or not os.path.exists(ckpt_path):
             raise RuntimeError(f"模型权重不存在: {ckpt_path}")
         params = load_checkpoint(ckpt_path)
-        load_param_into_net(self.frame_model, params)
+        # 统计匹配度
+        try:
+            net_params = {p.name: p for p in self.frame_model.get_parameters()}
+            total = len(net_params)
+            matched = 0
+            mismatched_shapes = []
+            for name, tensor in params.items():
+                if name in net_params:
+                    try:
+                        if tuple(net_params[name].shape) == tuple(tensor.data.shape):
+                            matched += 1
+                        else:
+                            mismatched_shapes.append((name, tuple(net_params[name].shape), tuple(tensor.data.shape)))
+                
+                    except Exception:
+                        pass
+            load_param_into_net(self.frame_model, params)
+            cover = (matched / max(1, total)) * 100.0
+            if cover < 95.0:
+                logger.warning(f"模型权重加载覆盖率偏低: {cover:.1f}% (匹配 {matched}/{total})")
+                if mismatched_shapes:
+                    head_mismatch = [n for n, s1, s2 in mismatched_shapes if 'classifier' in n]
+                    if head_mismatch:
+                        logger.warning(f"分类头权重维度不匹配，可能导致输出集中在少数类别: {head_mismatch[:3]} ...")
+        except Exception:
+            load_param_into_net(self.frame_model, params)
         self.frame_model.set_train(False)
         self.frame_model_ready = True
         logger.info("帧模型已加载并就绪")
 
     def _preprocess_frame_to_flat(self, frame: np.ndarray) -> np.ndarray:
-        # BGR->RGB，缩放到 image_size，归一化到[0,1]，转为 (C,H,W) 再展平成 (F,)
-        try:
-            img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        except Exception:
-            img = frame
-        img = cv2.resize(img, self.frame_image_size, interpolation=cv2.INTER_AREA)
-        img = img.astype(np.float32)
-        if img.max() > 1.0:
-            img = img / 255.0
-        # (H,W,C) -> (C,H,W) -> flatten
-        chw = np.transpose(img, (2, 0, 1))
-        flat = chw.reshape(-1)
-        return flat
+         # BGR->RGB，缩放到 image_size，归一化到[0,1]，转为 (C,H,W) 再展平成 (F,)
+         try:
+             img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+         except Exception:
+             img = frame
+         img = cv2.resize(img, self.frame_image_size, interpolation=cv2.INTER_AREA)
+         img = img.astype(np.float32)
+         if img.max() > 1.0:
+             img = img / 255.0
+         # (H,W,C) -> (C,H,W) -> flatten
+         chw = np.transpose(img, (2, 0, 1))
+         flat = chw.reshape(-1)
+         return flat
 
     async def _predict_window_frames(self, x_tf: np.ndarray) -> Tuple[str, float]:
-        # x_tf: (T,F) -> (1,T,F)
-        if not self.frame_model_ready:
-            await self._ensure_frame_model_loaded()
-        x = x_tf[None, ...]
-        logits = self.frame_model(Tensor(x, ms.float32))  # (1, vocab)
-        probs = logits.asnumpy().astype(np.float64)
-        # softmax
-        probs = np.exp(probs - probs.max(axis=-1, keepdims=True))
-        probs = probs / np.sum(probs, axis=-1, keepdims=True)
-        idx = int(np.argmax(probs[0]))
-        conf = float(probs[0, idx])
-        # idx->词
-        label = self.cslr_service.reverse_vocab.get(idx, "")
-        return label, conf
+         # x_tf: (T,F) -> (1,T,F)
+         if not self.frame_model_ready:
+             await self._ensure_frame_model_loaded()
+         x = x_tf[None, ...]
+         logits = self.frame_model(Tensor(x, ms.float32))  # (1, vocab)
+         probs = logits.asnumpy().astype(np.float64)
+         # softmax
+         probs = np.exp(probs - probs.max(axis=-1, keepdims=True))
+         probs = probs / np.sum(probs, axis=-1, keepdims=True)
+         idx = int(np.argmax(probs[0]))
+         conf = float(probs[0, idx])
+         # idx->词：优先使用 idx2word，回退 reverse_vocab
+         idx2word = getattr(self.cslr_service, 'idx2word', None)
+         if isinstance(idx2word, list) and idx < len(idx2word):
+             label = idx2word[idx]
+         else:
+             label = self.cslr_service.reverse_vocab.get(idx, "")
+         return label, conf

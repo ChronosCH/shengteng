@@ -196,6 +196,12 @@ class CSLRService:
             # 2) 带有 'word2idx' 字段 { "word2idx": { token: id, ... }, ... }
             if isinstance(data, dict) and 'word2idx' in data and isinstance(data['word2idx'], dict):
                 self.vocab = data['word2idx']
+                # 如果提供 idx2word，用于更稳妥的 index->label 映射（可选）
+                try:
+                    if isinstance(data.get('idx2word'), list):
+                        self.idx2word = data['idx2word']
+                except Exception:
+                    pass
             elif isinstance(data, dict):
                 self.vocab = data
             else:
