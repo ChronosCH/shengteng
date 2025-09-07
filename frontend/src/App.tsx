@@ -15,6 +15,7 @@ import AdvancedAvatarPage from './pages/AdvancedAvatarPage.tsx'
 import AvatarComparisonPage from './pages/AvatarComparisonPage.tsx'
 import SettingsPage from './pages/SettingsPage.tsx'
 import LabPage from './pages/LabPage.tsx'
+import { AuthProvider } from './contexts/AuthContext'
 
 function App() {
   const [darkMode, setDarkMode] = useState(false)
@@ -159,25 +160,27 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Router>
-          <Layout darkMode={darkMode} onToggleDarkMode={() => setDarkMode(!darkMode)}>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/recognition" element={<RecognitionPage />} />
-              <Route path="/learning" element={<LearningPage />} />
-              <Route path="/avatar" element={<AvatarPage />} />
-              <Route path="/avatar-pro" element={<ProfessionalAvatarPage />} />
-              <Route path="/avatar-hq" element={<HighQualityAvatarPage />} />
-              <Route path="/avatar-advanced" element={<AdvancedAvatarPage />} />
-              <Route path="/avatar-compare" element={<AvatarComparisonPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/lab" element={<LabPage />} />
-            </Routes>
-          </Layout>
-        </Router>
-      </ThemeProvider>
+      <AuthProvider>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <Router>
+            <Layout darkMode={darkMode} onToggleDarkMode={() => setDarkMode(!darkMode)}>
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/recognition" element={<RecognitionPage />} />
+                <Route path="/learning" element={<LearningPage />} />
+                <Route path="/avatar" element={<AvatarPage />} />
+                <Route path="/avatar-pro" element={<ProfessionalAvatarPage />} />
+                <Route path="/avatar-hq" element={<HighQualityAvatarPage />} />
+                <Route path="/avatar-advanced" element={<AdvancedAvatarPage />} />
+                <Route path="/avatar-compare" element={<AvatarComparisonPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/lab" element={<LabPage />} />
+              </Routes>
+            </Layout>
+          </Router>
+        </ThemeProvider>
+      </AuthProvider>
     </ErrorBoundary>
   )
 }

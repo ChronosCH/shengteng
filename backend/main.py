@@ -3,13 +3,9 @@
 整合手语识别与学习训练功能的完整后端服务
 """
 
-import asyncio
 import logging
-import os
 import json
 import time
-import uuid
-import cv2
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -22,11 +18,9 @@ for _p in (str(_PROJECT_ROOT), str(_BACKEND_DIR)):
     if _p not in _sys.path:
         _sys.path.insert(0, _p)
 
-import numpy as np
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Depends, status, UploadFile, File, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -66,58 +60,98 @@ sign_recognition_service = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用生命周期管理"""
-    global learning_service, sign_recognition_service, file_manager
-     
-    logger.info("🚀 启动手语学习训练系统...")
-    
-    try:
-        # 初始化文件管理器
-        file_manager = FileManager()
-        app.state.file_manager = file_manager
+    """改进的应用生命周期管理"""
+    from backend.core.service_manager import service_manager, default_health_check
+    from backend.core.config_manager import get_config
+    from backend.utils.file_manager import FileManager
 
-        # 初始化连续手语识别服务
+    logger.info("🚀 启动手语学习训练系统...")
+
+    try:
+        # 获取配置
+        config = get_config()
+
+        # 注册文件管理器
+        service_manager.register_service(
+            "file_manager",
+            FileManager,
+            health_check=default_health_check
+        )
+
+        # 注册MediaPipe服务
         if SIGN_RECOGNITION_AVAILABLE:
-            try:
-                mediapipe_service = MediaPipeService()
-                cslr_service = CSLRService()
-                await cslr_service.load_model()
-                sign_recognition_service = SignRecognitionService(mediapipe_service, cslr_service)
-                app.state.sign_recognition_service = sign_recognition_service
-                logger.info("✅ 连续手语识别服务初始化完成")
-            except Exception as e:
-                logger.error(f"❌ 连续手语识别服务初始化失败: {e}")
-                sign_recognition_service = None
-        else:
-            logger.warning("⚠️ 连续手语识别服务不可用")
-            sign_recognition_service = None
-        
-        # 初始化学习训练服务
+            service_manager.register_service(
+                "mediapipe_service",
+                MediaPipeService,
+                health_check=default_health_check
+            )
+
+            # 注册CSLR服务
+            service_manager.register_service(
+                "cslr_service",
+                CSLRService,
+                dependencies=["mediapipe_service"],
+                health_check=default_health_check
+            )
+
+            # 注册手语识别服务
+            def create_sign_recognition_service():
+                mediapipe_svc = service_manager.get_service("mediapipe_service")
+                cslr_svc = service_manager.get_service("cslr_service")
+                return SignRecognitionService(mediapipe_svc, cslr_svc)
+
+            service_manager.register_service(
+                "sign_recognition_service",
+                lambda: create_sign_recognition_service(),
+                dependencies=["mediapipe_service", "cslr_service"],
+                health_check=default_health_check
+            )
+
+        # 注册学习训练服务
         if LEARNING_AVAILABLE:
-            learning_service = LearningTrainingService()
-            # 可选的初始化钩子
-            if hasattr(learning_service, "initialize") and callable(getattr(learning_service, "initialize")):
-                try:
-                    await learning_service.initialize()
-                except Exception as e:
-                    logger.warning(f"学习训练服务初始化钩子执行失败: {e}")
-            app.state.learning_service = learning_service
-            logger.info("✅ 学习训练服务初始化完成")
-        else:
-            logger.warning("⚠️ 学习训练服务不可用")
-        
+            service_manager.register_service(
+                "learning_service",
+                LearningTrainingService,
+                health_check=default_health_check
+            )
+
+        # 启动所有服务
+        success = await service_manager.start_all_services()
+        if not success:
+            raise Exception("部分服务启动失败")
+
+        # 将服务注册到app.state
+        app.state.service_manager = service_manager
+        app.state.config = config
+
+        # 为了向后兼容，保留原有的访问方式
+        try:
+            app.state.file_manager = service_manager.get_service("file_manager")
+        except:
+            app.state.file_manager = None
+
+        try:
+            app.state.sign_recognition_service = service_manager.get_service("sign_recognition_service")
+        except:
+            app.state.sign_recognition_service = None
+
+        try:
+            app.state.learning_service = service_manager.get_service("learning_service")
+        except:
+            app.state.learning_service = None
+
         logger.info("✅ 系统初始化完成")
         yield
+
     except Exception as e:
         logger.error(f"❌ 服务初始化失败: {e}")
         raise
     finally:
         # 清理资源
         logger.info("🔄 正在关闭服务...")
-        if learning_service and hasattr(learning_service, "close") and callable(getattr(learning_service, "close")):
-            try:
-                await learning_service.close()
-            except Exception as e:
+        try:
+            await service_manager.stop_all_services()
+        except Exception as e:
                 logger.warning(f"学习训练服务关闭钩子执行失败: {e}")
         logger.info("✅ 服务关闭完成")
 
@@ -149,9 +183,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 注册认证路由
+try:
+    from backend.api.auth_routes import router as auth_router
+    app.include_router(auth_router, tags=["认证"])
+    logger.info("✅ 认证路由已注册")
+except ImportError as e:
+    logger.warning(f"⚠️ 认证路由注册失败: {e}")
+
 # 注册学习训练路由
 if LEARNING_AVAILABLE:
     app.include_router(learning_router, prefix="/api/learning", tags=["学习训练"])
+
+# 注册系统管理路由
+try:
+    from backend.api.system_routes import router as system_router
+    app.include_router(system_router)
+    logger.info("✅ 系统管理路由已注册")
+except ImportError as e:
+    logger.warning(f"⚠️ 系统管理路由注册失败: {e}")
 
 # 数据模型
 class HealthResponse(BaseModel):
@@ -498,9 +548,9 @@ async def sign_recognition_status(task_id: str):
 if __name__ == "__main__":
     import socket
     import platform
-    # 固定监听地址与端口，避免环境变量覆盖
+    # 使用8000端口以匹配前端配置
     host = "127.0.0.1"
-    port = 37759
+    port = 8000
     # Windows 下关闭 reload
     is_windows = platform.system().lower().startswith("win")
     reload_flag = False if is_windows else False

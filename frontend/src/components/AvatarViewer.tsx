@@ -23,6 +23,7 @@ import { SignSequence } from '../services/diffusionService'
 import { getSignPreset } from './SignLanguagePresets'
 import ImprovedAvatar from './avatar/ImprovedAvatar'
 import ThreeDErrorBoundary, { SimpleAvatarFallback } from './ThreeDErrorBoundary'
+import SimpleSignLanguageAvatar from './SimpleSignLanguageAvatar'
 
 interface HandKeypoint {
   x: number
@@ -227,12 +228,14 @@ const AvatarViewer: React.FC<AvatarViewerProps> = ({
             </Typography>
           </Box>
         }>
-          {/* 使用错误边界包装3D组件 */}
-          <ThreeDErrorBoundary 
+          {/* 使用错误边界包装3D组件，提供多层回退方案 */}
+          <ThreeDErrorBoundary
             fallback={
-              <SimpleAvatarFallback 
-                text={text} 
-                isActive={isActive} 
+              <SimpleSignLanguageAvatar
+                text={text}
+                isActive={isActive}
+                leftHandKeypoints={leftHandKeypoints || autoHandKeypoints.left}
+                rightHandKeypoints={rightHandKeypoints || autoHandKeypoints.right}
               />
             }
           >
@@ -241,6 +244,7 @@ const AvatarViewer: React.FC<AvatarViewerProps> = ({
                 isActive={isActive}
                 leftHandKeypoints={leftHandKeypoints || autoHandKeypoints.left}
                 rightHandKeypoints={rightHandKeypoints || autoHandKeypoints.right}
+                onReady={handleAvatarMeshReady}
               />
             </Box>
           </ThreeDErrorBoundary>

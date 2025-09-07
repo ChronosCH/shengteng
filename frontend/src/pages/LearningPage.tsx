@@ -3,7 +3,7 @@
  * 提供系统化的手语学习体验，包括课程管理、进度跟踪、成就系统等
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import {
   Box,
   Container,
@@ -46,7 +46,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Badge,
   Tooltip,
 } from '@mui/material'
 import {
@@ -73,13 +72,10 @@ import {
   Share,
   PlayCircle,
   Assignment,
-  Lightbulb,
   Group,
   Category,
-  CalendarToday,
   AccessTime,
   Language,
-  Translate,
   VolumeUp,
   Visibility,
   TouchApp,
@@ -90,6 +86,15 @@ import ErrorBoundary from '../components/ErrorBoundary'
 import HandSignDemo from '../components/HandSignDemo'
 import HandSignTestPanel from '../components/HandSignTestPanel'
 import SimpleHandSignTest from '../components/SimpleHandSignTest'
+import { useAuth } from '../contexts/AuthContext'
+import AuthModal from '../components/auth/AuthModal'
+import UserDashboard from '../components/learning/UserDashboard'
+import LearningRecommendations from '../components/learning/LearningRecommendations'
+import LearningAnalytics from '../components/learning/LearningAnalytics'
+import InteractiveTutorial from '../components/learning/InteractiveTutorial'
+import PracticeSession from '../components/learning/PracticeSession'
+import GamificationSystem from '../components/learning/GamificationSystem'
+import ExternalResources from '../components/learning/ExternalResources'
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -138,6 +143,14 @@ function LearningPage() {
   const [filterDifficulty, setFilterDifficulty] = useState('all')
   const [filterType, setFilterType] = useState('all')
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' as any })
+  const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [showTutorial, setShowTutorial] = useState(false)
+  const [showPractice, setShowPractice] = useState(false)
+  const [selectedTutorial, setSelectedTutorial] = useState<any>(null)
+  const [selectedPractice, setSelectedPractice] = useState<any>(null)
+
+  // 认证状态
+  const { isAuthenticated, user, loading } = useAuth()
   
   // 模拟用户数据
   const [userStats, setUserStats] = useState({
@@ -173,14 +186,25 @@ function LearningPage() {
     setSnackbar({ ...snackbar, open: false })
   }
 
-  // 开始课程
+  // 开始课程 - 需要认证
   const startLesson = useCallback((lesson: any) => {
+    if (!isAuthenticated) {
+      setAuthModalOpen(true)
+      showSnackbar('请先登录以开始学习', 'warning')
+      return
+    }
     setSelectedLesson(lesson)
     showSnackbar(`开始学习: ${lesson.title}`, 'info')
-  }, [])
+  }, [isAuthenticated])
 
-  // 完成课程
+  // 完成课程 - 需要认证
   const completeLesson = useCallback((lessonId: string, score: number = 100) => {
+    if (!isAuthenticated) {
+      setAuthModalOpen(true)
+      showSnackbar('请先登录以保存学习进度', 'warning')
+      return
+    }
+
     // 更新统计数据
     setUserStats(prev => ({
       ...prev,
@@ -188,7 +212,7 @@ function LearningPage() {
       totalXP: prev.totalXP + Math.floor(score * 0.5),
       totalLearningTime: prev.totalLearningTime + 15,
     }))
-    
+
     setTodayStats(prev => ({
       ...prev,
       lessonsCompleted: prev.lessonsCompleted + 1,
@@ -199,10 +223,15 @@ function LearningPage() {
     showSnackbar(`课程完成！获得 ${Math.floor(score * 0.5)} XP`, 'success')
   }, [])
 
-  // 收藏课程
+  // 收藏课程 - 需要认证
   const bookmarkLesson = useCallback((lessonId: string) => {
+    if (!isAuthenticated) {
+      setAuthModalOpen(true)
+      showSnackbar('请先登录以收藏课程', 'warning')
+      return
+    }
     showSnackbar('已添加到书签', 'success')
-  }, [])
+  }, [isAuthenticated])
 
   // 分享课程
   const shareLesson = useCallback((lesson: any) => {
@@ -646,6 +675,60 @@ function LearningPage() {
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
+      {/* 个性化欢迎消息 */}
+      {isAuthenticated && user && (
+        <Fade in timeout={400}>
+          <Alert
+            severity="success"
+            sx={{
+              mb: 3,
+              borderRadius: 3,
+              background: 'linear-gradient(135deg, #B5EAD7 0%, #C7F0DB 100%)',
+              border: 'none',
+            }}
+          >
+            <Typography variant="body1" sx={{ fontWeight: 600 }}>
+              欢迎回来，{user.full_name || user.username}！ 🎉
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 0.5 }}>
+              继续您的手语学习之旅，今天也要加油哦！
+            </Typography>
+          </Alert>
+        </Fade>
+      )}
+
+      {/* 未登录提示 */}
+      {!isAuthenticated && (
+        <Fade in timeout={400}>
+          <Alert
+            severity="info"
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => setAuthModalOpen(true)}
+                sx={{ fontWeight: 600 }}
+              >
+                立即登录
+              </Button>
+            }
+            sx={{
+              mb: 3,
+              borderRadius: 3,
+              background: 'linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%)',
+              border: 'none',
+            }}
+          >
+            <Typography variant="body1" sx={{ fontWeight: 600 }}>
+              登录以获得个性化学习体验 📚
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 0.5 }}>
+              保存学习进度、获得成就奖励、享受专属推荐内容
+            </Typography>
+          </Alert>
+        </Fade>
+      )}
+
       {/* 页面标题和用户统计增强版 */}
       <Fade in timeout={600}>
         <Box sx={{ mb: 6 }}>
@@ -1160,29 +1243,85 @@ function LearningPage() {
                     '& .MuiTab-root': { py: 2.5, fontSize: '1rem', fontWeight: 600 }
                   }}
                 >
-                  <Tab 
-                    icon={<VideoLibrary />} 
-                    label="视频演示" 
+                  <Tab
+                    icon={<Assessment />}
+                    label="学习仪表板"
                     iconPosition="start"
                   />
-                  <Tab 
-                    icon={<TouchApp />} 
-                    label="互动练习" 
+                  <Tab
+                    icon={<VideoLibrary />}
+                    label="视频演示"
                     iconPosition="start"
                   />
-                  <Tab 
-                    icon={<Quiz />} 
-                    label="能力测试" 
+                  <Tab
+                    icon={<TouchApp />}
+                    label="互动练习"
                     iconPosition="start"
                   />
-                  <Tab 
-                    icon={<Games />} 
-                    label="游戏学习" 
+                  <Tab
+                    icon={<Quiz />}
+                    label="能力测试"
+                    iconPosition="start"
+                  />
+                  <Tab
+                    icon={<Games />}
+                    label="游戏学习"
+                    iconPosition="start"
+                  />
+                  <Tab
+                    icon={<Language />}
+                    label="外部资源"
                     iconPosition="start"
                   />
                 </Tabs>
 
                 <TabPanel value={currentTab} index={0}>
+                  <Box sx={{ p: 4 }}>
+                    {/* 用户仪表板 */}
+                    {isAuthenticated ? (
+                      <Stack spacing={4}>
+                        <UserDashboard
+                          userStats={userStats}
+                          onStartLesson={startLesson}
+                        />
+
+                        <LearningRecommendations
+                          userLevel={userStats.level}
+                          completedLessons={userStats.completedLessons}
+                          currentStreak={userStats.currentStreak}
+                          onStartLesson={startLesson}
+                          onBookmarkLesson={bookmarkLesson}
+                        />
+
+                        <LearningAnalytics userStats={userStats} />
+                      </Stack>
+                    ) : (
+                      <Box textAlign="center" py={8}>
+                        <Typography variant="h5" gutterBottom>
+                          🔐 登录查看个人仪表板
+                        </Typography>
+                        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                          登录后可查看详细的学习进度、个性化推荐和学习分析
+                        </Typography>
+                        <Button
+                          variant="contained"
+                          size="large"
+                          onClick={() => setAuthModalOpen(true)}
+                          sx={{
+                            borderRadius: 3,
+                            px: 4,
+                            py: 1.5,
+                            background: 'linear-gradient(135deg, #B5EAD7 0%, #C7F0DB 100%)',
+                          }}
+                        >
+                          立即登录
+                        </Button>
+                      </Box>
+                    )}
+                  </Box>
+                </TabPanel>
+
+                <TabPanel value={currentTab} index={1}>
                   <Box sx={{ p: 4 }}>
                     <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                       📺 手语动作演示
@@ -1238,7 +1377,7 @@ function LearningPage() {
                   </Box>
                 </TabPanel>
 
-                <TabPanel value={currentTab} index={1}>
+                <TabPanel value={currentTab} index={2}>
                   <Box sx={{ p: 4 }}>
                     <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                       🤝 互动练习
@@ -1246,64 +1385,174 @@ function LearningPage() {
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                       通过实时交互练习手语动作，获得即时反馈和指导
                     </Typography>
-                    
+
                     <Grid container spacing={3}>
-                      <Grid item xs={12} md={8}>
-                        <ErrorBoundary>
-                          <SimpleHandSignTest />
-                        </ErrorBoundary>
-                      </Grid>
-                      <Grid item xs={12} md={4}>
-                        <Stack spacing={2}>
-                          <Paper sx={{ p: 3, bgcolor: '#e8f5e8', borderRadius: 3 }}>
-                            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                              🌟 练习建议
-                            </Typography>
-                            <Typography variant="body2" sx={{ mb: 2 }}>
-                              从简单的手语开始，逐步增加难度
-                            </Typography>
-                            <Button 
-                              variant="outlined" 
-                              size="small" 
-                              startIcon={<Lightbulb />}
-                              onClick={() => showSnackbar('已为您推荐适合的练习内容', 'info')}
-                            >
-                              获取练习建议
-                            </Button>
-                          </Paper>
-                          
-                          <Paper sx={{ p: 3, bgcolor: '#fff3e0', borderRadius: 3 }}>
-                            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                              📈 练习统计
-                            </Typography>
-                            <Stack spacing={1}>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2">今日练习</Typography>
-                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                  {todayStats.lessonsCompleted} 次
-                                </Typography>
-                              </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2">练习时长</Typography>
-                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                  {todayStats.timeSpent} 分钟
-                                </Typography>
-                              </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2">正确率</Typography>
-                                <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main' }}>
-                                  85%
-                                </Typography>
-                              </Box>
+                      {/* 交互式教程卡片 */}
+                      <Grid item xs={12} md={6}>
+                        <Card sx={{ borderRadius: 3, height: '100%' }}>
+                          <CardContent>
+                            <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
+                              <Avatar sx={{ bgcolor: '#B5EAD7' }}>
+                                <School />
+                              </Avatar>
+                              <Typography variant="h6" fontWeight="bold">
+                                交互式教程
+                              </Typography>
                             </Stack>
-                          </Paper>
-                        </Stack>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                              跟随步骤式指导学习手语，获得实时反馈和提示
+                            </Typography>
+                            <Stack spacing={2}>
+                              <Button
+                                variant="contained"
+                                fullWidth
+                                startIcon={<PlayArrow />}
+                                onClick={() => {
+                                  if (!isAuthenticated) {
+                                    setAuthModalOpen(true)
+                                    return
+                                  }
+                                  setSelectedTutorial({
+                                    id: 'basic-numbers',
+                                    title: '基础数字手语',
+                                    description: '学习0-10的数字手语表达',
+                                    steps: [
+                                      {
+                                        id: 'step1',
+                                        title: '数字0',
+                                        description: '学习数字0的手语表达',
+                                        instruction: '将手握成拳头，拇指向上',
+                                        tips: ['保持手型稳定', '动作要清晰'],
+                                        expectedAction: '握拳拇指向上',
+                                        difficulty: 'easy',
+                                        estimatedTime: 2,
+                                      },
+                                      {
+                                        id: 'step2',
+                                        title: '数字1',
+                                        description: '学习数字1的手语表达',
+                                        instruction: '伸出食指，其他手指握拳',
+                                        tips: ['食指要直立', '其他手指紧握'],
+                                        expectedAction: '食指直立',
+                                        difficulty: 'easy',
+                                        estimatedTime: 2,
+                                      },
+                                    ]
+                                  })
+                                  setShowTutorial(true)
+                                }}
+                                sx={{ borderRadius: 2 }}
+                              >
+                                开始教程
+                              </Button>
+                              <Button
+                                variant="outlined"
+                                fullWidth
+                                startIcon={<Assignment />}
+                                sx={{ borderRadius: 2 }}
+                              >
+                                查看所有教程
+                              </Button>
+                            </Stack>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+
+                      {/* 练习会话卡片 */}
+                      <Grid item xs={12} md={6}>
+                        <Card sx={{ borderRadius: 3, height: '100%' }}>
+                          <CardContent>
+                            <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
+                              <Avatar sx={{ bgcolor: '#FFB3BA' }}>
+                                <TouchApp />
+                              </Avatar>
+                              <Typography variant="h6" fontWeight="bold">
+                                实时练习
+                              </Typography>
+                            </Stack>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                              通过摄像头进行实时手语练习，获得准确率反馈
+                            </Typography>
+                            <Stack spacing={2}>
+                              <Button
+                                variant="contained"
+                                fullWidth
+                                startIcon={<PlayArrow />}
+                                onClick={() => {
+                                  if (!isAuthenticated) {
+                                    setAuthModalOpen(true)
+                                    return
+                                  }
+                                  setSelectedPractice({
+                                    sessionTitle: '基础手语练习',
+                                    exercises: [
+                                      {
+                                        id: 'ex1',
+                                        word: '你好',
+                                        description: '学习基本问候语',
+                                        difficulty: 'easy',
+                                        category: '问候',
+                                        expectedGesture: '右手举起，手掌向前',
+                                        hints: ['保持手掌平直', '动作要自然'],
+                                      },
+                                      {
+                                        id: 'ex2',
+                                        word: '谢谢',
+                                        description: '学习感谢表达',
+                                        difficulty: 'easy',
+                                        category: '礼貌用语',
+                                        expectedGesture: '双手合十，微微鞠躬',
+                                        hints: ['双手要对齐', '表情要真诚'],
+                                      },
+                                    ]
+                                  })
+                                  setShowPractice(true)
+                                }}
+                                sx={{ borderRadius: 2 }}
+                              >
+                                开始练习
+                              </Button>
+                              <Button
+                                variant="outlined"
+                                fullWidth
+                                startIcon={<Speed />}
+                                sx={{ borderRadius: 2 }}
+                              >
+                                快速测试
+                              </Button>
+                            </Stack>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+
+                      {/* 游戏化系统 */}
+                      <Grid item xs={12}>
+                        <GamificationSystem
+                          userStats={userStats}
+                          onClaimReward={(achievementId) => {
+                            showSnackbar('奖励已领取！', 'success')
+                          }}
+                        />
+                      </Grid>
+
+                      {/* 原有的简单测试组件 */}
+                      <Grid item xs={12}>
+                        <Card sx={{ borderRadius: 3 }}>
+                          <CardContent>
+                            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                              🎯 基础练习
+                            </Typography>
+                            <ErrorBoundary>
+                              <SimpleHandSignTest />
+                            </ErrorBoundary>
+                          </CardContent>
+                        </Card>
                       </Grid>
                     </Grid>
                   </Box>
                 </TabPanel>
 
-                <TabPanel value={currentTab} index={2}>
+                <TabPanel value={currentTab} index={3}>
                   <Box sx={{ p: 4 }}>
                     <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                       📝 能力测试
@@ -1380,7 +1629,7 @@ function LearningPage() {
                   </Box>
                 </TabPanel>
 
-                <TabPanel value={currentTab} index={3}>
+                <TabPanel value={currentTab} index={4}>
                   <Box sx={{ p: 4 }}>
                     <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                       🎮 游戏化学习
@@ -1489,6 +1738,16 @@ function LearningPage() {
                         </Grid>
                       ))}
                     </Grid>
+                  </Box>
+                </TabPanel>
+
+                <TabPanel value={currentTab} index={5}>
+                  <Box sx={{ p: 4 }}>
+                    <ExternalResources
+                      onBookmark={(resourceId) => {
+                        showSnackbar('资源已收藏', 'success')
+                      }}
+                    />
                   </Box>
                 </TabPanel>
               </Paper>
@@ -2193,6 +2452,52 @@ function LearningPage() {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* 认证模态框 */}
+      <AuthModal
+        open={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        initialMode="login"
+      />
+
+      {/* 交互式教程模态框 */}
+      {selectedTutorial && (
+        <InteractiveTutorial
+          tutorialId={selectedTutorial.id}
+          title={selectedTutorial.title}
+          description={selectedTutorial.description}
+          steps={selectedTutorial.steps}
+          onComplete={(score) => {
+            setShowTutorial(false)
+            setSelectedTutorial(null)
+            showSnackbar(`教程完成！得分: ${score}%`, 'success')
+            completeLesson(selectedTutorial.id, score)
+          }}
+          onClose={() => {
+            setShowTutorial(false)
+            setSelectedTutorial(null)
+          }}
+        />
+      )}
+
+      {/* 练习会话模态框 */}
+      {selectedPractice && (
+        <PracticeSession
+          exercises={selectedPractice.exercises}
+          sessionTitle={selectedPractice.sessionTitle}
+          onComplete={(results) => {
+            setShowPractice(false)
+            setSelectedPractice(null)
+            const averageScore = results.reduce((sum, result) => sum + result.accuracy, 0) / results.length
+            showSnackbar(`练习完成！平均准确率: ${Math.round(averageScore)}%`, 'success')
+            completeLesson('practice-session', averageScore)
+          }}
+          onClose={() => {
+            setShowPractice(false)
+            setSelectedPractice(null)
+          }}
+        />
+      )}
     </Container>
   )
 }

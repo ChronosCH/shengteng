@@ -235,39 +235,58 @@ class SignRecognitionService:
                 srt_path=srt_path,
             )
 
-        # 原有 MediaPipe 流程
+        # 改进的 MediaPipe 流程
+        return await self._run_mediapipe_pipeline(task_id, file_path)
+
+    async def _run_mediapipe_pipeline(self, task_id: str, file_path: str) -> RecognitionResult:
+        """使用MediaPipe + CSLR的视频识别流程"""
         cap = cv2.VideoCapture(file_path)
         if not cap.isOpened():
             raise RuntimeError("无法打开视频文件")
+
         fps = cap.get(cv2.CAP_PROP_FPS) or 25
         frame_interval = int(max(1, round(fps / self.target_fps)))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        landmark_vectors: List[List[float]] = []
+        landmark_sequences: List[np.ndarray] = []
         frame_indices: List[int] = []
 
         frame_id = 0
         processed_frames = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            if frame_id % frame_interval == 0:
-                result = self.mediapipe_service.extract_landmarks(frame)
-                if result.get("success"):
-                    landmarks_array = self.mediapipe_service.landmarks_to_array(result["landmarks"])  # (543,3)
-                    # 展平
-                    flat_vec = landmarks_array.reshape(-1).tolist()
-                    landmark_vectors.append(flat_vec)
-                    frame_indices.append(frame_id)
-                processed_frames += 1
-                if processed_frames % 50 == 0:
-                    await self._update_task(task_id, progress=min(0.8, 0.1 + 0.6 * processed_frames / total_frames))
-            frame_id += 1
 
-        cap.release()
-        if not landmark_vectors:
-            raise RuntimeError("未提取到任何关键点")
+        try:
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                if frame_id % frame_interval == 0:
+                    # 提取关键点
+                    result = self.mediapipe_service.extract_landmarks(frame)
+                    if result.get("success"):
+                        # 使用标准化的关键点数据
+                        landmarks_data = result["landmarks"]
+                        normalized_landmarks = self.mediapipe_service.get_normalized_landmarks_for_cslr(landmarks_data)
+                        landmark_sequences.append(normalized_landmarks)
+                        frame_indices.append(frame_id)
+                    else:
+                        # 如果关键点提取失败，添加零向量
+                        zero_landmarks = np.zeros(144, dtype=np.float32)
+                        landmark_sequences.append(zero_landmarks)
+                        frame_indices.append(frame_id)
+
+                    processed_frames += 1
+                    if processed_frames % 20 == 0:
+                        progress = min(0.6, 0.1 + 0.5 * processed_frames / max(1, total_frames / frame_interval))
+                        await self._update_task(task_id, progress=progress)
+
+                frame_id += 1
+
+        finally:
+            cap.release()
+
+        if not landmark_sequences:
+            raise RuntimeError("未提取到任何有效的关键点数据")
 
         # 分窗口推理
         win = self.window_length
@@ -275,28 +294,44 @@ class SignRecognitionService:
         segments: List[RecognitionSegment] = []
         gloss_full: List[str] = []
         confidences: List[float] = []
-        T = len(landmark_vectors)
+        T = len(landmark_sequences)
         idx = 0
-        window_id = 0
+
         while idx < T:
-            window_seq = landmark_vectors[idx: idx + win]
-            # 重置 cslr sequence buffer
-            self.cslr_service.sequence_buffer.clear()
-            for vec in window_seq:
-                self.cslr_service.sequence_buffer.append(vec)
-            pred = await self.cslr_service.predict(window_seq)
-            if pred.status == "success" and pred.gloss_sequence:
-                segments.append(RecognitionSegment(
-                    gloss_sequence=pred.gloss_sequence,
-                    start_frame=frame_indices[idx] if idx < len(frame_indices) else 0,
-                    end_frame=frame_indices[min(idx + len(window_seq)-1, len(frame_indices)-1)] if frame_indices else 0,
-                    confidence=pred.confidence,
-                ))
-                gloss_full.extend(pred.gloss_sequence)
-                confidences.append(pred.confidence)
+            # 获取窗口序列
+            end_idx = min(idx + win, T)
+            window_landmarks = landmark_sequences[idx:end_idx]
+
+            # 如果窗口不足，进行填充
+            if len(window_landmarks) < win:
+                padding_size = win - len(window_landmarks)
+                zero_padding = [np.zeros(144, dtype=np.float32) for _ in range(padding_size)]
+                window_landmarks.extend(zero_padding)
+
+            # 转换为CSLR服务期望的格式
+            window_data = [landmarks.tolist() for landmarks in window_landmarks]
+
+            # 调用CSLR服务进行预测
+            try:
+                pred = await self.cslr_service.predict(window_data)
+                if pred.status == "success" and pred.gloss_sequence:
+                    start_frame = frame_indices[idx] if idx < len(frame_indices) else 0
+                    end_frame = frame_indices[min(end_idx-1, len(frame_indices)-1)] if frame_indices else start_frame
+
+                    segments.append(RecognitionSegment(
+                        gloss_sequence=pred.gloss_sequence,
+                        start_frame=start_frame,
+                        end_frame=end_frame,
+                        confidence=pred.confidence,
+                    ))
+                    gloss_full.extend(pred.gloss_sequence)
+                    confidences.append(pred.confidence)
+            except Exception as e:
+                logger.warning(f"窗口 {idx} 预测失败: {e}")
+
             idx += step
-            window_id += 1
-            await self._update_task(task_id, progress=min(0.9, 0.8 + 0.1 * idx / T))
+            progress = min(0.9, 0.6 + 0.3 * idx / T)
+            await self._update_task(task_id, progress=progress)
         # 计算时间戳
         for seg in segments:
             seg.start_time = seg.start_frame / fps if fps > 0 else 0.0

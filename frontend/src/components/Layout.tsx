@@ -27,6 +27,7 @@ import {
   Collapse,
   Paper,
   LinearProgress,
+  Dialog,
 } from '@mui/material'
 import {
   Menu as MenuIcon,
@@ -55,6 +56,9 @@ import {
 import StatusIndicator from './StatusIndicator'
 import SafeFade from './SafeFade'
 import { useSignLanguageRecognition } from '../hooks/useSignLanguageRecognition'
+import { useAuth } from '../contexts/AuthContext'
+import AuthModal from './auth/AuthModal'
+import UserProfile from './auth/UserProfile'
 
 interface LayoutProps {
   children: ReactNode
@@ -96,7 +100,9 @@ function Layout({ children, darkMode, onToggleDarkMode }: LayoutProps) {
   const [expandedGroups, setExpandedGroups] = useState<string[]>(['主要功能'])
   const [notifications, setNotifications] = useState(3)
   const [isMounted, setIsMounted] = useState(false)
-  
+  const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [profileModalOpen, setProfileModalOpen] = useState(false)
+
   const navigate = useNavigate()
   const location = useLocation()
   const theme = useTheme()
@@ -104,6 +110,7 @@ function Layout({ children, darkMode, onToggleDarkMode }: LayoutProps) {
   const isTablet = useMediaQuery(theme.breakpoints.down('md'))
 
   const { isRecognizing, confidence, websocketService, stats } = useSignLanguageRecognition()
+  const { isAuthenticated, user } = useAuth()
   const [isConnected, setIsConnected] = useState(false)
 
   // 确保组件完全挂载后再显示动画
@@ -522,13 +529,65 @@ function Layout({ children, darkMode, onToggleDarkMode }: LayoutProps) {
               isRecognizing={isRecognizing}
               confidence={confidence}
             />
-            
+
+            {/* 用户认证区域 */}
+            {isAuthenticated ? (
+              <Tooltip title="个人资料">
+                <IconButton
+                  color="inherit"
+                  onClick={() => setProfileModalOpen(true)}
+                  sx={{
+                    borderRadius: 2,
+                    backgroundColor: 'primary.light',
+                    color: 'primary.contrastText',
+                    '&:hover': {
+                      backgroundColor: 'primary.main',
+                      transform: 'scale(1.05)',
+                    },
+                    transition: 'all 0.3s ease',
+                    mr: 1,
+                  }}
+                >
+                  <Avatar
+                    sx={{
+                      width: 28,
+                      height: 28,
+                      fontSize: '0.8rem',
+                      bgcolor: 'primary.dark',
+                    }}
+                  >
+                    {user?.username?.charAt(0).toUpperCase() || 'U'}
+                  </Avatar>
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <Tooltip title="登录">
+                <IconButton
+                  color="inherit"
+                  onClick={() => setAuthModalOpen(true)}
+                  sx={{
+                    borderRadius: 2,
+                    backgroundColor: 'success.light',
+                    color: 'success.contrastText',
+                    '&:hover': {
+                      backgroundColor: 'success.main',
+                      transform: 'scale(1.05)',
+                    },
+                    transition: 'all 0.3s ease',
+                    mr: 1,
+                  }}
+                >
+                  <Person />
+                </IconButton>
+              </Tooltip>
+            )}
+
             {/* 主题切换 */}
             <Tooltip title={darkMode ? '切换到亮色模式' : '切换到暗色模式'}>
-              <IconButton 
-                color="inherit" 
+              <IconButton
+                color="inherit"
                 onClick={onToggleDarkMode}
-                sx={{ 
+                sx={{
                   borderRadius: 2,
                   backgroundColor: darkMode ? 'warning.light' : 'info.light',
                   color: darkMode ? 'warning.contrastText' : 'info.contrastText',
@@ -630,6 +689,29 @@ function Layout({ children, darkMode, onToggleDarkMode }: LayoutProps) {
           }
         `}
       </style>
+
+      {/* 认证模态框 */}
+      <AuthModal
+        open={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        initialMode="login"
+      />
+
+      {/* 用户资料模态框 */}
+      <Dialog
+        open={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            maxHeight: '90vh',
+          }
+        }}
+      >
+        <UserProfile onLogout={() => setProfileModalOpen(false)} />
+      </Dialog>
     </Box>
   )
 }

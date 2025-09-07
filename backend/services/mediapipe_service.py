@@ -85,42 +85,71 @@ class MediaPipeService:
             }
     
     def _extract_all_landmarks(self, results) -> Dict[str, List[List[float]]]:
-        """提取所有类型的关键点"""
+        """提取所有类型的关键点，增加稳定性和错误处理"""
         landmarks_data = {
             "pose": [],
             "left_hand": [],
             "right_hand": [],
             "face": [],
         }
-        
-        # 姿态关键点 (33个点)
-        if results.pose_landmarks:
-            landmarks_data["pose"] = [
-                [lm.x, lm.y, lm.z, lm.visibility] 
-                for lm in results.pose_landmarks.landmark
-            ]
-        
-        # 左手关键点 (21个点)
-        if results.left_hand_landmarks:
-            landmarks_data["left_hand"] = [
-                [lm.x, lm.y, lm.z] 
-                for lm in results.left_hand_landmarks.landmark
-            ]
-        
-        # 右手关键点 (21个点)
-        if results.right_hand_landmarks:
-            landmarks_data["right_hand"] = [
-                [lm.x, lm.y, lm.z] 
-                for lm in results.right_hand_landmarks.landmark
-            ]
-        
-        # 面部关键点 (468个点)
-        if results.face_landmarks:
-            landmarks_data["face"] = [
-                [lm.x, lm.y, lm.z] 
-                for lm in results.face_landmarks.landmark
-            ]
-        
+
+        try:
+            # 姿态关键点 (33个点)
+            if results.pose_landmarks:
+                landmarks_data["pose"] = [
+                    [
+                        float(lm.x), float(lm.y), float(lm.z),
+                        float(getattr(lm, 'visibility', 1.0))
+                    ]
+                    for lm in results.pose_landmarks.landmark
+                ]
+            else:
+                # 如果没有检测到姿态，填充零值
+                landmarks_data["pose"] = [[0.0, 0.0, 0.0, 0.0] for _ in range(33)]
+
+            # 左手关键点 (21个点)
+            if results.left_hand_landmarks:
+                landmarks_data["left_hand"] = [
+                    [float(lm.x), float(lm.y), float(lm.z)]
+                    for lm in results.left_hand_landmarks.landmark
+                ]
+            else:
+                # 如果没有检测到左手，填充零值
+                landmarks_data["left_hand"] = [[0.0, 0.0, 0.0] for _ in range(21)]
+
+            # 右手关键点 (21个点)
+            if results.right_hand_landmarks:
+                landmarks_data["right_hand"] = [
+                    [float(lm.x), float(lm.y), float(lm.z)]
+                    for lm in results.right_hand_landmarks.landmark
+                ]
+            else:
+                # 如果没有检测到右手，填充零值
+                landmarks_data["right_hand"] = [[0.0, 0.0, 0.0] for _ in range(21)]
+
+            # 面部关键点 (468个点) - 简化为关键区域
+            if results.face_landmarks:
+                # 只提取面部的关键点，减少数据量
+                key_face_indices = list(range(0, 468, 10))  # 每10个点取一个
+                landmarks_data["face"] = [
+                    [float(lm.x), float(lm.y), float(lm.z)]
+                    for i, lm in enumerate(results.face_landmarks.landmark)
+                    if i in key_face_indices
+                ]
+            else:
+                # 如果没有检测到面部，填充零值
+                landmarks_data["face"] = [[0.0, 0.0, 0.0] for _ in range(47)]  # 468/10 ≈ 47
+
+        except Exception as e:
+            logger.error(f"关键点提取过程中出错: {e}")
+            # 返回默认的零值数据
+            landmarks_data = {
+                "pose": [[0.0, 0.0, 0.0, 0.0] for _ in range(33)],
+                "left_hand": [[0.0, 0.0, 0.0] for _ in range(21)],
+                "right_hand": [[0.0, 0.0, 0.0] for _ in range(21)],
+                "face": [[0.0, 0.0, 0.0] for _ in range(47)],
+            }
+
         return landmarks_data
     
     def landmarks_to_array(self, landmarks_data: Dict) -> np.ndarray:
@@ -159,7 +188,55 @@ class MediaPipeService:
             landmarks_array[offset:offset+468] = face_points
         
         return landmarks_array
-    
+
+    def get_normalized_landmarks_for_cslr(self, landmarks_data: Dict) -> np.ndarray:
+        """获取适用于CSLR模型的标准化关键点数据"""
+        try:
+            # 提取关键的关键点，减少维度
+            pose_points = landmarks_data.get("pose", [])
+            left_hand_points = landmarks_data.get("left_hand", [])
+            right_hand_points = landmarks_data.get("right_hand", [])
+
+            # 只使用上半身姿态关键点（肩膀、手肘、手腕等）
+            key_pose_indices = [11, 12, 13, 14, 15, 16]  # 肩膀、手肘、手腕
+            selected_pose = []
+            for i in key_pose_indices:
+                if i < len(pose_points):
+                    selected_pose.extend(pose_points[i][:3])  # x, y, z
+                else:
+                    selected_pose.extend([0.0, 0.0, 0.0])
+
+            # 合并所有关键点
+            all_points = []
+            all_points.extend(selected_pose)  # 6 * 3 = 18 维
+
+            # 添加左手关键点
+            for point in left_hand_points:
+                all_points.extend(point[:3])  # 21 * 3 = 63 维
+
+            # 添加右手关键点
+            for point in right_hand_points:
+                all_points.extend(point[:3])  # 21 * 3 = 63 维
+
+            # 总维度: 18 + 63 + 63 = 144
+            target_dim = 144
+            if len(all_points) < target_dim:
+                all_points.extend([0.0] * (target_dim - len(all_points)))
+            elif len(all_points) > target_dim:
+                all_points = all_points[:target_dim]
+
+            # 转换为numpy数组
+            landmarks_array = np.array(all_points, dtype=np.float32)
+
+            # 归一化到[-1, 1]范围
+            landmarks_array = np.clip((landmarks_array - 0.5) * 2.0, -1.0, 1.0)
+
+            return landmarks_array
+
+        except Exception as e:
+            logger.error(f"CSLR关键点标准化失败: {e}")
+            return np.zeros(144, dtype=np.float32)
+
     def draw_landmarks(self, image: np.ndarray, landmarks_data: Dict) -> np.ndarray:
         """
         在图像上绘制关键点

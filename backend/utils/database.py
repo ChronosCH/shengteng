@@ -249,7 +249,119 @@ class DatabaseManager:
                         'accessibility_settings': json.loads(row[10] or '{}')
                     }
                 return None
-    
+
+    async def get_user_by_username(self, username: str) -> Optional[Dict]:
+        """根据用户名获取用户信息"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT id, username, email, full_name, avatar_url, is_active, is_admin,
+                       created_at, last_login, preferences, accessibility_settings
+                FROM users WHERE username = ?
+            """, (username,)) as cursor:
+
+                row = await cursor.fetchone()
+                if row:
+                    return {
+                        'id': row[0],
+                        'username': row[1],
+                        'email': row[2],
+                        'full_name': row[3],
+                        'avatar_url': row[4],
+                        'is_active': bool(row[5]),
+                        'is_admin': bool(row[6]),
+                        'created_at': row[7],
+                        'last_login': row[8],
+                        'preferences': json.loads(row[9] or '{}'),
+                        'accessibility_settings': json.loads(row[10] or '{}')
+                    }
+                return None
+
+    async def get_user_by_email(self, email: str) -> Optional[Dict]:
+        """根据邮箱获取用户信息"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT id, username, email, full_name, avatar_url, is_active, is_admin,
+                       created_at, last_login, preferences, accessibility_settings
+                FROM users WHERE email = ?
+            """, (email,)) as cursor:
+
+                row = await cursor.fetchone()
+                if row:
+                    return {
+                        'id': row[0],
+                        'username': row[1],
+                        'email': row[2],
+                        'full_name': row[3],
+                        'avatar_url': row[4],
+                        'is_active': bool(row[5]),
+                        'is_admin': bool(row[6]),
+                        'created_at': row[7],
+                        'last_login': row[8],
+                        'preferences': json.loads(row[9] or '{}'),
+                        'accessibility_settings': json.loads(row[10] or '{}')
+                    }
+                return None
+
+    async def update_user_profile(self, user_id: int, full_name: str = None,
+                                email: str = None, preferences: Dict = None,
+                                accessibility_settings: Dict = None) -> bool:
+        """更新用户个人资料"""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                # 构建动态更新语句
+                update_fields = []
+                params = []
+
+                if full_name is not None:
+                    update_fields.append("full_name = ?")
+                    params.append(full_name)
+
+                if email is not None:
+                    update_fields.append("email = ?")
+                    params.append(email)
+
+                if preferences is not None:
+                    update_fields.append("preferences = ?")
+                    params.append(json.dumps(preferences))
+
+                if accessibility_settings is not None:
+                    update_fields.append("accessibility_settings = ?")
+                    params.append(json.dumps(accessibility_settings))
+
+                if not update_fields:
+                    return True  # 没有需要更新的字段
+
+                # 添加更新时间
+                update_fields.append("updated_at = CURRENT_TIMESTAMP")
+                params.append(user_id)
+
+                query = f"UPDATE users SET {', '.join(update_fields)} WHERE id = ?"
+                await db.execute(query, params)
+                await db.commit()
+
+                return True
+        except Exception as e:
+            logger.error(f"更新用户个人资料失败: {e}")
+            return False
+
+    async def update_user_password(self, user_id: int, new_password: str) -> bool:
+        """更新用户密码"""
+        try:
+            password_hash = self._hash_password(new_password)
+
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute("""
+                    UPDATE users
+                    SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (password_hash, user_id))
+                await db.commit()
+
+                return True
+        except Exception as e:
+            logger.error(f"更新用户密码失败: {e}")
+            return False
+
     # 会话管理方法
     async def create_session(self, user_id: int = None, device_info: Dict = None, 
                            ip_address: str = None, user_agent: str = None) -> str:
@@ -275,7 +387,50 @@ class DatabaseManager:
                 WHERE id = ?
             """, (session_id,))
             await db.commit()
-    
+
+    async def get_user_sessions(self, user_id: int) -> List[Dict]:
+        """获取用户的活跃会话"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT id, device_info, ip_address, user_agent, start_time, end_time
+                FROM sessions
+                WHERE user_id = ? AND end_time IS NULL
+                ORDER BY start_time DESC
+            """, (user_id,)) as cursor:
+
+                sessions = []
+                async for row in cursor:
+                    sessions.append({
+                        'id': row[0],
+                        'device_info': json.loads(row[1] or '{}'),
+                        'ip_address': row[2],
+                        'user_agent': row[3],
+                        'start_time': row[4],
+                        'end_time': row[5]
+                    })
+                return sessions
+
+    async def get_session_by_id(self, session_id: str) -> Optional[Dict]:
+        """根据ID获取会话信息"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT id, user_id, device_info, ip_address, user_agent, start_time, end_time
+                FROM sessions WHERE id = ?
+            """, (session_id,)) as cursor:
+
+                row = await cursor.fetchone()
+                if row:
+                    return {
+                        'id': row[0],
+                        'user_id': row[1],
+                        'device_info': json.loads(row[2] or '{}'),
+                        'ip_address': row[3],
+                        'user_agent': row[4],
+                        'start_time': row[5],
+                        'end_time': row[6]
+                    }
+                return None
+
     # 识别历史记录方法
     async def save_recognition_result(self, session_id: str, user_id: int = None, 
                                     recognized_text: str = "", confidence: float = 0.0,

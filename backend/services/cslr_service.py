@@ -235,16 +235,31 @@ class CSLRService:
             "是": 5, "不是": 6, "好": 7, "不好": 8, "我": 9, "你": 10,
             "他": 11, "她": 12, "吃": 13, "喝": 14, "睡觉": 15,
             "工作": 16, "学习": 17, "家": 18, "学校": 19, "医院": 20,
+            "商店": 21, "公园": 22, "今天": 23, "明天": 24, "昨天": 25,
+            "现在": 26, "早上": 27, "下午": 28, "晚上": 29, "年": 30,
+            "月": 31, "日": 32, "一": 33, "二": 34, "三": 35, "四": 36,
+            "五": 37, "六": 38, "七": 39, "八": 40, "九": 41, "十": 42,
+            "爸爸": 43, "妈妈": 44, "儿子": 45, "女儿": 46, "朋友": 47,
+            "老师": 48, "学生": 49, "医生": 50, "护士": 51, "司机": 52,
+            "警察": 53, "农民": 54, "工人": 55, "经理": 56, "老板": 57,
+            "红色": 58, "蓝色": 59, "绿色": 60, "黄色": 61, "黑色": 62,
+            "白色": 63, "大": 64, "小": 65, "高": 66, "矮": 67, "胖": 68,
+            "瘦": 69, "新": 70, "旧": 71, "快": 72, "慢": 73, "热": 74, "冷": 75
         }
-        
+
         self.vocab = default_vocab
         self.reverse_vocab = {v: k for k, v in default_vocab.items()}
-        
+
+        # 确保CTC配置正确
+        self.ctc_config["blank_id"] = 0  # <blank> 的ID
+
         # 保存词汇表
         import os
         os.makedirs(os.path.dirname(self.config.vocab_path), exist_ok=True)
         with open(self.config.vocab_path, 'w', encoding='utf-8') as f:
             json.dump(default_vocab, f, ensure_ascii=False, indent=2)
+
+        logger.info(f"创建默认词汇表，共 {len(default_vocab)} 个词汇")
     
     async def _load_mindspore_model(self) -> None:
         """加载MindSpore模型"""
@@ -419,95 +434,207 @@ class CSLRService:
             return outputs[0].get_data_to_numpy()
     
     def _sync_mock_inference(self, input_data: np.ndarray) -> np.ndarray:
-        """同步模拟推理"""
+        """同步模拟推理 - 改进版本，生成更真实的手语识别结果"""
         time.sleep(0.02)  # 模拟推理时间
         T = input_data.shape[1]
         vocab_size = len(self.vocab)
-        
-        # 创建更真实的概率分布
-        prediction = np.random.rand(1, T, vocab_size).astype(np.float32)
-        
-        # 为了模拟更真实的模型输出，增强某些类别的概率
+
+        # 创建基础概率分布
+        prediction = np.random.rand(1, T, vocab_size).astype(np.float32) * 0.1
+
+        # 模拟真实的手语序列模式
+        # 1. 选择一个主要的手语词汇序列
+        main_words = ["你好", "谢谢", "再见", "我", "你", "好", "是", "不是"]
+        available_words = [word for word in main_words if word in self.vocab]
+
+        if available_words:
+            # 随机选择1-3个词汇作为主要识别结果
+            num_words = min(np.random.randint(1, 4), len(available_words))
+            selected_words = np.random.choice(available_words, num_words, replace=False)
+
+            # 为每个选中的词汇分配时间段
+            word_duration = T // len(selected_words)
+
+            for i, word in enumerate(selected_words):
+                word_id = self.vocab[word]
+                start_t = i * word_duration
+                end_t = min((i + 1) * word_duration, T)
+
+                # 在对应时间段内增强该词汇的概率
+                for t in range(start_t, end_t):
+                    # 主要词汇的概率
+                    prediction[0, t, word_id] += np.random.uniform(3.0, 6.0)
+
+                    # 添加一些噪声（其他可能的词汇）
+                    noise_classes = np.random.choice(vocab_size, 2, replace=False)
+                    for noise_cls in noise_classes:
+                        if noise_cls != word_id:
+                            prediction[0, t, noise_cls] += np.random.uniform(0.5, 1.5)
+
+        # 2. 增强空白标记的概率（CTC特性）
+        blank_id = self.ctc_config["blank_id"]
         for t in range(T):
-            # 每个时间步随机选择1-3个主要类别
-            num_main_classes = np.random.randint(1, 4)
-            main_classes = np.random.choice(vocab_size, num_main_classes, replace=False)
-            
-            # 给主要类别增加概率权重
-            for cls in main_classes:
-                prediction[0, t, cls] += np.random.uniform(2.0, 5.0)
-        
-        return np.exp(prediction) / np.sum(np.exp(prediction), axis=-1, keepdims=True)
+            # 在词汇之间和开始/结束位置增加空白概率
+            if t % 8 == 0 or t % 8 == 7:  # 模拟词汇边界
+                prediction[0, t, blank_id] += np.random.uniform(2.0, 4.0)
+
+        # 3. 应用softmax归一化
+        prediction = np.exp(prediction)
+        prediction = prediction / np.sum(prediction, axis=-1, keepdims=True)
+
+        return prediction
     
     def _ctc_decode(self, prediction: np.ndarray) -> Dict:
-        """CTC解码"""
+        """改进的CTC解码"""
         try:
-            # 简化的贪心解码
-            # 实际应用中可以使用beam search等更复杂的解码方法
-            
-            # 获取最大概率的类别
+            # 获取最大概率的类别序列
             predicted_ids = np.argmax(prediction[0], axis=-1)
-            
-            # 移除重复和空白标记
+            blank_id = self.ctc_config["blank_id"]
+
+            # CTC解码：移除重复和空白标记
             decoded_ids = []
+            decoded_probs = []
             prev_id = -1
-            selected_probs = []  # 记录选中的概率
-            
-            for i, id in enumerate(predicted_ids):
-                if id != prev_id and id != self.ctc_config["blank_id"]:
-                    decoded_ids.append(id)
-                    selected_probs.append(prediction[0, i, id])  # 记录该时刻该类别的概率
-                prev_id = id
-            
-            # 计算更合理的置信度 - 使用选中词汇的概率
-            if selected_probs:
-                confidence = np.mean(selected_probs)
+
+            for i, current_id in enumerate(predicted_ids):
+                # 跳过重复的标记（CTC规则）
+                if current_id != prev_id:
+                    # 跳过空白标记
+                    if current_id != blank_id:
+                        decoded_ids.append(current_id)
+                        decoded_probs.append(prediction[0, i, current_id])
+                prev_id = current_id
+
+            # 计算置信度
+            if decoded_probs:
+                # 使用几何平均数，对低概率更敏感
+                confidence = np.exp(np.mean(np.log(np.maximum(decoded_probs, 1e-8))))
+                # 应用长度惩罚，避免过短或过长的序列
+                length_penalty = min(1.0, len(decoded_ids) / 3.0)  # 期望长度约为3个词
+                confidence *= length_penalty
             else:
-                # 如果没有选中任何词汇，使用所有时刻最大概率的平均值
-                max_probs = np.max(prediction[0], axis=-1)
-                confidence = np.mean(max_probs)
-            
+                # 没有识别到任何词汇
+                confidence = 0.0
+
+            # 后处理：移除连续重复的词汇（可能是识别错误）
+            if len(decoded_ids) > 1:
+                filtered_ids = [decoded_ids[0]]
+                filtered_probs = [decoded_probs[0]]
+
+                for i in range(1, len(decoded_ids)):
+                    if decoded_ids[i] != decoded_ids[i-1]:
+                        filtered_ids.append(decoded_ids[i])
+                        filtered_probs.append(decoded_probs[i])
+
+                decoded_ids = filtered_ids
+                decoded_probs = filtered_probs
+
+                # 重新计算置信度
+                if decoded_probs:
+                    confidence = np.exp(np.mean(np.log(np.maximum(decoded_probs, 1e-8))))
+
             return {
                 "decoded_ids": decoded_ids,
-                "confidence": float(confidence),
-                "raw_prediction": prediction
+                "confidence": float(np.clip(confidence, 0.0, 1.0)),
+                "raw_prediction": prediction,
+                "sequence_length": len(decoded_ids),
+                "avg_prob": float(np.mean(decoded_probs)) if decoded_probs else 0.0
             }
-            
+
         except Exception as e:
             logger.error(f"CTC解码失败: {e}")
             return {
                 "decoded_ids": [],
                 "confidence": 0.0,
-                "raw_prediction": prediction
+                "raw_prediction": prediction,
+                "sequence_length": 0,
+                "avg_prob": 0.0
             }
     
     def _post_process(self, decoded_result: Dict) -> Dict:
-        """后处理解码结果"""
+        """改进的后处理解码结果"""
         decoded_ids = decoded_result["decoded_ids"]
         confidence = decoded_result["confidence"]
-        
+        sequence_length = decoded_result.get("sequence_length", len(decoded_ids))
+
         # 将ID转换为词汇
         gloss_sequence = []
         for id in decoded_ids:
             if id in self.reverse_vocab:
-                gloss_sequence.append(self.reverse_vocab[id])
+                word = self.reverse_vocab[id]
+                # 跳过特殊标记
+                if word not in ["<blank>", "<unk>"]:
+                    gloss_sequence.append(word)
             else:
-                gloss_sequence.append("<unk>")
-        
-        # 组合成文本
-        text = " ".join(gloss_sequence)
-        
-        # 过滤低置信度结果
-        if confidence < self.config.confidence_threshold:
+                logger.warning(f"未知词汇ID: {id}")
+
+        # 应用语言模型规则进行后处理
+        processed_sequence = self._apply_language_rules(gloss_sequence)
+
+        # 组合成自然文本
+        text = self._generate_natural_text(processed_sequence)
+
+        # 质量评估和过滤
+        final_confidence = self._evaluate_result_quality(
+            processed_sequence, confidence, sequence_length
+        )
+
+        # 过滤低质量结果
+        if final_confidence < self.config.confidence_threshold:
             text = ""
-            gloss_sequence = []
-        
+            processed_sequence = []
+            final_confidence = 0.0
+
         return {
             "text": text,
-            "confidence": confidence,
-            "gloss_sequence": gloss_sequence,
+            "confidence": final_confidence,
+            "gloss_sequence": processed_sequence,
+            "raw_sequence": gloss_sequence,
+            "sequence_length": len(processed_sequence)
         }
     
+    def _apply_language_rules(self, sequence: List[str]) -> List[str]:
+        """应用语言规则优化序列"""
+        if not sequence:
+            return sequence
+
+        # 移除连续重复的词汇
+        processed = [sequence[0]]
+        for i in range(1, len(sequence)):
+            if sequence[i] != sequence[i-1]:
+                processed.append(sequence[i])
+
+        return processed
+
+    def _generate_natural_text(self, sequence: List[str]) -> str:
+        """生成自然的中文文本"""
+        if not sequence:
+            return ""
+
+        # 简单的文本生成规则
+        return "".join(sequence)
+
+    def _evaluate_result_quality(self, sequence: List[str], confidence: float, length: int) -> float:
+        """评估识别结果质量"""
+        if not sequence:
+            return 0.0
+
+        quality_score = confidence
+
+        # 长度惩罚：过短或过长的序列质量较低
+        if length < 1:
+            quality_score *= 0.1
+        elif length > 10:
+            quality_score *= 0.8
+
+        # 词汇质量：检查是否包含常见词汇
+        common_words = {"你好", "谢谢", "再见", "我", "你", "是", "不是", "好"}
+        has_common = any(word in common_words for word in sequence)
+        if has_common:
+            quality_score *= 1.1
+
+        return min(quality_score, 1.0)
+
     def _update_stats(self, inference_time: float, success: bool = True):
         """更新性能统计"""
         self.stats["total_predictions"] += 1

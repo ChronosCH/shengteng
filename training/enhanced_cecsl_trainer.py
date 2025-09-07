@@ -44,9 +44,9 @@ class EnhancedCECSLConfig:
     vocab_size: int = 1000
     d_model: int = 192
     n_layers: int = 2
-    dropout: float = 0.3
+    dropout: float = 0.1  # 降低丢弃率提升早期收敛稳定性
     batch_size: int = 1
-    learning_rate: float = 1e-4
+    learning_rate: float = 3e-4  # 提高初始学习率，加快摆脱全空白预测
     weight_decay: float = 1e-3
     epochs: int = 100
     warmup_epochs: int = 10
@@ -60,6 +60,10 @@ class EnhancedCECSLConfig:
     patience: int = 20
     min_delta: float = 0.001
     max_target_length: int = 48  # 或更大，视数据分布
+    # 新增调试参数
+    debug_overfit: bool = False          # 设为 True 时只在第一批上过拟合，验证梯度是否有效
+    debug_overfit_steps: int = 120       # 过拟合迭代步数
+    log_first_batch_logits: bool = True  # 记录首批次logits分布
 
 class DataAugmentor:
     """数据增强器"""
@@ -263,7 +267,8 @@ class EnhancedCECSLDataset:
         # 取标签序列
         gloss = sample['label']
         tokens = [t.strip() for t in gloss.split('/') if t.strip()]
-        targets = [self.token2idx.get(t, self.token2idx['<BLK>']) for t in tokens]
+        # 将 OOV token 映射为 <UNK>，不要映射为 <BLK>（CTC 的 blank 不能作为目标标签）
+        targets = [self.token2idx.get(t, self.token2idx['<UNK>']) for t in tokens]
         target_len = len(targets)
         max_target_len = 32  # 可根据数据实际调整
         if target_len < max_target_len:
@@ -317,6 +322,15 @@ class ImprovedCECSLModel(nn.Cell):
         # CTC头
         self.ctc_head = nn.Dense(config.d_model * 2, vocab_size)
         self.ctc_loss = nn.CTCLoss(blank=0)  # blank id=0
+
+        # 减少初始时刻对 <BLK> 的偏置，避免一开始全是空白预测
+        try:
+            b = self.ctc_head.bias.asnumpy()
+            if b is not None and b.shape[0] >= 1:
+                b[0] = -3.0  # <BLK>=0 的 bias 设为负
+                self.ctc_head.bias.set_data(Tensor(b, ms.float32))
+        except Exception:
+            pass
 
     def construct(self, x, targets, input_len, target_len):
         batch_size, seq_len, input_size = x.shape
@@ -414,7 +428,8 @@ class EnhancedCECSLTrainer:
         self.token2idx = token2idx
         self.idx2token = idx2token
         self.vocab_size = len(token2idx)
-        train_data = EnhancedCECSLDataset(self.config, 'train', use_augmentation=True, token2idx=token2idx)
+        # 为稳定起见，先关闭在线增强（如需开启可将 use_augmentation=True）
+        train_data = EnhancedCECSLDataset(self.config, 'train', use_augmentation=False, token2idx=token2idx)
         val_data = EnhancedCECSLDataset(self.config, 'dev', use_augmentation=False, token2idx=token2idx)
         
         if len(train_data) == 0:
@@ -507,13 +522,14 @@ class EnhancedCECSLTrainer:
     
     def train_step(self, data, targets, input_len, target_len):
         def forward_fn(d, t, il, tl):
-            loss, _ = self.model(d, t, il, tl)
-            return loss
-        grad_fn = ms.value_and_grad(forward_fn, None, self.model.trainable_params())
-        loss, grads = grad_fn(data, targets, input_len, target_len)
-        grads = ops.clip_by_global_norm(grads, 1.0)
-        self.optimizer(grads)
-        return loss
+            loss, log_probs = self.model(d, t, il, tl)
+            return loss, log_probs
+        grad_fn = ms.value_and_grad(forward_fn, None, self.model.trainable_params(), has_aux=True)
+        (loss, log_probs), grads = grad_fn(data, targets, input_len, target_len)
+        # 修正：部分 MindSpore 版本 clip_by_global_norm 只返回裁剪梯度
+        clipped_grads = ops.clip_by_global_norm(grads, 1.0)
+        self.optimizer(clipped_grads)
+        return loss, log_probs, None
     
     def evaluate(self):
         """评估模型"""
@@ -535,7 +551,7 @@ class EnhancedCECSLTrainer:
             loss, log_probs = self.model(data, targets, input_len, target_len)
             total_loss += float(loss.asnumpy()); n_batches += 1
 
-            preds = ctc_greedy_decode(log_probs, self.idx2token)  # List[List[token]]
+            preds = ctc_greedy_decode(log_probs, self.idx2token, input_len)  # List[List[token]]
 
             targets_np    = targets.asnumpy()
             target_len_np = target_len.asnumpy()
@@ -570,60 +586,102 @@ class EnhancedCECSLTrainer:
     def train(self):
         """开始训练"""
         logger.info("开始增强版CE-CSL真实数据训练...")
-        
         best_val_acc = 0
         training_history = []
-        
+
+        # 可选：取第一批用于过拟合调试
+        first_batch_cache = None
+        if self.config.debug_overfit:
+            logger.warning("DEBUG: 启用单批次过拟合模式 (debug_overfit=True)，不会进行正常全数据训练！")
+            for batch in self.train_dataset.create_tuple_iterator():
+                first_batch_cache = batch
+                break
+            if first_batch_cache is None:
+                raise RuntimeError("无法取得首批数据用于过拟合调试")
+            logger.warning(f"DEBUG: 首批数据 shapes: {[x.shape for x in first_batch_cache]}")
+
+            for step in range(self.config.debug_overfit_steps):
+                data, targets, input_len, target_len = first_batch_cache
+                data = Tensor(data, ms.float32)
+                targets = Tensor(targets, ms.int32)
+                input_len = Tensor(input_len, ms.int32)
+                target_len = Tensor(target_len, ms.int32)
+                self.model.set_train(True)
+                loss, log_probs, gnorm = self.train_step(data, targets, input_len, target_len)
+                if step % 10 == 0:
+                    # 观察预测（按有效时长裁剪）
+                    preds = ctc_greedy_decode(log_probs, self.idx2token, input_len)
+                    tgt_np = targets.asnumpy(); tgt_len_np = target_len.asnumpy()
+                    ref_ids = tgt_np[0, :int(tgt_len_np[0])].tolist()
+                    ref_tokens = [self.idx2token[i] for i in ref_ids if i not in (0,1)]
+                    gnorm_str = f"{gnorm:.3f}" if isinstance(gnorm, (int, float)) else str(gnorm)
+                    logger.info(f"[Overfit Step {step}] loss={float(loss.asnumpy()):.4f} gnorm={gnorm_str} ref={ref_tokens} pred={preds[0]}")
+                # 若已精确匹配可提前结束
+                preds = ctc_greedy_decode(log_probs, self.idx2token, input_len)
+                tgt_np = targets.asnumpy(); tgt_len_np = target_len.asnumpy()
+                ref_ids = tgt_np[0, :int(tgt_len_np[0])].tolist()
+                ref_tokens = [self.idx2token[i] for i in ref_ids if i not in (0,1)]
+                if preds[0] == ref_tokens and step > 5:
+                    logger.info(f"DEBUG: 成功在 {step} 步过拟合单批次，梯度更新有效。")
+                    break
+            logger.warning("DEBUG: 过拟合调试结束，退出训练流程。请关闭 debug_overfit 进行正式训练。")
+            return self.model
+
         for epoch in range(self.config.epochs):
             start_time = time.time()
-            
-            # 训练
             self.model.set_train(True)
             epoch_loss = 0
             epoch_correct = 0
             epoch_total = 0
-            
+            sum_gn = 0.0; gn_steps = 0
             logger.info(f"开始第 {epoch+1}/{self.config.epochs} 轮训练...")
-            
+
             for batch_idx, (data, targets, input_len, target_len) in enumerate(self.train_dataset):
-                data       = Tensor(data,       ms.float32)
-                targets    = Tensor(targets,    ms.int32)
-                input_len  = Tensor(input_len,  ms.int32)
+                data = Tensor(data, ms.float32)
+                targets = Tensor(targets, ms.int32)
+                input_len = Tensor(input_len, ms.int32)
                 target_len = Tensor(target_len, ms.int32)
 
-                loss = self.train_step(data, targets, input_len, target_len)
+                loss, log_probs, gnorm = self.train_step(data, targets, input_len, target_len)
+                if gnorm is not None:
+                    sum_gn += gnorm
+                    gn_steps += 1
                 epoch_loss += float(loss.asnumpy())
 
-                # 计算训练批次的EM准确率
-                _, log_probs = self.model(data, targets, input_len, target_len)
-                preds = ctc_greedy_decode(log_probs, self.idx2token)
-                targets_np    = targets.asnumpy()
-                target_len_np = target_len.asnumpy()
+                # 首批次可选记录 logits 分布（检查是否严重偏向 blank）
+                if self.config.log_first_batch_logits and batch_idx == 0 and epoch == 0:
+                    lp_np = log_probs.asnumpy()  # (T,B,V)
+                    vocab_mean = lp_np.mean(axis=(0,1))  # (V,)
+                    top5 = np.argsort(-vocab_mean)[:5]
+                    logger.info("首批平均log概率Top5: " + ", ".join([f"{self.idx2token[i]}:{vocab_mean[i]:.2f}" for i in top5]))
+                    logger.info(f"首批 blank(0) 平均logp: {vocab_mean[0]:.2f} | pad(1): {vocab_mean[1]:.2f}")
+
+                # 计算训练EM（按有效时长裁剪）
+                preds = ctc_greedy_decode(log_probs, self.idx2token, input_len)
+                targets_np = targets.asnumpy(); target_len_np = target_len.asnumpy()
                 for b in range(targets_np.shape[0]):
                     L = int(target_len_np[b])
                     ref_ids = targets_np[b, :L].tolist()
-                    ref_tokens = [ self.idx2token[i] for i in ref_ids if i not in (0,1) ]
-                    hyp_tokens = preds[b]
-                    if hyp_tokens == ref_tokens:
+                    ref_tokens = [self.idx2token[i] for i in ref_ids if i not in (0,1)]
+                    if preds[b] == ref_tokens:
                         epoch_correct += 1
                     epoch_total += 1
 
                 if batch_idx % 10 == 0:
-                    logger.info(f"Batch {batch_idx}: Loss = {float(loss.asnumpy()):.4f} | TrainEM={epoch_correct/max(1,epoch_total):.4f}")
-            
-            avg_train_loss = epoch_loss / len(self.train_dataset)
+                    gnorm_str = f"{gnorm:.3f}" if gnorm is not None else "None"
+                    logger.info(f"Batch {batch_idx}: Loss={float(loss.asnumpy()):.4f} TrainEM={epoch_correct/max(1,epoch_total):.4f} gNorm={gnorm_str}")
+
+            avg_train_loss = epoch_loss / max(1, len(self.train_dataset))
             train_accuracy = epoch_correct / epoch_total if epoch_total > 0 else 0
-            
-            logger.info(f"Epoch {epoch+1} 训练完成:")
-            logger.info(f"  平均损失: {avg_train_loss:.4f}")
-            logger.info(f"  训练准确率: {train_accuracy:.4f}")
-            logger.info(f"  学习率: {self.config.learning_rate:.6f}")
-            
+            avg_gn = sum_gn / max(1, gn_steps)
+            logger.info(f"Epoch {epoch+1} 训练完成: 平均损失={avg_train_loss:.4f} 训练EM={train_accuracy:.4f} 平均梯度范数={avg_gn:.3f}")
+            logger.info(f"学习率(基准): {self.config.learning_rate:.6f}")
+
             # 验证
             logger.info("开始模型评估...")
             val_loss, val_em, val_cer, class_accuracies, class_total = self.evaluate()
-            val_accuracy = val_em  # 修正变量名
-            logger.info(f"  验证损失: {val_loss:.4f} | EM: {val_em:.4f} | CER: {val_cer:.4f}")
+            val_accuracy = 1.0 - val_cer
+            logger.info(f"  验证损失: {val_loss:.4f} | EM: {val_em:.4f} | CER: {val_cer:.4f} | TokenAcc: {val_accuracy:.4f}")
             
             logger.info("各类别准确率（样本数）:")
             for word in sorted(class_total.keys()):
@@ -632,8 +690,8 @@ class EnhancedCECSLTrainer:
             
             epoch_time = time.time() - start_time
             logger.info(f"Epoch {epoch+1} 总结:")
-            logger.info(f"  训练损失: {avg_train_loss:.4f}, 训练准确率: {train_accuracy:.4f}")
-            logger.info(f"  验证损失: {val_loss:.4f}, 验证准确率: {val_accuracy:.4f}")
+            logger.info(f"  训练损失: {avg_train_loss:.4f}, 训练EM: {train_accuracy:.4f}")
+            logger.info(f"  验证损失: {val_loss:.4f}, 验证EM: {val_em:.4f}, 验证TokenAcc: {val_accuracy:.4f}")
             logger.info(f"  耗时: {epoch_time:.2f}秒")
             
             # 保存最佳模型
@@ -698,16 +756,35 @@ def build_token_vocab(corpus_csv):
                 token = token.strip()
                 if token:
                     tokens.add(token)
-    idx2token = ['<BLK>', '<PAD>'] + sorted(tokens)
+    # 加入 <UNK>，避免 OOV 错映射到 <BLK>
+    idx2token = ['<BLK>', '<PAD>', '<UNK>'] + sorted(tokens)
     token2idx = {t: i for i, t in enumerate(idx2token)}
     return token2idx, idx2token
 
-def ctc_greedy_decode(log_probs, idx2token):
-    # log_probs: (seq, batch, vocab_size)
-    pred_ids = np.argmax(log_probs.asnumpy(), axis=2)  # (seq, batch)
+def ctc_greedy_decode(log_probs, idx2token, input_lengths=None):
+    """
+    基于贪心的CTC解码，支持按各样本有效时长裁剪，避免padding区域产生伪预测导致EM恒为0。
+    Args:
+        log_probs: (seq_len, batch_size, vocab_size) 的对数概率
+        idx2token: 词表索引到token的映射
+        input_lengths: (batch_size,) 每个样本的有效时长T，若为None则使用完整seq_len
+    Returns:
+        List[List[str]]: 每个样本的token序列
+    """
+    lp_np = log_probs.asnumpy() if hasattr(log_probs, 'asnumpy') else np.asarray(log_probs)
+    seq_len, batch_size, _ = lp_np.shape
+    if input_lengths is not None:
+        il_np = input_lengths.asnumpy() if hasattr(input_lengths, 'asnumpy') else np.asarray(input_lengths)
+        il_np = il_np.astype(np.int32)
+    else:
+        il_np = None
+
+    pred_ids = np.argmax(lp_np, axis=2)  # (seq_len, batch_size)
     results = []
     for b in range(pred_ids.shape[1]):
-        seq = pred_ids[:, b]
+        valid_len = int(il_np[b]) if il_np is not None else seq_len
+        valid_len = max(0, min(valid_len, seq_len))
+        seq = pred_ids[:valid_len, b]
         tokens = []
         prev = -1
         for t in seq:
