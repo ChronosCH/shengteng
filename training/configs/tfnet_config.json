@@ -1,0 +1,55 @@
+{
+  "dataset": {
+    "name": "CE-CSL",
+    "train_data_path": "data/CE-CSL/video/train",
+    "valid_data_path": "data/CE-CSL/video/dev",
+    "test_data_path": "data/CE-CSL/video/test",
+    "train_label_path": "data/CE-CSL/label/train.csv",
+    "valid_label_path": "data/CE-CSL/label/dev.csv",
+    "test_label_path": "data/CE-CSL/label/test.csv",
+    "crop_size": 224,
+    "max_frames": 300
+  },
+  "model": {
+    "name": "TFNet",
+    "hidden_size": 1024,
+    "device_target": "CPU"
+  },
+  "training": {
+    "batch_size": 2,
+    "learning_rate": 0.0001,
+    "num_epochs": 55,
+    "num_workers": 1,
+    "weight_decay": 0.0001,
+    "gradient_clip_norm": 1.0,
+    "save_interval": 5,
+    "eval_interval": 1,
+    "early_stopping_patience": 10
+  },
+  "optimizer": {
+    "type": "Adam",
+    "lr_scheduler": {
+      "type": "MultiStepLR",
+      "milestones": [35, 45],
+      "gamma": 0.2
+    }
+  },
+  "loss": {
+    "ctc_blank_id": 0,
+    "ctc_reduction": "mean",
+    "kd_temperature": 8,
+    "kd_weight": 25.0
+  },
+  "paths": {
+    "checkpoint_dir": "training/checkpoints",
+    "log_dir": "training/logs",
+    "output_dir": "training/output",
+    "best_model_path": "training/checkpoints/best_tfnet_model.ckpt",
+    "current_model_path": "training/checkpoints/current_tfnet_model.ckpt"
+  },
+  "logging": {
+    "level": "INFO",
+    "save_logs": true,
+    "print_interval": 10
+  }
+}

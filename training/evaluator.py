@@ -1,0 +1,323 @@
+#!/usr/bin/env python3
+"""
+Model evaluation script for TFNet
+"""
+
+import os
+import sys
+import json
+import logging
+from datetime import datetime
+
+import mindspore as ms
+from mindspore import context, load_checkpoint, load_param_into_net
+
+# Try to import new API, fallback to old if not available
+try:
+    from mindspore import set_device
+    MINDSPORE_NEW_API = True
+except ImportError:
+    MINDSPORE_NEW_API = False
+
+# Add current directory to path for imports
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from config_manager import ConfigManager
+from tfnet_model import TFNetModel
+from data_processor import build_vocabulary, create_dataset
+from decoder import CTCDecoder, calculate_wer_score, WERCalculator
+from utils import (
+    normalize_path, ensure_directory_exists, safe_file_path,
+    check_file_exists, print_error_details
+)
+
+class TFNetEvaluator:
+    """TFNet model evaluator"""
+    
+    def __init__(self, config_path=None, model_path=None):
+        try:
+            # Initialize configuration
+            print("Initializing TFNet Evaluator...")
+            self.config_manager = ConfigManager(config_path)
+            self.config = self.config_manager.config
+            self.model_path = model_path
+
+            # Ensure output directory exists
+            output_dir = self.config_manager.get("paths.output_dir")
+            if output_dir:
+                ensure_directory_exists(output_dir, create=True)
+        
+        # Set MindSpore context with API compatibility
+        device_target = self.config_manager.get("model.device_target", "CPU")
+
+        # Use new API if available, otherwise fallback to old API
+        if MINDSPORE_NEW_API:
+            try:
+                context.set_context(mode=context.GRAPH_MODE)
+                set_device(device_target)
+                print(f"✓ MindSpore device set to: {device_target} (new API)")
+            except Exception as e:
+                print(f"Warning: New API failed, using fallback: {e}")
+                context.set_context(
+                    mode=context.GRAPH_MODE,
+                    device_target=device_target
+                )
+                print(f"✓ MindSpore device set to: {device_target} (fallback API)")
+        else:
+            context.set_context(
+                mode=context.GRAPH_MODE,
+                device_target=device_target
+            )
+            print(f"✓ MindSpore device set to: {device_target} (legacy API)")
+        
+        # Initialize logging
+        self._setup_logging()
+        
+        # Initialize components
+        self.model = None
+        self.test_dataset = None
+        self.word2idx = None
+        self.idx2word = None
+        self.decoder = None
+        
+            self.logger.info("TFNet Evaluator initialized successfully")
+
+        except Exception as e:
+            print_error_details(e, "TFNet Evaluator initialization")
+            raise
+    
+    def _setup_logging(self):
+        """Setup logging configuration"""
+        log_level = getattr(logging, self.config_manager.get("logging.level", "INFO"))
+        
+        # Create logger
+        self.logger = logging.getLogger('TFNetEvaluator')
+        self.logger.setLevel(log_level)
+        
+        # Clear existing handlers
+        self.logger.handlers.clear()
+        
+        # Console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(log_level)
+        console_format = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        console_handler.setFormatter(console_format)
+        self.logger.addHandler(console_handler)
+    
+    def load_vocabulary(self):
+        """Load vocabulary from file or build from data"""
+        vocab_path = os.path.join(self.config_manager.get("paths.output_dir"), "vocabulary.json")
+        
+        if os.path.exists(vocab_path):
+            self.logger.info(f"Loading vocabulary from {vocab_path}")
+            with open(vocab_path, 'r', encoding='utf-8') as f:
+                vocab_data = json.load(f)
+            
+            self.word2idx = vocab_data['word2idx']
+            self.idx2word = vocab_data['idx2word']
+            vocab_size = vocab_data['vocab_size']
+        else:
+            self.logger.info("Building vocabulary from data")
+            dataset_config = self.config_manager.get_dataset_config()
+            
+            self.word2idx, vocab_size, self.idx2word = build_vocabulary(
+                dataset_config["train_label_path"],
+                dataset_config["valid_label_path"],
+                dataset_config["test_label_path"],
+                dataset_config["name"]
+            )
+        
+        self.logger.info(f"Vocabulary size: {vocab_size}")
+        return vocab_size
+    
+    def prepare_test_data(self):
+        """Prepare test dataset"""
+        self.logger.info("Preparing test data...")
+        
+        dataset_config = self.config_manager.get_dataset_config()
+        
+        # Create test dataset
+        self.test_dataset = create_dataset(
+            data_path=dataset_config["test_data_path"],
+            label_path=dataset_config["test_label_path"],
+            word2idx=self.word2idx,
+            dataset_name=dataset_config["name"],
+            batch_size=1,  # Use batch size 1 for evaluation
+            is_train=False,
+            num_workers=1
+        )
+        
+        self.logger.info("Test data preparation completed")
+    
+    def load_model(self, vocab_size):
+        """Load trained model"""
+        self.logger.info("Loading model...")
+        
+        model_config = self.config_manager.get_model_config()
+        
+        # Create model
+        self.model = TFNetModel(
+            hidden_size=model_config["hidden_size"],
+            word_set_num=vocab_size,
+            device_target=model_config["device_target"],
+            dataset_name=model_config["dataset_name"]
+        )
+        
+        # Load checkpoint
+        if self.model_path and os.path.exists(self.model_path):
+            self.logger.info(f"Loading model from {self.model_path}")
+            param_dict = load_checkpoint(self.model_path)
+            load_param_into_net(self.model, param_dict)
+        else:
+            # Try to load best model
+            best_model_path = self.config_manager.get("paths.best_model_path")
+            if os.path.exists(best_model_path):
+                self.logger.info(f"Loading best model from {best_model_path}")
+                param_dict = load_checkpoint(best_model_path)
+                load_param_into_net(self.model, param_dict)
+            else:
+                self.logger.error("No trained model found!")
+                return False
+        
+        # Initialize decoder
+        self.decoder = CTCDecoder(
+            gloss_dict=self.word2idx,
+            num_classes=vocab_size + 1,
+            search_mode='max',
+            blank_id=self.config_manager.get("loss.ctc_blank_id", 0)
+        )
+        
+        self.logger.info("Model loaded successfully")
+        return True
+    
+    def evaluate(self):
+        """Evaluate model on test set"""
+        self.logger.info("Starting evaluation...")
+        
+        # Prepare data and model
+        vocab_size = self.load_vocabulary()
+        self.prepare_test_data()
+        
+        if not self.load_model(vocab_size):
+            return None
+        
+        # Set model to evaluation mode
+        self.model.set_train(False)
+        
+        # Evaluation metrics
+        total_samples = 0
+        total_wer = 0.0
+        all_predictions = []
+        all_references = []
+        
+        # Process test data
+        for batch_idx, batch_data in enumerate(self.test_dataset.create_dict_iterator()):
+            # Extract batch data
+            videos = batch_data['video']
+            labels = batch_data['label']
+            video_lengths = batch_data['videoLength']
+            info = batch_data['info']
+            
+            # Forward pass
+            log_probs1, _, _, _, _, lgt, _, _, _ = \
+                self.model(videos, video_lengths, is_train=False)
+            
+            # Decode predictions
+            predictions, _ = self.decoder.decode(log_probs1, lgt, batch_first=False, probs=False)
+            
+            # Process predictions and references
+            for i, (pred, label_seq, sample_info) in enumerate(zip(predictions, labels, info)):
+                # Convert prediction to words
+                pred_words = [word for word, _ in pred] if pred else []
+                pred_sentence = ' '.join(pred_words)
+                
+                # Convert reference to words
+                if isinstance(label_seq, (list, tuple)):
+                    ref_words = [self.idx2word[idx] for idx in label_seq if idx < len(self.idx2word)]
+                else:
+                    ref_words = [self.idx2word[label_seq.asnumpy().item()]] if label_seq.asnumpy().item() < len(self.idx2word) else []
+                ref_sentence = ' '.join(ref_words)
+                
+                # Calculate WER for this sample
+                sample_wer = WERCalculator.calculate_wer([ref_sentence], [pred_sentence])["wer"]
+                
+                all_predictions.append(pred_sentence)
+                all_references.append(ref_sentence)
+                total_wer += sample_wer
+                total_samples += 1
+                
+                # Log sample results
+                if batch_idx % 10 == 0:
+                    self.logger.info(f"Sample {total_samples}: {sample_info}")
+                    self.logger.info(f"  Reference: {ref_sentence}")
+                    self.logger.info(f"  Prediction: {pred_sentence}")
+                    self.logger.info(f"  WER: {sample_wer:.2f}%")
+        
+        # Calculate overall metrics
+        avg_wer = total_wer / total_samples if total_samples > 0 else 0.0
+        overall_wer = WERCalculator.calculate_wer(all_references, all_predictions)
+        
+        # Log results
+        self.logger.info("=" * 50)
+        self.logger.info("EVALUATION RESULTS")
+        self.logger.info("=" * 50)
+        self.logger.info(f"Total samples: {total_samples}")
+        self.logger.info(f"Average WER: {avg_wer:.2f}%")
+        self.logger.info(f"Overall WER: {overall_wer['wer']:.2f}%")
+        self.logger.info(f"Deletion rate: {overall_wer['del_rate']:.2f}%")
+        self.logger.info(f"Insertion rate: {overall_wer['ins_rate']:.2f}%")
+        self.logger.info(f"Substitution rate: {overall_wer['sub_rate']:.2f}%")
+        
+        # Save results
+        results = {
+            'total_samples': total_samples,
+            'average_wer': avg_wer,
+            'overall_wer': overall_wer,
+            'predictions': all_predictions,
+            'references': all_references,
+            'evaluation_time': datetime.now().isoformat()
+        }
+        
+        results_path = os.path.join(
+            self.config_manager.get("paths.output_dir"), 
+            f"evaluation_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        )
+        
+        with open(results_path, 'w', encoding='utf-8') as f:
+            json.dump(results, f, indent=2, ensure_ascii=False)
+        
+        self.logger.info(f"Results saved to {results_path}")
+        
+        return results
+
+def main():
+    """Main function"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='TFNet Evaluation Script')
+    parser.add_argument('--config', type=str, default='training/configs/tfnet_config.json',
+                       help='Path to configuration file')
+    parser.add_argument('--model', type=str, default=None,
+                       help='Path to trained model checkpoint')
+    
+    args = parser.parse_args()
+    
+    # Create evaluator
+    evaluator = TFNetEvaluator(config_path=args.config, model_path=args.model)
+    
+    # Start evaluation
+    try:
+        results = evaluator.evaluate()
+        if results:
+            print(f"\nEvaluation completed successfully!")
+            print(f"Overall WER: {results['overall_wer']['wer']:.2f}%")
+        else:
+            print("Evaluation failed!")
+    except Exception as e:
+        evaluator.logger.error(f"Evaluation failed with error: {e}")
+        raise
+
+if __name__ == "__main__":
+    main()
