@@ -174,6 +174,21 @@ try:
 except Exception as _e:
     logger.warning(f"挂载字幕静态目录失败: {_e}")
 
+# 安全中间件
+try:
+    from backend.middleware.security_headers import security_headers_middleware
+    from backend.middleware.rate_limiting import rate_limit_middleware
+
+    # 添加安全头中间件
+    app.middleware("http")(security_headers_middleware)
+
+    # 添加速率限制中间件
+    app.middleware("http")(rate_limit_middleware)
+
+    logger.info("✅ 安全中间件已加载")
+except ImportError as e:
+    logger.warning(f"⚠️ 安全中间件加载失败: {e}")
+
 # CORS中间件
 app.add_middleware(
     CORSMiddleware,

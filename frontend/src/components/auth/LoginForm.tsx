@@ -28,6 +28,7 @@ import {
   Lock,
   Login as LoginIcon,
 } from '@mui/icons-material'
+import { validateUsername, sanitizeInput } from '../../utils/inputValidation'
 
 interface LoginFormProps {
   onLogin: (credentials: LoginCredentials) => Promise<void>
@@ -59,12 +60,17 @@ const LoginForm: React.FC<LoginFormProps> = ({
   const validateForm = (): boolean => {
     const errors: {[key: string]: string} = {}
 
-    if (!credentials.username.trim()) {
-      errors.username = '请输入用户名'
+    // 验证用户名
+    const usernameResult = validateUsername(credentials.username)
+    if (!usernameResult.isValid) {
+      errors.username = usernameResult.errors[0]
     }
 
+    // 验证密码（基本检查）
     if (!credentials.password) {
       errors.password = '请输入密码'
+    } else if (credentials.password.length > 128) {
+      errors.password = '密码过长'
     }
 
     setValidationErrors(errors)
@@ -88,12 +94,18 @@ const LoginForm: React.FC<LoginFormProps> = ({
   const handleInputChange = (field: keyof LoginCredentials) => (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const value = field === 'remember_me' ? e.target.checked : e.target.value
+    let value: string | boolean = field === 'remember_me' ? e.target.checked : e.target.value
+
+    // 对字符串输入进行基本清理
+    if (typeof value === 'string') {
+      value = sanitizeInput(value, field === 'username' ? 50 : 128)
+    }
+
     setCredentials(prev => ({
       ...prev,
       [field]: value
     }))
-    
+
     // 清除对应字段的验证错误
     if (validationErrors[field]) {
       setValidationErrors(prev => ({

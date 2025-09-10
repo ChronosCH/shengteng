@@ -5,7 +5,9 @@
 
 import jwt
 import asyncio
-from datetime import datetime, timedelta
+import base64
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 from functools import wraps
 import hashlib
@@ -251,7 +253,7 @@ class SecurityAuditor:
             'event_types': dict(event_counts),
             'severity_distribution': dict(severity_counts),
             'top_ips': dict(sorted(ip_counts.items(), key=lambda x: x[1], reverse=True)[:10]),
-            'generated_at': datetime.utcnow().isoformat()
+            'generated_at': datetime.now(timezone.utc).isoformat()
         }
 
 
@@ -434,23 +436,46 @@ class InputValidator:
         return result
     
     @staticmethod
-    def sanitize_input(input_str: str) -> str:
-        """清理输入数据"""
+    def sanitize_input(input_str: str, max_length: int = 1000) -> str:
+        """清理输入数据 - 增强版"""
         import html
         import re
-        
+
+        if not isinstance(input_str, str):
+            raise ValueError("输入必须是字符串类型")
+
+        # 长度限制
+        if len(input_str) > max_length:
+            raise ValueError(f"输入长度超过限制 ({max_length} 字符)")
+
         # HTML转义
         sanitized = html.escape(input_str)
-        
-        # 移除潜在的脚本标签
-        sanitized = re.sub(r'<script[^>]*>.*?</script>', '', sanitized, flags=re.IGNORECASE | re.DOTALL)
-        
+
+        # 移除潜在的脚本标签和事件处理器
+        dangerous_patterns = [
+            r'<script[^>]*>.*?</script>',
+            r'<style[^>]*>.*?</style>',
+            r'javascript:',
+            r'vbscript:',
+            r'data:text/html',
+            r'on\w+\s*=',  # 事件处理器如 onclick, onload 等
+        ]
+
+        for pattern in dangerous_patterns:
+            sanitized = re.sub(pattern, '', sanitized, flags=re.IGNORECASE | re.DOTALL)
+
         # 移除其他潜在危险的标签
-        dangerous_tags = ['iframe', 'object', 'embed', 'form', 'input']
+        dangerous_tags = ['iframe', 'object', 'embed', 'form', 'input', 'meta', 'link', 'base']
         for tag in dangerous_tags:
             pattern = f'<{tag}[^>]*>.*?</{tag}>'
             sanitized = re.sub(pattern, '', sanitized, flags=re.IGNORECASE | re.DOTALL)
-        
+            # 也移除自闭合标签
+            pattern = f'<{tag}[^>]*/?>'
+            sanitized = re.sub(pattern, '', sanitized, flags=re.IGNORECASE)
+
+        # 移除多余的空白字符
+        sanitized = re.sub(r'\s+', ' ', sanitized)
+
         return sanitized.strip()
     
     @staticmethod
@@ -522,9 +547,9 @@ class SecurityManager:
         to_encode = data.copy()
         
         if expires_delta:
-            expire = datetime.utcnow() + expires_delta
+            expire = datetime.now(timezone.utc) + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
+            expire = datetime.now(timezone.utc) + timedelta(minutes=self.access_token_expire_minutes)
         
         to_encode.update({"exp": expire, "type": "access"})
         
@@ -534,7 +559,7 @@ class SecurityManager:
     def create_refresh_token(self, data: dict) -> str:
         """创建刷新令牌"""
         to_encode = data.copy()
-        expire = datetime.utcnow() + timedelta(days=self.refresh_token_expire_days)
+        expire = datetime.now(timezone.utc) + timedelta(days=self.refresh_token_expire_days)
         
         to_encode.update({
             "exp": expire, 

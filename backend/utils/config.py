@@ -6,6 +6,8 @@
 import os
 import json
 import logging
+import secrets
+import warnings
 from typing import List, Optional, Dict, Any, Union
 from pathlib import Path
 from pydantic import validator, Field
@@ -26,6 +28,28 @@ def resolve_to_root(path_str: str) -> str:
         return str(p)
     except Exception:
         return path_str
+
+
+def generate_secure_secret_key() -> str:
+    """生成安全的密钥"""
+    return secrets.token_urlsafe(32)
+
+
+def get_secret_key_from_env() -> str:
+    """从环境变量获取密钥，如果不存在则生成新的"""
+    secret_key = os.getenv("SECRET_KEY")
+
+    if not secret_key or secret_key == "your-secret-key-here-change-in-production":
+        # 生成新的安全密钥
+        new_key = generate_secure_secret_key()
+        logger.warning(f"未找到有效的SECRET_KEY，已生成新密钥。请将以下密钥添加到环境变量中：\nSECRET_KEY={new_key}")
+        return new_key
+
+    if len(secret_key) < 32:
+        logger.error("SECRET_KEY长度不足，必须至少32个字符")
+        raise ValueError("SECRET_KEY长度必须至少32个字符")
+
+    return secret_key
 
 
 class Settings(BaseSettings):
@@ -114,7 +138,7 @@ class Settings(BaseSettings):
     PERFORMANCE_METRICS_RETENTION: int = Field(default=7, ge=1, le=30)  # 天
     
     # 安全设置
-    SECRET_KEY: str = "your-secret-key-here-change-in-production"
+    SECRET_KEY: str = Field(default_factory=get_secret_key_from_env)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, ge=5, le=1440)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, ge=1, le=30)
     RATE_LIMIT_REQUESTS: int = Field(default=100, ge=10, le=10000)
@@ -156,10 +180,13 @@ class Settings(BaseSettings):
     
     @validator('SECRET_KEY')
     def validate_secret_key(cls, v):
-        if v == "your-secret-key-here-change-in-production":
-            logger.warning("使用默认密钥，生产环境中请更改！")
+        if not v:
+            raise ValueError("SECRET_KEY不能为空")
         if len(v) < 32:
-            raise ValueError("密钥长度必须至少32个字符")
+            raise ValueError("SECRET_KEY长度必须至少32个字符")
+        # 检查是否为默认的不安全密钥
+        if v == "your-secret-key-here-change-in-production":
+            raise ValueError("不能使用默认的不安全密钥，请设置环境变量SECRET_KEY")
         return v
     
     @validator('ALLOWED_ORIGINS')
@@ -296,14 +323,14 @@ class Settings(BaseSettings):
     
     def export_config(self) -> Dict[str, Any]:
         """导出配置（脱敏）"""
-        config = self.dict()
-        
+        config = self.model_dump()
+
         # 脱敏敏感信息
         sensitive_keys = ["SECRET_KEY", "REDIS_PASSWORD", "DATABASE_URL"]
         for key in sensitive_keys:
             if key in config and config[key]:
                 config[key] = "***"
-        
+
         return config
     
     def validate_environment(self) -> List[str]:
@@ -315,8 +342,8 @@ class Settings(BaseSettings):
             if self.DEBUG:
                 warnings.append("生产环境不应启用DEBUG模式")
             
-            if self.SECRET_KEY == "your-secret-key-here-change-in-production":
-                warnings.append("生产环境必须更改默认密钥")
+            if len(self.SECRET_KEY) < 32:
+                warnings.append("生产环境密钥长度不足，必须至少32个字符")
             
             if not self.SESSION_COOKIE_SECURE:
                 warnings.append("生产环境应启用安全Cookie")
