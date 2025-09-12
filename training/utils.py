@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Utility functions for TFNet training system
-Cross-platform compatibility and error handling
+TFNet训练系统实用功能
+跨平台兼容性和错误处理
 """
 
 import os
@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Union, Optional, List
 
 def get_platform_info():
-    """Get platform information for debugging"""
+    """获取平台信息用于调试"""
     return {
         'system': platform.system(),
         'platform': platform.platform(),
@@ -22,7 +22,7 @@ def get_platform_info():
     }
 
 def normalize_path(path: Union[str, Path]) -> str:
-    """Normalize path for cross-platform compatibility"""
+    """规范化路径以实现跨平台兼容性"""
     if path is None:
         return ""
     

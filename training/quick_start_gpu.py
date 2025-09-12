@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Quick GPU Training Launcher
-Simple script to quickly start GPU training with proper environment checks
+快速GPU训练启动器
+用于快速启动GPU训练并进行适当环境检查的简单脚本
 """
 
 import os
@@ -10,14 +10,14 @@ import subprocess
 import time
 
 def check_environment():
-    """Quick environment check"""
+    """快速环境检查"""
     print("=" * 50)
-    print("QUICK ENVIRONMENT CHECK")
+    print("快速环境检查")
     print("=" * 50)
     
-    # Check conda environment
+    # 检查conda环境
     conda_env = os.environ.get('CONDA_DEFAULT_ENV', 'unknown')
-    print(f"Conda Environment: {conda_env}")
+    print(f"Conda环境: {conda_env}")
     
     if 'mindspore-gpu' not in conda_env:
         print("❌ Wrong conda environment!")

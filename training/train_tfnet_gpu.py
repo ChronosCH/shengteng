@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-GPU-Optimized TFNet Training Script for Continuous Sign Language Recognition
-Optimized for GPU execution with MindSpore framework
+GPU优化的连续手语识别TFNet训练脚本
+针对MindSpore框架的GPU执行进行优化
 """
 
 import os
@@ -18,14 +18,14 @@ from mindspore import context, save_checkpoint, load_checkpoint, load_param_into
 from mindspore.train import Model
 from mindspore.train.callback import ModelCheckpoint, CheckpointConfig, LossMonitor, TimeMonitor
 
-# Try to import new API, fallback to old if not available
+# 尝试导入新API，如果不可用则回退到旧版本
 try:
     from mindspore import set_device
     MINDSPORE_NEW_API = True
 except ImportError:
     MINDSPORE_NEW_API = False
 
-# Add current directory to path for imports
+# 将当前目录添加到导入路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from config_manager import ConfigManager
@@ -39,30 +39,30 @@ from utils import (
 )
 
 class GPUTFNetTrainer:
-    """GPU-optimized TFNet model trainer"""
+    """GPU优化的TFNet模型训练器"""
     
     def __init__(self, config_path=None):
         try:
-            # Initialize configuration
-            print("Initializing GPU-Optimized TFNet Trainer...")
+            # 初始化配置
+            print("初始化GPU优化的TFNet训练器...")
             self.config_manager = ConfigManager(config_path)
             self.config = self.config_manager.config
 
-            # Validate and create directories FIRST (before logging setup)
-            print("Setting up directories...")
+            # 首先验证和创建目录（在日志设置之前）
+            print("设置目录...")
             if not self._setup_directories():
-                raise RuntimeError("Failed to create required directories")
+                raise RuntimeError("创建所需目录失败")
 
-            # Validate dataset structure
-            print("Validating dataset...")
+            # 验证数据集结构
+            print("验证数据集...")
             if not self._validate_dataset():
-                raise RuntimeError("Dataset validation failed")
+                raise RuntimeError("数据集验证失败")
 
-            # Setup GPU context with optimizations
-            print("Setting up GPU context...")
+            # 使用优化设置GPU上下文
+            print("设置GPU上下文...")
             self._setup_gpu_context()
 
-            # Initialize logging (after directories are created)
+            # 初始化日志记录（在目录创建后）
             self._setup_logging()
 
             # Initialize components
@@ -113,21 +113,36 @@ class GPUTFNetTrainer:
                 save_graphs_path="./graphs",
             )
 
-            # Enable memory optimization
+            # Enable memory optimization (using max_device_memory instead)
             if gpu_config.get("enable_mem_reuse", True):
-                context.set_context(enable_mem_reuse=True)
-                print("✓ Memory reuse enabled")
+                try:
+                    # Use max_device_memory for memory optimization
+                    max_memory = gpu_config.get("max_device_memory", "0.9")
+                    context.set_context(max_device_memory=max_memory)
+                    print(f"✓ Memory optimization enabled (max_device_memory: {max_memory})")
+                except Exception as e:
+                    print(f"Warning: Memory optimization not supported: {e}")
 
             # Enable graph kernel optimization
             if self.config_manager.get("model.enable_graph_kernel", True):
-                context.set_context(enable_graph_kernel=True)
-                print("✓ Graph kernel optimization enabled")
+                try:
+                    # Graph kernel might not be available in all versions
+                    context.set_context(enable_graph_kernel=True)
+                    print("✓ Graph kernel optimization enabled")
+                except Exception as e:
+                    print(f"Warning: Graph kernel optimization not supported: {e}")
 
             # Enable auto mixed precision if supported
             if self.config_manager.get("model.enable_auto_mixed_precision", True):
                 try:
-                    context.set_auto_parallel_context(enable_auto_mixed_precision=True)
-                    print("✓ Auto mixed precision enabled")
+                    # Try different methods for auto mixed precision
+                    try:
+                        context.set_auto_parallel_context(enable_auto_mixed_precision=True)
+                        print("✓ Auto mixed precision enabled (auto_parallel_context)")
+                    except:
+                        # Alternative approach
+                        context.set_context(enable_auto_mixed_precision=True)
+                        print("✓ Auto mixed precision enabled (context)")
                 except Exception as e:
                     print(f"Warning: Auto mixed precision not supported: {e}")
 
@@ -332,7 +347,7 @@ class GPUTFNetTrainer:
             word2idx=self.word2idx,
             batch_size=batch_size,
             num_workers=num_workers,
-            is_training=True,
+            is_train=True,
             dataset_name=dataset_config["name"],
             prefetch_size=prefetch_size,
             max_rowsize=max_rowsize
@@ -344,7 +359,7 @@ class GPUTFNetTrainer:
             word2idx=self.word2idx,
             batch_size=batch_size,
             num_workers=num_workers,
-            is_training=False,
+            is_train=False,
             dataset_name=dataset_config["name"],
             prefetch_size=prefetch_size,
             max_rowsize=max_rowsize
@@ -375,9 +390,10 @@ class GPUTFNetTrainer:
         
         # Initialize decoder
         self.decoder = CTCDecoder(
-            blank_id=self.config_manager.get("loss.ctc_blank_id"),
-            word2idx=self.word2idx,
-            idx2word=self.idx2word
+            gloss_dict=self.word2idx,
+            num_classes=vocab_size,
+            search_mode='beam',
+            blank_id=self.config_manager.get("loss.ctc_blank_id", 0)
         )
         
         return self.model
@@ -399,14 +415,11 @@ class GPUTFNetTrainer:
             weight_decay=weight_decay
         )
         
-        # Setup loss function
-        loss_fn = SeqKD(
-            vocab_size=vocab_size,
-            blank_id=self.config_manager.get("loss.ctc_blank_id"),
-            reduction=self.config_manager.get("loss.ctc_reduction"),
-            temperature=self.config_manager.get("loss.kd_temperature"),
-            weight=self.config_manager.get("loss.kd_weight")
-        )
+        # Setup loss function - use CTCLoss instead of SeqKD
+        from mindspore.nn import CTCLoss
+        blank_id = self.config_manager.get("loss.ctc_blank_id", 0)
+        reduction = self.config_manager.get("loss.ctc_reduction", "mean")
+        loss_fn = CTCLoss(blank=blank_id, reduction=reduction)
         
         self.logger.info("Training components setup completed")
         
@@ -498,7 +511,11 @@ class GPUTFNetTrainer:
             try:
                 # Forward pass
                 def forward_fn(seq_data, seq_label, data_len, label_len):
-                    logits = model(seq_data, data_len, is_train=True)
+                    model_output = model(seq_data, data_len, is_train=True)
+                    # Model returns: (log_probs1, log_probs2, log_probs3, log_probs4, log_probs5, lgt_tensor, None, None, None)
+                    # CTCLoss expects the first log_probs tensor
+                    logits = model_output[0]  # Extract log_probs1
+                    # CTCLoss expects: (logits, targets, input_lengths, target_lengths)
                     loss = loss_fn(logits, seq_label, data_len, label_len)
                     return loss
                 

@@ -10,7 +10,7 @@ import json
 PAD = ' '
 
 def preprocess_words(words):
-    """Preprocess word list by removing brackets and digits"""
+    """通过移除括号和数字来预处理单词列表"""
     for i in range(len(words)):
         word = words[i]
         
@@ -259,6 +259,16 @@ class CECSLDataset:
             cap.release()
 
         print(f"Loaded {len(frames)} frames")
+        
+        # Convert to numpy array and ensure proper dtype
+        if frames:
+            frames = np.asarray(frames, dtype=np.float32)
+            # Normalize to [0, 1] range
+            frames = frames / 255.0
+        else:
+            # Return empty array with proper shape if no frames loaded
+            frames = np.empty((0, 224, 224, 3), dtype=np.float32)
+            
         return frames
 
 def collate_fn(videos, labels, video_lengths, infos):
@@ -309,12 +319,29 @@ def create_dataset(data_path, label_path, word2idx, dataset_name,
     def generator():
         for i in range(len(dataset)):
             sample = dataset[i]
-            yield sample['video'], sample['label'], sample['video_length'], sample['info']
+            # Ensure all data is properly formatted with simple data types
+            video = sample['video']
+            if isinstance(video, list):
+                video = np.array(video, dtype=np.float32)
+            elif isinstance(video, np.ndarray):
+                video = video.astype(np.float32)
+            
+            # Make sure video has the right shape (T, H, W, C)
+            if video.ndim == 4:
+                pass  # Already correct shape
+            elif video.ndim == 3:
+                video = np.expand_dims(video, axis=0)  # Add time dimension
+            
+            label = np.array(sample['label'], dtype=np.int32)
+            video_length = int(sample['video_length'])  # Simple integer
+            label_length = len(sample['label'])  # Label length as integer
+            
+            yield (video, label, video_length, label_length)
     
     # Create dataset with GPU optimizations
     ms_dataset = ds.GeneratorDataset(
         generator,
-        column_names=['video', 'label', 'videoLength', 'info'],
+        column_names=['video', 'label', 'videoLength', 'labelLength'],
         shuffle=is_train,
         num_parallel_workers=num_workers,
         max_rowsize=max_rowsize  # GPU optimization for memory efficiency
@@ -326,14 +353,18 @@ def create_dataset(data_path, label_path, word2idx, dataset_name,
         # Note: Some operations might need to be moved to custom transforms
         pass
     
+    # Set prefetch for better GPU utilization (before batching)
+    try:
+        ms_dataset = ms_dataset.prefetch(buffer_size=prefetch_size)
+        print(f"✓ Prefetch enabled with buffer size: {prefetch_size}")
+    except AttributeError:
+        print(f"Warning: Prefetch not available, skipping prefetch optimization")
+    
     # Batch dataset with optimizations
     ms_dataset = ms_dataset.batch(
         batch_size=batch_size,
         drop_remainder=True
     )
-    
-    # Set prefetch for better GPU utilization
-    ms_dataset = ms_dataset.prefetch(buffer_size=prefetch_size)
     
     # Enable repeat for training (helps with GPU utilization)
     if is_train:

@@ -3,7 +3,7 @@ import os
 from typing import Dict, Any
 
 class ConfigManager:
-    """Configuration manager for training parameters"""
+    """训练参数配置管理器"""
     
     def __init__(self, config_path: str = None):
         self.config_path = config_path
@@ -13,9 +13,9 @@ class ConfigManager:
             self.load_config(config_path)
     
     def _load_default_config(self) -> Dict[str, Any]:
-        """Load default configuration"""
+        """加载默认配置"""
         return {
-            # Dataset configuration
+            # 数据集配置
             "dataset": {
                 "name": "CE-CSL",
                 "train_data_path": "data/CE-CSL/video/train",
