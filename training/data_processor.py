@@ -8,7 +8,7 @@ from mindspore.dataset import vision, transforms
 import json
 
 PAD = ' '
-
+# 通过移除括号和数字来预处理单词列表
 def preprocess_words(words):
     """通过移除括号和数字来预处理单词列表"""
     for i in range(len(words)):
@@ -54,21 +54,21 @@ def preprocess_words(words):
     return words
 
 def build_vocabulary(train_label_path, valid_label_path, test_label_path, dataset_name):
-    """Build vocabulary from label files"""
+    """从标签文件构建词汇表"""
     word_list = []
     
     if dataset_name == "CE-CSL":
-        # Process CE-CSL dataset
+        # 处理CE-CSL数据集
         for label_path in [train_label_path, valid_label_path, test_label_path]:
             with open(label_path, 'r', encoding="utf-8") as f:
                 reader = csv.reader(f)
                 for n, row in enumerate(reader):
-                    if n != 0:  # Skip header
+                    if n != 0:  # 跳过表头
                         words = row[3].split("/")
                         words = preprocess_words(words)
                         word_list += words
     
-    # Build vocabulary
+    # 构建词汇表
     idx2word = [PAD]
     set2list = sorted(list(set(word_list)))
     idx2word.extend(set2list)
@@ -78,22 +78,22 @@ def build_vocabulary(train_label_path, valid_label_path, test_label_path, datase
     return word2idx, len(idx2word) - 1, idx2word
 
 class VideoTransform:
-    """Video transformation for data augmentation"""
+    """用于数据增强的视频转换"""
     def __init__(self, is_train=True, crop_size=224):
         self.is_train = is_train
         self.crop_size = crop_size
     
     def __call__(self, video_frames):
-        """Apply transformations to video frames"""
-        # Convert to numpy array if needed
+        """对视频帧应用转换"""
+        # 如果需要，转换为numpy数组
         if isinstance(video_frames, list):
             video_frames = np.array(video_frames)
         
-        # Resize frames
+        # 调整帧大小
         resized_frames = []
         for frame in video_frames:
             if self.is_train:
-                # Random crop for training
+                # 训练时随机裁剪
                 h, w = frame.shape[:2]
                 if h > self.crop_size and w > self.crop_size:
                     top = np.random.randint(0, h - self.crop_size)
@@ -102,54 +102,54 @@ class VideoTransform:
                 else:
                     frame = cv2.resize(frame, (self.crop_size, self.crop_size))
                 
-                # Random horizontal flip
+                # 随机水平翻转
                 if np.random.random() > 0.5:
                     frame = cv2.flip(frame, 1)
             else:
-                # Center crop for validation/test
+                # 验证/测试时中心裁剪
                 frame = cv2.resize(frame, (self.crop_size, self.crop_size))
             
             resized_frames.append(frame)
         
-        # Convert to tensor format (T, H, W, C) -> (T, C, H, W)
+        # 转换为张量格式 (T, H, W, C) -> (T, C, H, W)
         video_tensor = np.array(resized_frames)
 
-        # Debug: Check tensor shape
+        # 调试：检查张量形状
         if len(video_tensor.shape) != 4:
             print(f"Warning: Unexpected video tensor shape: {video_tensor.shape}")
             print(f"Expected 4D tensor (T, H, W, C), got {len(video_tensor.shape)}D")
-            # Handle grayscale images by adding channel dimension
+            # 通过添加通道维度处理灰度图像
             if len(video_tensor.shape) == 3:
                 video_tensor = np.expand_dims(video_tensor, axis=-1)
-                print(f"Added channel dimension, new shape: {video_tensor.shape}")
+                print(f"添加了通道维度，新形状：{video_tensor.shape}")
 
-        # Ensure we have the right number of dimensions for transpose
+        # 确保有正确的维度数量用于转置
         if len(video_tensor.shape) == 4:
             video_tensor = np.transpose(video_tensor, (0, 3, 1, 2))
         else:
-            raise ValueError(f"Cannot transpose tensor with shape {video_tensor.shape}")
+            raise ValueError(f"无法转置形状为{video_tensor.shape}的张量")
 
-        # Pad or truncate to fixed length for batching
-        max_frames = 300  # From config
+        # 填充或截断到固定长度以便批处理
+        max_frames = 300  # 来自配置
         current_frames = video_tensor.shape[0]
 
         if current_frames > max_frames:
-            # Truncate
+            # 截断
             video_tensor = video_tensor[:max_frames]
         elif current_frames < max_frames:
-            # Pad with zeros
+            # 用零填充
             pad_frames = max_frames - current_frames
             pad_shape = (pad_frames,) + video_tensor.shape[1:]
             pad_tensor = np.zeros(pad_shape, dtype=video_tensor.dtype)
             video_tensor = np.concatenate([video_tensor, pad_tensor], axis=0)
         
-        # Normalize to [0, 1]
+        # 标准化到[0, 1]
         video_tensor = video_tensor.astype(np.float32) / 255.0
         
         return video_tensor
 
 class CECSLDataset:
-    """CE-CSL dataset for sign language recognition"""
+    """用于手语识别的CE-CSL数据集"""
     
     def __init__(self, data_path, label_path, word2idx, dataset_name, is_train=False, transform=None):
         self.data_path = data_path

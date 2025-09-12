@@ -6,7 +6,7 @@ import numpy as np
 import copy
 
 class Identity(nn.Cell):
-    """Identity layer that returns input unchanged"""
+    """返回输入不变的恒等层"""
     def __init__(self):
         super(Identity, self).__init__()
 
@@ -14,7 +14,7 @@ class Identity(nn.Cell):
         return x
 
 class TemporalConv(nn.Cell):
-    """Temporal convolution module for processing sequential features"""
+    """用于处理序列特征的时序卷积模块"""
     def __init__(self, input_size, hidden_size, conv_type=2):
         super(TemporalConv, self).__init__()
         self.input_size = input_size
@@ -46,20 +46,20 @@ class TemporalConv(nn.Cell):
         self.temporal_conv = nn.SequentialCell(*modules)
 
     def update_lgt(self, lgt):
-        """Update sequence lengths after convolution operations"""
+        """在卷积操作后更新序列长度"""
         feat_len = copy.deepcopy(lgt)
         for ks in self.kernel_size:
             if ks[0] == 'P':
-                # Pooling operation: divide by stride
+                # 池化操作：除以步长
                 feat_len = [max(1, int(i // 2)) for i in feat_len]
             else:
-                # Convolution operation: length = input_length - kernel_size + 1
+                # 卷积操作：长度 = 输入长度 - 卷积核大小 + 1
                 kernel_size = int(ks[1])
                 feat_len = [max(1, i - kernel_size + 1) for i in feat_len]
         return feat_len
 
     def construct(self, frame_feat, lgt):
-        # Only compute visual features inside graph; avoid Python ops on lengths here
+        # 只在图内计算视觉特征；避免在长度上进行Python操作
         visual_feat = self.temporal_conv(frame_feat)
         return {
             "visual_feat": visual_feat,
@@ -67,10 +67,10 @@ class TemporalConv(nn.Cell):
         }
 
 class NormLinear(nn.Cell):
-    """Normalized linear layer"""
+    """标准化线性层"""
     def __init__(self, in_dim, out_dim):
         super(NormLinear, self).__init__()
-        # Xavier uniform initialization
+        # Xavier均匀初始化
         limit = np.sqrt(6.0 / (in_dim + out_dim))
         weight_init = np.random.uniform(-limit, limit, (in_dim, out_dim)).astype(np.float32)
         self.weight = ms.Parameter(
@@ -81,8 +81,8 @@ class NormLinear(nn.Cell):
         self.matmul = ops.MatMul()
 
     def construct(self, x):
-        # Support inputs with rank >= 2 by flattening the last feature dim
-        x_shape = x.shape  # e.g., (T, B, C) or (N, C)
+        # 通过展平最后特征维度来支持rank >= 2的输入
+        x_shape = x.shape  # 例如：(T, B, C) 或 (N, C)
         in_feat = x_shape[-1]
         reshape = ops.Reshape()
         x2d = reshape(x, (-1, in_feat))
@@ -96,7 +96,7 @@ class NormLinear(nn.Cell):
         return outputs
 
 class BiLSTMLayer(nn.Cell):
-    """Bidirectional LSTM layer"""
+    """双向LSTM层"""
     def __init__(self, rnn_type='LSTM', input_size=512, hidden_size=512, 
                  num_layers=2, bidirectional=True):
         super(BiLSTMLayer, self).__init__()
@@ -120,7 +120,7 @@ class BiLSTMLayer(nn.Cell):
         output, _ = self.rnn(x)
         
         if self.bidirectional:
-            # Split bidirectional output and sum
+            # 分割双向输出并相加
             forward_out = output[:, :, :self.hidden_size]
             backward_out = output[:, :, self.hidden_size:]
             output = forward_out + backward_out
@@ -131,16 +131,16 @@ class BiLSTMLayer(nn.Cell):
         }
 
 class ResNet34Backbone(nn.Cell):
-    """ResNet34 backbone for feature extraction"""
+    """用于特征提取的ResNet34骨干网络"""
     def __init__(self):
         super(ResNet34Backbone, self).__init__()
-        # Simplified ResNet34 implementation for CPU
+        # 为CPU优化的简化ResNet34实现
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, has_bias=False, pad_mode='pad')
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU()
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, pad_mode='pad')
         
-        # Simplified residual blocks
+        # 简化的残差块
         self.layer1 = self._make_layer(64, 64, 3)
         self.layer2 = self._make_layer(64, 128, 4, stride=2)
         self.layer3 = self._make_layer(128, 256, 6, stride=2)
@@ -151,13 +151,13 @@ class ResNet34Backbone(nn.Cell):
 
     def _make_layer(self, in_channels, out_channels, blocks, stride=1):
         layers = []
-        # First block with potential stride
+        # 第一个可能带步长的块
         layers.append(nn.Conv2d(in_channels, out_channels, 3, stride=stride, 
                                padding=1, has_bias=False, pad_mode='pad'))
         layers.append(nn.BatchNorm2d(out_channels))
         layers.append(nn.ReLU())
         
-        # Remaining blocks
+        # 其余块
         for _ in range(1, blocks):
             layers.append(nn.Conv2d(out_channels, out_channels, 3, stride=1, 
                                    padding=1, has_bias=False, pad_mode='pad'))

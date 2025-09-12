@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-GPU Training Test Script
-Simple test to verify GPU training setup works correctly
+GPU训练测试脚本
+用于验证GPU训练设置正确工作的简单测试
 """
 
 import os
@@ -9,11 +9,11 @@ import sys
 import time
 import numpy as np
 
-# Add current directory to path
+# 将当前目录添加到路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def test_gpu_availability():
-    """Test if GPU is available and working"""
+    """测试GPU是否可用并正常工作"""
     print("Testing GPU availability...")
     
     try:

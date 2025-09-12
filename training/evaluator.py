@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Model evaluation script for TFNet
+TFNet的模型评估脚本
 """
 
 import os
@@ -12,14 +12,14 @@ from datetime import datetime
 import mindspore as ms
 from mindspore import context, load_checkpoint, load_param_into_net
 
-# Try to import new API, fallback to old if not available
+# 尝试导入新API，如果不可用则回退到旧版本
 try:
     from mindspore import set_device
     MINDSPORE_NEW_API = True
 except ImportError:
     MINDSPORE_NEW_API = False
 
-# Add current directory to path for imports
+# 将当前目录添加到路径以便导入
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from config_manager import ConfigManager
@@ -32,22 +32,22 @@ from utils import (
 )
 
 class TFNetEvaluator:
-    """TFNet model evaluator"""
+    """TFNet模型评估器"""
     
     def __init__(self, config_path=None, model_path=None):
         try:
-            # Initialize configuration
-            print("Initializing TFNet Evaluator...")
+            # 初始化配置
+            print("正在初始化TFNet评估器...")
             self.config_manager = ConfigManager(config_path)
             self.config = self.config_manager.config
             self.model_path = model_path
 
-            # Ensure output directory exists
+            # 确保输出目录存在
             output_dir = self.config_manager.get("paths.output_dir")
             if output_dir:
                 ensure_directory_exists(output_dir, create=True)
         
-        # Set MindSpore context with API compatibility
+        # 设置MindSpore上下文，具有API兼容性
         device_target = self.config_manager.get("model.device_target", "CPU")
 
         # Use new API if available, otherwise fallback to old API

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Basic functionality test for TFNet training system
+TFNet训练系统基本功能测试
 """
 
 import os
@@ -8,7 +8,7 @@ import sys
 import traceback
 
 def test_imports():
-    """Test if all modules can be imported"""
+    """测试是否可以导入所有模块"""
     print("Testing imports...")
     
     try:

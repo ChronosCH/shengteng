@@ -28,7 +28,7 @@ class ConfigManager:
                 "max_frames": 300
             },
             
-            # Model configuration
+            # 模型配置
             "model": {
                 "name": "TFNet",
                 "hidden_size": 1024,
@@ -39,7 +39,7 @@ class ConfigManager:
                 "enable_auto_mixed_precision": False
             },
             
-            # Training configuration
+            # 训练配置
             "training": {
                 "batch_size": 2,
                 "learning_rate": 0.0001,
@@ -55,7 +55,7 @@ class ConfigManager:
                 "enable_data_sink": False
             },
             
-            # Optimizer configuration
+            # 优化器配置
             "optimizer": {
                 "type": "Adam",
                 "lr_scheduler": {
@@ -65,7 +65,7 @@ class ConfigManager:
                 }
             },
             
-            # Loss configuration
+            # 损失配置
             "loss": {
                 "ctc_blank_id": 0,
                 "ctc_reduction": "mean",
@@ -73,7 +73,7 @@ class ConfigManager:
                 "kd_weight": 25.0
             },
             
-            # Paths configuration
+            # 路径配置
             "paths": {
                 "checkpoint_dir": "training/checkpoints",
                 "log_dir": "training/logs",
@@ -82,14 +82,14 @@ class ConfigManager:
                 "current_model_path": "training/checkpoints/current_model.ckpt"
             },
             
-            # Logging configuration
+            # 日志配置
             "logging": {
                 "level": "INFO",
                 "save_logs": True,
                 "print_interval": 10
             },
             
-            # GPU optimization configuration
+            # GPU优化配置
             "gpu_optimization": {
                 "enable_graph_mode": False,
                 "enable_mem_reuse": False,
@@ -105,7 +105,7 @@ class ConfigManager:
             with open(config_path, 'r', encoding='utf-8') as f:
                 loaded_config = json.load(f)
             
-            # Merge with default config
+            # 与默认配置合并
             self._merge_config(self.config, loaded_config)
             print(f"Configuration loaded from {config_path}")
             
@@ -151,13 +151,13 @@ class ConfigManager:
         keys = key_path.split('.')
         config = self.config
         
-        # Navigate to the parent dictionary
+        # 导航到父字典
         for key in keys[:-1]:
             if key not in config:
                 config[key] = {}
             config = config[key]
         
-        # Set the value
+        # 设置值
         config[keys[-1]] = value
     
     def update_paths_for_dataset(self, dataset_name: str):
@@ -186,7 +186,7 @@ class ConfigManager:
         for dir_path in dirs_to_create:
             if dir_path:
                 try:
-                    # Normalize path for cross-platform compatibility
+                    # 为跨平台兼容性标准化路径
                     normalized_path = os.path.normpath(dir_path)
                     os.makedirs(normalized_path, exist_ok=True)
                     created_dirs.append(normalized_path)

@@ -6,7 +6,7 @@ import numpy as np
 from modules import Identity, TemporalConv, NormLinear, BiLSTMLayer, ResNet34Backbone
 
 class TFNetModel(nn.Cell):
-    """TFNet model implementation in MindSpore"""
+    """基于MindSpore的TFNet模型实现"""
     
     def __init__(self, hidden_size, word_set_num, device_target="CPU", dataset_name='CE-CSL'):
         super(TFNetModel, self).__init__()
@@ -15,14 +15,14 @@ class TFNetModel(nn.Cell):
         self.dataset_name = dataset_name
         self.hidden_size = hidden_size
         
-        # Backbone network
+        # 骨干网络
         self.conv2d = ResNet34Backbone()
         
-        # Temporal convolution layers
+        # 时序卷积层
         self.conv1d = TemporalConv(input_size=512, hidden_size=hidden_size, conv_type=2)
         self.conv1d1 = TemporalConv(input_size=512, hidden_size=hidden_size, conv_type=2)
         
-        # Bidirectional LSTM layers
+        # 双向LSTM层
         self.temporal_model = BiLSTMLayer(
             rnn_type='LSTM', 
             input_size=hidden_size, 
@@ -39,38 +39,38 @@ class TFNetModel(nn.Cell):
             bidirectional=True
         )
         
-        # Classification layers
+        # 分类层
         self.classifier11 = NormLinear(hidden_size, self.out_dim)
         self.classifier22 = self.classifier11
         self.classifier33 = NormLinear(hidden_size, self.out_dim)
         self.classifier44 = self.classifier33
         self.classifier55 = NormLinear(hidden_size, self.out_dim)
         
-        # Activation functions
+        # 激活函数
         self.relu = nn.ReLU()
         
-        # Operations
+        # 操作符
         self.transpose = ops.Transpose()
         self.reshape = ops.Reshape()
         self.concat = ops.Concat(axis=0)
-        # Note: FFT is not available in MindSpore, using simplified approach
+        # 注意：MindSpore中没有FFT，使用简化方法
         self.abs = ops.Abs()
 
     def pad_sequence(self, tensor, length):
-        """Pad tensor to specified length"""
+        """将张量填充到指定长度"""
         current_length = tensor.shape[0]
         if current_length >= length:
             return tensor[:length]
 
-        # Ensure consistent types for shape calculation
+        # 确保形状计算的类型一致性
         pad_length = int(length) - int(current_length)
         pad_shape = (pad_length,) + tensor.shape[1:]
         pad_tensor = ops.zeros(pad_shape, tensor.dtype)
         return ops.concat([tensor, pad_tensor], axis=0)
 
     def construct(self, seq_data, data_len=None, is_train=True):
-        """Forward pass of TFNet model"""
-        # Standardize length input to a Python list for MindSpore GRAPH_MODE safety
+        """TFNet模型的前向传播"""
+        # 为MindSpore GRAPH_MODE安全性，将长度输入标准化为Python列表
         len_x = data_len
         batch, temp, channel, height, width = seq_data.shape
         if len_x is None:
@@ -80,29 +80,29 @@ class TFNetModel(nn.Cell):
         elif isinstance(len_x, (int, np.integer)):
             len_x_list = [int(len_x)] * int(batch)
         else:
-            # Unknown type; default to full length per sample
+            # 未知类型；默认每个样本使用完整长度
             len_x_list = [int(temp)] * int(batch)
-        # Ensure length list matches batch size
+        # 确保长度列表与批次大小匹配
         if len(len_x_list) < int(batch):
             len_x_list = len_x_list + [int(temp)] * (int(batch) - len(len_x_list))
         elif len(len_x_list) > int(batch):
             len_x_list = len_x_list[:int(batch)]
 
-        # Reshape for 2D convolution
+        # 重塑为2D卷积格式
         inputs = self.reshape(seq_data, (batch * temp, channel, height, width))
 
-        # Extract features for each sequence using original lengths
+        # 使用原始长度为每个序列提取特征
         feature_list = []
         start_idx = 0
         for i in range(int(batch)):
-            # Use original length but cap at actual tensor size
+            # 使用原始长度但限制为实际张量大小
             lgt_i = min(int(len_x_list[i]), int(temp))
             end_idx = start_idx + lgt_i
             seq_features = self.conv2d(inputs[start_idx:end_idx])
             feature_list.append(seq_features)
-            start_idx += int(temp)  # Move to next sequence (fixed stride)
+            start_idx += int(temp)  # 移动到下一个序列（固定步长）
 
-        # Pad sequences to same length
+        # 将序列填充到相同长度
         max_len = max(len_x_list) if len_x_list else max([f.shape[0] for f in feature_list])
 
         padded_features = []
@@ -110,14 +110,14 @@ class TFNetModel(nn.Cell):
             padded = self.pad_sequence(features, max_len)
             padded_features.append(padded)
 
-        # Stack features
+        # 堆叠特征
         framewise = ops.stack(padded_features, axis=0)  # (B, T, C)
         framewise = self.transpose(framewise, (0, 2, 1))  # (B, C, T)
 
-        # Apply temporal convolution and update lengths in Python
+        # 应用时序卷积并在Python中更新长度
         conv1d_outputs = self.conv1d(framewise, len_x_list)
         x = conv1d_outputs['visual_feat']
-        # Update lengths according to conv/pool recipe K5,P2,K5,P2
+        # 根据卷积/池化配方K5,P2,K5,P2更新长度
         lgt = len_x_list
         for ks in ['K5', 'P2', 'K5', 'P2']:
             if ks[0] == 'P':

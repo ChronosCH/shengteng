@@ -100,14 +100,14 @@ def safe_file_path(file_path: Union[str, Path], create_parent: bool = True) -> O
 
 def check_file_exists(file_path: Union[str, Path], description: str = "File") -> bool:
     """
-    Check if file exists with descriptive error message
+    检查文件是否存在，提供描述性错误信息
     
     Args:
-        file_path: File path to check
-        description: Description for error message
+        file_path: 要检查的文件路径
+        description: 错误信息的描述
         
     Returns:
-        bool: True if file exists
+        bool: 如果文件存在返回True
     """
     if not file_path:
         print(f"✗ {description}: Path is empty")
@@ -133,14 +133,14 @@ def check_file_exists(file_path: Union[str, Path], description: str = "File") ->
 
 def check_directory_exists(dir_path: Union[str, Path], description: str = "Directory") -> bool:
     """
-    Check if directory exists with descriptive error message
+    检查目录是否存在，提供描述性错误信息
     
     Args:
-        dir_path: Directory path to check
-        description: Description for error message
+        dir_path: 要检查的目录路径
+        description: 错误信息的描述
         
     Returns:
-        bool: True if directory exists
+        bool: 如果目录存在返回True
     """
     if not dir_path:
         print(f"✗ {description}: Path is empty")
@@ -166,14 +166,14 @@ def check_directory_exists(dir_path: Union[str, Path], description: str = "Direc
 
 def safe_import(module_name: str, package: str = None) -> tuple:
     """
-    Safely import module with error handling
+    安全导入模块，带错误处理
     
     Args:
-        module_name: Name of module to import
-        package: Package name for relative imports
+        module_name: 要导入的模块名称
+        package: 相对导入的包名
         
     Returns:
-        tuple: (module_object, success_flag, error_message)
+        tuple: (模块对象, 成功标志, 错误信息)
     """
     try:
         if package:
@@ -188,11 +188,11 @@ def safe_import(module_name: str, package: str = None) -> tuple:
 
 def print_error_details(error: Exception, context: str = ""):
     """
-    Print detailed error information for debugging
+    打印详细错误信息用于调试
     
     Args:
-        error: Exception object
-        context: Context description
+        error: 异常对象
+        context: 上下文描述
     """
     print(f"{'='*60}")
     print(f"ERROR DETAILS")

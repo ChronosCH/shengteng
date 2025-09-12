@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-TFNet Training Script for Continuous Sign Language Recognition
-Optimized for CPU execution with MindSpore framework
+用于连续手语识别的TFNet训练脚本
+针对MindSpore框架的CPU执行进行优化
 """
 
 import os
@@ -18,14 +18,14 @@ from mindspore import context, save_checkpoint, load_checkpoint, load_param_into
 from mindspore.train import Model
 from mindspore.train.callback import ModelCheckpoint, CheckpointConfig, LossMonitor, TimeMonitor
 
-# Try to import new API, fallback to old if not available
+# 尝试导入新API，如果不可用则回退到旧版本
 try:
     from mindspore import set_device
     MINDSPORE_NEW_API = True
 except ImportError:
     MINDSPORE_NEW_API = False
 
-# Add current directory to path for imports
+# 将当前目录添加到路径以便导入
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from config_manager import ConfigManager
@@ -39,52 +39,52 @@ from utils import (
 )
 
 class TFNetTrainer:
-    """TFNet model trainer"""
+    """TFNet模型训练器"""
     
     def __init__(self, config_path=None):
         try:
-            # Initialize configuration
-            print("Initializing TFNet Trainer...")
+            # 初始化配置
+            print("正在初始化TFNet训练器...")
             self.config_manager = ConfigManager(config_path)
             self.config = self.config_manager.config
 
-            # Validate and create directories FIRST (before logging setup)
-            print("Setting up directories...")
+            # 首先验证和创建目录（在日志设置之前）
+            print("正在设置目录...")
             if not self._setup_directories():
-                raise RuntimeError("Failed to create required directories")
+                raise RuntimeError("创建必需目录失败")
 
-            # Validate dataset structure
-            print("Validating dataset...")
+            # 验证数据集结构
+            print("正在验证数据集...")
             if not self._validate_dataset():
-                raise RuntimeError("Dataset validation failed")
+                raise RuntimeError("数据集验证失败")
 
-            # Set MindSpore context with API compatibility
+            # 设置MindSpore上下文，具有API兼容性
             device_target = self.config_manager.get("model.device_target", "CPU")
 
-            # Use new API if available, otherwise fallback to old API
+            # 如果可用，使用新API，否则回退到旧API
             if MINDSPORE_NEW_API:
                 try:
                     context.set_context(mode=context.PYNATIVE_MODE)
                     set_device(device_target)
-                    print(f"✓ MindSpore device set to: {device_target} (new API)")
+                    print(f"✓ MindSpore设备设置为：{device_target}（新API）")
                 except Exception as e:
-                    print(f"Warning: New API failed, using fallback: {e}")
+                    print(f"警告：新API失败，使用回退：{e}")
                     context.set_context(
                         mode=context.PYNATIVE_MODE,
                         device_target=device_target
                     )
-                    print(f"✓ MindSpore device set to: {device_target} (fallback API)")
+                    print(f"✓ MindSpore设备设置为：{device_target}（回退API）")
             else:
                 context.set_context(
                     mode=context.PYNATIVE_MODE,
                     device_target=device_target
                 )
-                print(f"✓ MindSpore device set to: {device_target} (legacy API)")
+                print(f"✓ MindSpore设备设置为：{device_target}（传统API）")
 
-            # Initialize logging (after directories are created)
+            # 初始化日志（在目录创建后）
             self._setup_logging()
 
-            # Initialize components
+            # 初始化组件
             self.model = None
             self.train_dataset = None
             self.valid_dataset = None
@@ -92,7 +92,7 @@ class TFNetTrainer:
             self.idx2word = None
             self.decoder = None
 
-            # Training state
+            # 训练状态
             self.current_epoch = 0
             self.best_wer = float('inf')
             self.best_epoch = 0

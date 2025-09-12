@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script to verify all fixes in TFNet training system
+验证TFNet训练系统中所有修复的测试脚本
 """
 
 import os
@@ -9,11 +9,11 @@ import traceback
 import tempfile
 import shutil
 
-# Add current directory to path
+# 将当前目录添加到路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def test_imports():
-    """Test if all modules can be imported without errors"""
+    """测试是否可以无错误地导入所有模块"""
     print("Testing imports...")
     
     try:

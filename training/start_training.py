@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple startup script for TFNet training
+TFNet训练的简单启动脚本
 """
 
 import os
@@ -10,7 +10,7 @@ import argparse
 import platform
 from pathlib import Path
 
-# Add current directory to path for imports
+# 将当前目录添加到路径以便导入
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 try:
@@ -24,7 +24,7 @@ except ImportError:
     print("Warning: Utils module not available, using basic error handling")
 
 def check_environment():
-    """Check if the environment is properly set up"""
+    """检查环境是否正确设置"""
     print("=" * 60)
     print("ENVIRONMENT CHECK")
     print("=" * 60)

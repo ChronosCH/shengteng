@@ -4,7 +4,7 @@ import numpy as np
 from itertools import groupby
 
 class CTCDecoder:
-    """CTC decoder for sequence prediction"""
+    """用于序列预测的CTC解码器"""
     
     def __init__(self, gloss_dict, num_classes, search_mode='beam', blank_id=0):
         self.g2i_dict = {}
@@ -17,12 +17,12 @@ class CTCDecoder:
         self.search_mode = search_mode
         self.blank_id = blank_id
         
-        # Operations
+        # 操作符
         self.softmax = ops.Softmax(axis=-1)
         self.argmax = ops.Argmax(axis=2)
         
     def decode(self, nn_output, vid_lgt, batch_first=True, probs=False):
-        """Decode neural network output to sequences"""
+        """将神经网络输出解码为序列"""
         if not batch_first:
             nn_output = ops.transpose(nn_output, (1, 0, 2))
         
@@ -32,8 +32,8 @@ class CTCDecoder:
             return self.beam_search(nn_output, vid_lgt, probs)
     
     def max_decode(self, nn_output, vid_lgt):
-        """Maximum decoding (greedy search)"""
-        # Convert to numpy for easier processing
+        """最大值解码（贪心搜索）"""
+        # 转换为numpy以便处理
         if isinstance(nn_output, ms.Tensor):
             nn_output = nn_output.asnumpy()
         if isinstance(vid_lgt, ms.Tensor):
@@ -44,16 +44,16 @@ class CTCDecoder:
         ret_list = []
         
         for batch_idx in range(batch_size):
-            # Get sequence up to actual length
+            # 获取到实际长度的序列
             sequence = index_list[batch_idx][:vid_lgt[batch_idx]]
             
-            # Remove consecutive duplicates
+            # 移除连续重复
             group_result = [x[0] for x in groupby(sequence)]
             
-            # Remove blank tokens
+            # 移除空白标记
             filtered = [x for x in group_result if x != self.blank_id]
             
-            # Convert to words
+            # 转换为词汇
             decoded_sequence = []
             for idx, gloss_id in enumerate(filtered):
                 if gloss_id in self.i2g_dict:
@@ -64,17 +64,17 @@ class CTCDecoder:
         return ret_list
     
     def beam_search(self, nn_output, vid_lgt, probs=False):
-        """Simplified beam search decoding"""
-        # For simplicity, fall back to max decoding
-        # In a full implementation, you would use a proper beam search algorithm
+        """简化的束搜索解码"""
+        # 为简化起见，回退到最大值解码
+        # 在完整实现中，您将使用适当的束搜索算法
         return self.max_decode(nn_output, vid_lgt)
 
 class WERCalculator:
-    """Word Error Rate calculator"""
+    """词错误率计算器"""
     
     @staticmethod
     def calculate_wer(references, hypotheses):
-        """Calculate WER between reference and hypothesis sequences"""
+        """计算参考序列和假设序列之间的词错误率"""
         total_error = total_del = total_ins = total_sub = total_ref_len = 0
         
         for ref, hyp in zip(references, hypotheses):
