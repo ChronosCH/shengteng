@@ -292,8 +292,9 @@ def collate_fn(videos, labels, video_lengths, infos):
     )
 
 def create_dataset(data_path, label_path, word2idx, dataset_name, 
-                  batch_size=2, is_train=True, num_workers=1):
-    """Create MindSpore dataset"""
+                  batch_size=2, is_train=True, num_workers=1, 
+                  prefetch_size=2, max_rowsize=32):
+    """Create MindSpore dataset with GPU optimizations"""
     
     # Create custom dataset
     dataset = CECSLDataset(
@@ -310,17 +311,32 @@ def create_dataset(data_path, label_path, word2idx, dataset_name,
             sample = dataset[i]
             yield sample['video'], sample['label'], sample['video_length'], sample['info']
     
-    # Create dataset
+    # Create dataset with GPU optimizations
     ms_dataset = ds.GeneratorDataset(
         generator,
         column_names=['video', 'label', 'videoLength', 'info'],
-        shuffle=is_train
+        shuffle=is_train,
+        num_parallel_workers=num_workers,
+        max_rowsize=max_rowsize  # GPU optimization for memory efficiency
     )
     
-    # Batch dataset (without custom collate function for now)
+    # Apply data augmentation operations if training
+    if is_train:
+        # Add random operations for data augmentation
+        # Note: Some operations might need to be moved to custom transforms
+        pass
+    
+    # Batch dataset with optimizations
     ms_dataset = ms_dataset.batch(
         batch_size=batch_size,
         drop_remainder=True
     )
+    
+    # Set prefetch for better GPU utilization
+    ms_dataset = ms_dataset.prefetch(buffer_size=prefetch_size)
+    
+    # Enable repeat for training (helps with GPU utilization)
+    if is_train:
+        ms_dataset = ms_dataset.repeat()
     
     return ms_dataset

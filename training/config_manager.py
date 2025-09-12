@@ -32,7 +32,11 @@ class ConfigManager:
             "model": {
                 "name": "TFNet",
                 "hidden_size": 1024,
-                "device_target": "CPU"
+                "device_target": "CPU",
+                "device_id": 0,
+                "enable_graph_kernel": False,
+                "enable_reduce_precision": False,
+                "enable_auto_mixed_precision": False
             },
             
             # Training configuration
@@ -45,7 +49,10 @@ class ConfigManager:
                 "gradient_clip_norm": 1.0,
                 "save_interval": 5,
                 "eval_interval": 1,
-                "early_stopping_patience": 10
+                "early_stopping_patience": 10,
+                "prefetch_size": 2,
+                "max_rowsize": 32,
+                "enable_data_sink": False
             },
             
             # Optimizer configuration
@@ -80,6 +87,15 @@ class ConfigManager:
                 "level": "INFO",
                 "save_logs": True,
                 "print_interval": 10
+            },
+            
+            # GPU optimization configuration
+            "gpu_optimization": {
+                "enable_graph_mode": False,
+                "enable_mem_reuse": False,
+                "max_device_memory": "8GB",
+                "enable_profiling": False,
+                "enable_dump": False
             }
         }
     
