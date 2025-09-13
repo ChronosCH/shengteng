@@ -117,20 +117,30 @@ class GPUTFNetTrainer:
             if gpu_config.get("enable_mem_reuse", True):
                 try:
                     # Use max_device_memory for memory optimization
-                    max_memory = gpu_config.get("max_device_memory", "0.9")
+                    max_memory = gpu_config.get("max_device_memory", "4GB")
                     context.set_context(max_device_memory=max_memory)
                     print(f"✓ Memory optimization enabled (max_device_memory: {max_memory})")
+                    
+                    # Additional memory optimization settings
+                    context.set_context(
+                        mempool_block_size="1GB",  # Smaller memory pool blocks
+                        enable_reduce_precision=True  # Enable reduce precision to save memory
+                    )
+                    print("✓ Additional memory optimizations enabled")
                 except Exception as e:
                     print(f"Warning: Memory optimization not supported: {e}")
 
-            # Enable graph kernel optimization
-            if self.config_manager.get("model.enable_graph_kernel", True):
+            # Disable graph kernel optimization to avoid compilation issues
+            if self.config_manager.get("model.enable_graph_kernel", False):
                 try:
                     # Graph kernel might not be available in all versions
                     context.set_context(enable_graph_kernel=True)
                     print("✓ Graph kernel optimization enabled")
                 except Exception as e:
                     print(f"Warning: Graph kernel optimization not supported: {e}")
+            else:
+                context.set_context(enable_graph_kernel=False)
+                print("✓ Graph kernel optimization disabled for stability")
 
             # Enable auto mixed precision if supported
             if self.config_manager.get("model.enable_auto_mixed_precision", True):

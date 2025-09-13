@@ -89,30 +89,29 @@ class VideoTransform:
         if isinstance(video_frames, list):
             video_frames = np.array(video_frames)
         
+        # 限制最大帧数以减少内存使用
+        max_frames = 150
+        if len(video_frames) > max_frames:
+            # 均匀采样帧
+            indices = np.linspace(0, len(video_frames) - 1, max_frames, dtype=int)
+            video_frames = video_frames[indices]
+        
         # 调整帧大小
         resized_frames = []
         for frame in video_frames:
+            # 确保帧已经是正确的大小 (224x224)
+            if frame.shape[:2] != (self.crop_size, self.crop_size):
+                frame = cv2.resize(frame, (self.crop_size, self.crop_size))
+            
             if self.is_train:
-                # 训练时随机裁剪
-                h, w = frame.shape[:2]
-                if h > self.crop_size and w > self.crop_size:
-                    top = np.random.randint(0, h - self.crop_size)
-                    left = np.random.randint(0, w - self.crop_size)
-                    frame = frame[top:top+self.crop_size, left:left+self.crop_size]
-                else:
-                    frame = cv2.resize(frame, (self.crop_size, self.crop_size))
-                
-                # 随机水平翻转
+                # 随机水平翻转 (减少其他增强以节省内存)
                 if np.random.random() > 0.5:
                     frame = cv2.flip(frame, 1)
-            else:
-                # 验证/测试时中心裁剪
-                frame = cv2.resize(frame, (self.crop_size, self.crop_size))
             
             resized_frames.append(frame)
         
         # 转换为张量格式 (T, H, W, C) -> (T, C, H, W)
-        video_tensor = np.array(resized_frames)
+        video_tensor = np.array(resized_frames, dtype=np.float32)
 
         # 调试：检查张量形状
         if len(video_tensor.shape) != 4:
@@ -223,11 +222,16 @@ class CECSLDataset:
         }
     
     def _load_video(self, video_path):
-        """Load video frames from directory"""
+        """Load video frames from directory with memory optimization"""
         frames = []
+        max_frames = 150  # Limit max frames to reduce memory usage
 
         # Debug: Print video path (only for first few videos)
-        if len(frames) == 0:  # Only print for first video
+        debug_print = len(getattr(self, '_debug_count', [])) < 3
+        if debug_print:
+            if not hasattr(self, '_debug_count'):
+                self._debug_count = []
+            self._debug_count.append(1)
             print(f"Loading video from: {video_path}")
             print(f"Path exists: {os.path.exists(video_path)}")
             print(f"Is directory: {os.path.isdir(video_path)}")
@@ -235,30 +239,56 @@ class CECSLDataset:
         if os.path.isdir(video_path):
             # Load from image directory
             frame_files = sorted([f for f in os.listdir(video_path) if f.endswith(('.jpg', '.png'))])
-            print(f"Found {len(frame_files)} frame files")
-            if len(frame_files) > 0:
-                print(f"First few files: {frame_files[:5]}")
+            if debug_print:
+                print(f"Found {len(frame_files)} frame files")
+                if len(frame_files) > 0:
+                    print(f"First few files: {frame_files[:5]}")
+
+            # Limit number of frames to avoid memory issues
+            if len(frame_files) > max_frames:
+                # Sample frames evenly across the video
+                step = len(frame_files) // max_frames
+                frame_files = frame_files[::step][:max_frames]
 
             for frame_file in frame_files:
                 frame_path = os.path.join(video_path, frame_file)
                 frame = cv2.imread(frame_path)
                 if frame is not None:
+                    # Resize frame to reduce memory usage
+                    frame = cv2.resize(frame, (224, 224))
                     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     frames.append(frame)
                 else:
-                    print(f"Failed to load frame: {frame_path}")
+                    if debug_print:
+                        print(f"Failed to load frame: {frame_path}")
         else:
             # Load from video file
             cap = cv2.VideoCapture(video_path)
+            frame_count = 0
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            
+            # Calculate step to sample frames if video is too long
+            step = max(1, total_frames // max_frames) if total_frames > max_frames else 1
+            
             while True:
                 ret, frame = cap.read()
                 if not ret:
                     break
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                frames.append(frame)
+                    
+                if frame_count % step == 0:
+                    # Resize frame to reduce memory usage
+                    frame = cv2.resize(frame, (224, 224))
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    frames.append(frame)
+                    
+                frame_count += 1
+                if len(frames) >= max_frames:
+                    break
+                    
             cap.release()
 
-        print(f"Loaded {len(frames)} frames")
+        if debug_print:
+            print(f"Loaded {len(frames)} frames")
         
         # Convert to numpy array and ensure proper dtype
         if frames:
@@ -303,8 +333,8 @@ def collate_fn(videos, labels, video_lengths, infos):
 
 def create_dataset(data_path, label_path, word2idx, dataset_name, 
                   batch_size=2, is_train=True, num_workers=1, 
-                  prefetch_size=2, max_rowsize=32):
-    """Create MindSpore dataset with GPU optimizations"""
+                  prefetch_size=1, max_rowsize=16):
+    """Create MindSpore dataset with memory optimizations"""
     
     # Create custom dataset
     dataset = CECSLDataset(
@@ -315,9 +345,12 @@ def create_dataset(data_path, label_path, word2idx, dataset_name,
         is_train=is_train
     )
     
+    # Limit dataset size for memory testing (remove this for full training)
+    dataset_size = min(len(dataset), 100)  # Limit to first 100 samples
+    
     # Convert to MindSpore dataset
     def generator():
-        for i in range(len(dataset)):
+        for i in range(dataset_size):
             sample = dataset[i]
             # Ensure all data is properly formatted with simple data types
             video = sample['video']
@@ -332,18 +365,23 @@ def create_dataset(data_path, label_path, word2idx, dataset_name,
             elif video.ndim == 3:
                 video = np.expand_dims(video, axis=0)  # Add time dimension
             
+            # Limit max frames per video to reduce memory
+            if video.shape[0] > 150:
+                indices = np.linspace(0, video.shape[0] - 1, 150, dtype=int)
+                video = video[indices]
+            
             label = np.array(sample['label'], dtype=np.int32)
-            video_length = int(sample['video_length'])  # Simple integer
+            video_length = min(int(sample['video_length']), 150)  # Cap video length
             label_length = len(sample['label'])  # Label length as integer
             
             yield (video, label, video_length, label_length)
     
-    # Create dataset with GPU optimizations
+    # Create dataset with memory optimizations
     ms_dataset = ds.GeneratorDataset(
         generator,
         column_names=['video', 'label', 'videoLength', 'labelLength'],
         shuffle=is_train,
-        num_parallel_workers=num_workers,
+        num_parallel_workers=min(num_workers, 2),  # Limit workers to save memory
         max_rowsize=max_rowsize  # GPU optimization for memory efficiency
     )
     
@@ -363,7 +401,7 @@ def create_dataset(data_path, label_path, word2idx, dataset_name,
     # Batch dataset with optimizations
     ms_dataset = ms_dataset.batch(
         batch_size=batch_size,
-        drop_remainder=True
+        drop_remainder=True  # Drop incomplete batches to maintain consistent memory usage
     )
     
     # Enable repeat for training (helps with GPU utilization)
