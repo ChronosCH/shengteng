@@ -59,14 +59,19 @@ class TFNetModel(nn.Cell):
     def pad_sequence(self, tensor, length):
         """将张量填充到指定长度"""
         current_length = tensor.shape[0]
-        if current_length >= length:
-            return tensor[:length]
+        target_length = max(1, int(length))  # 确保目标长度至少为1
+        
+        if current_length >= target_length:
+            return tensor[:target_length]
 
         # 确保形状计算的类型一致性
-        pad_length = int(length) - int(current_length)
-        pad_shape = (pad_length,) + tensor.shape[1:]
-        pad_tensor = ops.zeros(pad_shape, tensor.dtype)
-        return ops.concat([tensor, pad_tensor], axis=0)
+        pad_length = target_length - int(current_length)
+        if pad_length > 0:
+            pad_shape = (pad_length,) + tensor.shape[1:]
+            pad_tensor = ops.zeros(pad_shape, tensor.dtype)
+            return ops.concat([tensor, pad_tensor], axis=0)
+        else:
+            return tensor
 
     def construct(self, seq_data, data_len=None, is_train=True):
         """TFNet模型的前向传播"""
@@ -98,16 +103,35 @@ class TFNetModel(nn.Cell):
             # 使用原始长度但限制为实际张量大小
             lgt_i = min(int(len_x_list[i]), int(temp))
             end_idx = start_idx + lgt_i
-            seq_features = self.conv2d(inputs[start_idx:end_idx])
-            feature_list.append(seq_features)
+            # 确保索引不超出边界
+            end_idx = min(end_idx, inputs.shape[0])
+            if start_idx < inputs.shape[0] and start_idx < end_idx:
+                seq_features = self.conv2d(inputs[start_idx:end_idx])
+                feature_list.append(seq_features)
+            else:
+                # 如果索引无效，创建一个空的特征张量
+                dummy_input = inputs[0:1]  # 取第一个样本作为模板
+                dummy_features = self.conv2d(dummy_input)
+                # 创建零特征
+                zero_features = ops.zeros_like(dummy_features)
+                feature_list.append(zero_features)
             start_idx += int(temp)  # 移动到下一个序列（固定步长）
 
         # 将序列填充到相同长度
-        max_len = max(len_x_list) if len_x_list else max([f.shape[0] for f in feature_list])
+        if len_x_list and feature_list:
+            max_len = max(max(len_x_list), max([f.shape[0] for f in feature_list if f.shape[0] > 0]))
+        else:
+            max_len = 1  # 默认最小长度
 
         padded_features = []
         for features in feature_list:
-            padded = self.pad_sequence(features, max_len)
+            # 确保特征张量不为空
+            if features.shape[0] > 0:
+                padded = self.pad_sequence(features, max_len)
+            else:
+                # 创建一个最小的特征张量
+                feature_shape = (max_len,) + features.shape[1:]
+                padded = ops.zeros(feature_shape, features.dtype)
             padded_features.append(padded)
 
         # 堆叠特征
@@ -155,7 +179,9 @@ class TFNetModel(nn.Cell):
             log_probs1 = log_probs5
 
         # Convert lengths to tensor (list of ints -> Tensor shape (B,))
-        lgt_tensor = Tensor(np.array(lgt, dtype=np.int32))
+        # 确保长度列表不为空且值都为正数
+        safe_lgt = [max(1, int(l)) for l in lgt] if lgt else [1] * int(batch)
+        lgt_tensor = Tensor(np.array(safe_lgt, dtype=np.int32))
 
         return log_probs1, log_probs2, log_probs3, log_probs4, log_probs5, lgt_tensor, None, None, None
 

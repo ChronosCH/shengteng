@@ -79,9 +79,10 @@ def build_vocabulary(train_label_path, valid_label_path, test_label_path, datase
 
 class VideoTransform:
     """用于数据增强的视频转换"""
-    def __init__(self, is_train=True, crop_size=224):
+    def __init__(self, is_train=True, crop_size=224, max_frames=150):
         self.is_train = is_train
         self.crop_size = crop_size
+        self.max_frames = max_frames
     
     def __call__(self, video_frames):
         """对视频帧应用转换"""
@@ -90,10 +91,9 @@ class VideoTransform:
             video_frames = np.array(video_frames)
         
         # 限制最大帧数以减少内存使用
-        max_frames = 150
-        if len(video_frames) > max_frames:
+        if len(video_frames) > self.max_frames:
             # 均匀采样帧
-            indices = np.linspace(0, len(video_frames) - 1, max_frames, dtype=int)
+            indices = np.linspace(0, len(video_frames) - 1, self.max_frames, dtype=int)
             video_frames = video_frames[indices]
         
         # 调整帧大小
@@ -129,15 +129,14 @@ class VideoTransform:
             raise ValueError(f"无法转置形状为{video_tensor.shape}的张量")
 
         # 填充或截断到固定长度以便批处理
-        max_frames = 300  # 来自配置
         current_frames = video_tensor.shape[0]
 
-        if current_frames > max_frames:
+        if current_frames > self.max_frames:
             # 截断
-            video_tensor = video_tensor[:max_frames]
-        elif current_frames < max_frames:
+            video_tensor = video_tensor[:self.max_frames]
+        elif current_frames < self.max_frames:
             # 用零填充
-            pad_frames = max_frames - current_frames
+            pad_frames = self.max_frames - current_frames
             pad_shape = (pad_frames,) + video_tensor.shape[1:]
             pad_tensor = np.zeros(pad_shape, dtype=video_tensor.dtype)
             video_tensor = np.concatenate([video_tensor, pad_tensor], axis=0)
@@ -150,13 +149,15 @@ class VideoTransform:
 class CECSLDataset:
     """用于手语识别的CE-CSL数据集"""
     
-    def __init__(self, data_path, label_path, word2idx, dataset_name, is_train=False, transform=None):
+    def __init__(self, data_path, label_path, word2idx, dataset_name, is_train=False, transform=None, crop_size=224, max_frames=150):
         self.data_path = data_path
         self.label_path = label_path
         self.word2idx = word2idx
         self.dataset_name = dataset_name
         self.is_train = is_train
-        self.transform = transform or VideoTransform(is_train=is_train)
+        self.crop_size = crop_size
+        self.max_frames = max_frames
+        self.transform = transform or VideoTransform(is_train=is_train, crop_size=crop_size, max_frames=max_frames)
         
         # Load labels
         self.samples = self._load_samples()
@@ -333,20 +334,22 @@ def collate_fn(videos, labels, video_lengths, infos):
 
 def create_dataset(data_path, label_path, word2idx, dataset_name, 
                   batch_size=2, is_train=True, num_workers=1, 
-                  prefetch_size=1, max_rowsize=16):
+                  prefetch_size=1, max_rowsize=16, crop_size=224, max_frames=150):
     """Create MindSpore dataset with memory optimizations"""
     
-    # Create custom dataset
+    # Create custom dataset with memory optimizations
     dataset = CECSLDataset(
         data_path=data_path,
         label_path=label_path,
         word2idx=word2idx,
         dataset_name=dataset_name,
-        is_train=is_train
+        is_train=is_train,
+        crop_size=crop_size,
+        max_frames=max_frames
     )
     
-    # Limit dataset size for memory testing (remove this for full training)
-    dataset_size = min(len(dataset), 100)  # Limit to first 100 samples
+    # Use full dataset size (for small memory testing, you can add: min(len(dataset), 100))
+    dataset_size = len(dataset)
     
     # Convert to MindSpore dataset
     def generator():
@@ -366,12 +369,12 @@ def create_dataset(data_path, label_path, word2idx, dataset_name,
                 video = np.expand_dims(video, axis=0)  # Add time dimension
             
             # Limit max frames per video to reduce memory
-            if video.shape[0] > 150:
-                indices = np.linspace(0, video.shape[0] - 1, 150, dtype=int)
+            if video.shape[0] > max_frames:
+                indices = np.linspace(0, video.shape[0] - 1, max_frames, dtype=int)
                 video = video[indices]
             
             label = np.array(sample['label'], dtype=np.int32)
-            video_length = min(int(sample['video_length']), 150)  # Cap video length
+            video_length = min(int(sample['video_length']), max_frames)  # Cap video length
             label_length = len(sample['label'])  # Label length as integer
             
             yield (video, label, video_length, label_length)

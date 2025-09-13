@@ -2,56 +2,46 @@
     "dataset": {
         "name": "CE-CSL",
         "train_data_path": "/root/shengteng/training/data/CE-CSL/video/train",
-        "valid_data_path": "/root/shengteng/training/data/CE-CSL/video/dev", 
+        "valid_data_path": "/root/shengteng/training/data/CE-CSL/video/dev",
         "test_data_path": "/root/shengteng/training/data/CE-CSL/video/test",
         "train_label_path": "/root/shengteng/training/data/CE-CSL/label/train.csv",
         "valid_label_path": "/root/shengteng/training/data/CE-CSL/label/dev.csv",
         "test_label_path": "/root/shengteng/training/data/CE-CSL/label/test.csv",
         "crop_size": 160,
-        "max_frames": 100
+        "max_frames": 50
     },
-    
     "model": {
         "name": "TFNet",
-        "hidden_size": 256,
+        "hidden_size": 128,
         "device_target": "GPU",
         "device_id": 0,
         "enable_graph_kernel": false,
         "enable_reduce_precision": true,
-        "enable_auto_mixed_precision": true
+        "enable_auto_mixed_precision": false
     },
-    
     "training": {
         "batch_size": 1,
         "learning_rate": 0.0001,
-        "num_epochs": 55,
+        "num_epochs": 5,
         "num_workers": 1,
         "weight_decay": 0.0001,
         "gradient_clip_norm": 1.0,
-        "save_interval": 5,
+        "save_interval": 1,
         "eval_interval": 1,
-        "early_stopping_patience": 10,
+        "early_stopping_patience": 3,
         "prefetch_size": 1,
-        "max_rowsize": 8,
+        "max_rowsize": 4,
         "enable_data_sink": false
     },
-    
-    "optimizer": {
-        "type": "Adam",
-        "lr_scheduler": {
-            "type": "MultiStepLR",
-            "milestones": [35, 45],
-            "gamma": 0.2
-        }
+    "gpu_optimization": {
+        "enable_graph_mode": false,
+        "enable_mem_reuse": true,
+        "max_device_memory": "2GB",
+        "enable_profiling": false,
+        "enable_dump": false,
+        "enable_memory_offload": true,
+        "mempool_block_size": "256MB"
     },
-    
-    "loss": {
-        "ctc_blank_id": 0,
-        "ctc_reduction": "mean",
-        "kd_temperature": 8,
-        "kd_weight": 25.0
-    },
-    
     "paths": {
         "checkpoint_dir": "/root/shengteng/training/checkpoints_gpu",
         "log_dir": "/root/shengteng/training/logs_gpu",
@@ -59,20 +49,15 @@
         "best_model_path": "/root/shengteng/training/checkpoints_gpu/best_model.ckpt",
         "current_model_path": "/root/shengteng/training/checkpoints_gpu/current_model.ckpt"
     },
-    
     "logging": {
         "level": "INFO",
         "save_logs": true,
-        "print_interval": 10
+        "print_interval": 5
     },
-    
-    "gpu_optimization": {
-        "enable_graph_mode": true,
-        "enable_mem_reuse": true,
-        "max_device_memory": "4GB",
-        "enable_profiling": false,
-        "enable_dump": false,
-        "enable_memory_offload": true,
-        "mempool_block_size": "512MB"
+    "loss": {
+        "ctc_blank_id": 0,
+        "ctc_reduction": "mean",
+        "kd_temperature": 8,
+        "kd_weight": 25.0
     }
 }

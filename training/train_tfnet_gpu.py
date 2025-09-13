@@ -14,7 +14,7 @@ from datetime import datetime
 import mindspore as ms
 import mindspore.nn as nn
 import mindspore.ops as ops
-from mindspore import context, save_checkpoint, load_checkpoint, load_param_into_net
+from mindspore import context, save_checkpoint, load_checkpoint, load_param_into_net, Tensor
 from mindspore.train import Model
 from mindspore.train.callback import ModelCheckpoint, CheckpointConfig, LossMonitor, TimeMonitor
 
@@ -122,11 +122,21 @@ class GPUTFNetTrainer:
                     print(f"✓ Memory optimization enabled (max_device_memory: {max_memory})")
                     
                     # Additional memory optimization settings
+                    mempool_size = gpu_config.get("mempool_block_size", "512MB")
                     context.set_context(
-                        mempool_block_size="1GB",  # Smaller memory pool blocks
+                        mempool_block_size=mempool_size,  # Smaller memory pool blocks
                         enable_reduce_precision=True  # Enable reduce precision to save memory
                     )
-                    print("✓ Additional memory optimizations enabled")
+                    print(f"✓ Additional memory optimizations enabled (mempool: {mempool_size})")
+                    
+                    # Enable memory offload if available
+                    if gpu_config.get("enable_memory_offload", False):
+                        try:
+                            context.set_context(enable_sparse=True)  # Enable sparse tensor support
+                            print("✓ Sparse tensor support enabled for memory savings")
+                        except Exception as sparse_e:
+                            print(f"Warning: Sparse tensor not supported: {sparse_e}")
+                            
                 except Exception as e:
                     print(f"Warning: Memory optimization not supported: {e}")
 
@@ -344,12 +354,16 @@ class GPUTFNetTrainer:
         num_workers = self.config_manager.get("training.num_workers")
         prefetch_size = self.config_manager.get("training.prefetch_size", 2)
         max_rowsize = self.config_manager.get("training.max_rowsize", 32)
+        crop_size = self.config_manager.get("dataset.crop_size", 224)
+        max_frames = self.config_manager.get("dataset.max_frames", 150)
         
         self.logger.info(f"Creating datasets with GPU optimizations:")
         self.logger.info(f"  - Batch size: {batch_size}")
         self.logger.info(f"  - Num workers: {num_workers}")
         self.logger.info(f"  - Prefetch size: {prefetch_size}")
         self.logger.info(f"  - Max rowsize: {max_rowsize}")
+        self.logger.info(f"  - Crop size: {crop_size}")
+        self.logger.info(f"  - Max frames: {max_frames}")
         
         self.train_dataset = create_dataset(
             data_path=dataset_config["train_data_path"],
@@ -360,7 +374,9 @@ class GPUTFNetTrainer:
             is_train=True,
             dataset_name=dataset_config["name"],
             prefetch_size=prefetch_size,
-            max_rowsize=max_rowsize
+            max_rowsize=max_rowsize,
+            crop_size=crop_size,
+            max_frames=max_frames
         )
         
         self.valid_dataset = create_dataset(
@@ -372,7 +388,9 @@ class GPUTFNetTrainer:
             is_train=False,
             dataset_name=dataset_config["name"],
             prefetch_size=prefetch_size,
-            max_rowsize=max_rowsize
+            max_rowsize=max_rowsize,
+            crop_size=crop_size,
+            max_frames=max_frames
         )
         
         self.logger.info("Data preparation completed")
@@ -523,9 +541,29 @@ class GPUTFNetTrainer:
                 def forward_fn(seq_data, seq_label, data_len, label_len):
                     model_output = model(seq_data, data_len, is_train=True)
                     # Model returns: (log_probs1, log_probs2, log_probs3, log_probs4, log_probs5, lgt_tensor, None, None, None)
-                    # CTCLoss expects the first log_probs tensor
-                    logits = model_output[0]  # Extract log_probs1
-                    # CTCLoss expects: (logits, targets, input_lengths, target_lengths)
+                    logits = model_output[0]
+                    
+                    # 统一将data_len转换为Tensor[int32]
+                    if not isinstance(data_len, Tensor):
+                        if isinstance(data_len, (list, tuple)):
+                            data_len = Tensor([int(l.item() if hasattr(l, 'item') else int(l)) for l in data_len], ms.int32)
+                        else:
+                            data_len = Tensor([int(data_len)], ms.int32)
+                    else:
+                        # 若是标量，包装成一维
+                        if len(data_len.shape) == 0:
+                            data_len = ops.expand_dims(data_len, 0)
+                        data_len = ops.cast(data_len, ms.int32)
+                    
+                    # 获取模型输出时间步（logits形状: T x N x C 或类似），取第0维
+                    actual_time_steps = logits.shape[0]
+                    ts_tensor = Tensor(actual_time_steps, ms.int32)
+                    one_tensor = Tensor(1, ms.int32)
+                    
+                    # 保证长度在[1, actual_time_steps]
+                    data_len = ops.minimum(data_len, ts_tensor)
+                    data_len = ops.maximum(data_len, one_tensor)
+                    
                     loss = loss_fn(logits, seq_label, data_len, label_len)
                     return loss
                 

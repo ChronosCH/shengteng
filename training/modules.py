@@ -34,11 +34,16 @@ class TemporalConv(nn.Cell):
         for layer_idx, ks in enumerate(self.kernel_size):
             input_sz = self.input_size if layer_idx == 0 else self.hidden_size
             if ks[0] == 'P':
-                modules.append(nn.MaxPool1d(kernel_size=int(ks[1])))
+                # 为了避免池化导致输出尺寸为0，使用较小的kernel size和stride
+                pool_kernel = min(2, int(ks[1]))
+                modules.append(nn.MaxPool1d(kernel_size=pool_kernel, stride=1))  # 改为stride=1以保持更多特征
             elif ks[0] == 'K':
+                # 使用padding='same'模式来保持序列长度
+                kernel_size = int(ks[1])
+                padding = kernel_size // 2  # 计算'same'padding
                 modules.append(
-                    nn.Conv1d(input_sz, self.hidden_size, kernel_size=int(ks[1]), 
-                             stride=1, padding=0, has_bias=True, pad_mode='valid')
+                    nn.Conv1d(input_sz, self.hidden_size, kernel_size=kernel_size, 
+                             stride=1, padding=padding, has_bias=True, pad_mode='pad')
                 )
                 modules.append(nn.BatchNorm1d(self.hidden_size))
                 modules.append(nn.ReLU())
@@ -59,7 +64,7 @@ class TemporalConv(nn.Cell):
         return feat_len
 
     def construct(self, frame_feat, lgt):
-        # 只在图内计算视觉特征；避免在长度上进行Python操作
+        # 直接使用预定义的网络层，避免在图模式下动态创建层
         visual_feat = self.temporal_conv(frame_feat)
         return {
             "visual_feat": visual_feat,
