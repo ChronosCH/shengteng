@@ -26,7 +26,7 @@ def check_environment():
     else:
         print("✅ Correct conda environment")
     
-    # Check MindSpore
+    # 检查 MindSpore
     try:
         import mindspore as ms
         print(f"✅ MindSpore {ms.__version__} imported successfully")
@@ -34,7 +34,7 @@ def check_environment():
         print("❌ MindSpore not found!")
         return False
     
-    # Quick GPU test
+    # 快速 GPU 测试
     try:
         from mindspore import context
         context.set_context(device_target="GPU")
@@ -45,7 +45,7 @@ def check_environment():
         print(f"❌ GPU test failed: {e}")
         return False
     
-    # Check files
+    # 检查文件
     required_files = [
         "training/train_tfnet_gpu.py",
         "training/configs/gpu_config.json"
@@ -61,7 +61,7 @@ def check_environment():
     return True
 
 def create_directories():
-    """Create necessary directories"""
+    """创建必要的目录"""
     dirs = [
         "training/checkpoints_gpu",
         "training/logs_gpu", 
@@ -87,7 +87,7 @@ def main():
     print("=" * 50)
     
     try:
-        # Change to training directory and run
+        # 切换到 training 目录并运行
         os.chdir("training")
         
         cmd = [sys.executable, "train_tfnet_gpu.py", "--config", "configs/gpu_config.json"]
@@ -96,11 +96,11 @@ def main():
         print(f"Working directory: {os.getcwd()}")
         print()
         
-        # Set GPU environment variables
+        # 设置 GPU 环境变量
         env = os.environ.copy()
         env['CUDA_VISIBLE_DEVICES'] = '0'
         
-        # Run training
+        # 运行训练
         process = subprocess.Popen(
             cmd, 
             env=env,
@@ -110,7 +110,7 @@ def main():
             bufsize=1
         )
         
-        # Stream output in real-time
+        # 实时输出日志
         while True:
             output = process.stdout.readline()
             if output == '' and process.poll() is not None:

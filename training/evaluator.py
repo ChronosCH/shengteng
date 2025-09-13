@@ -50,7 +50,7 @@ class TFNetEvaluator:
         # 设置MindSpore上下文，具有API兼容性
         device_target = self.config_manager.get("model.device_target", "CPU")
 
-        # Use new API if available, otherwise fallback to old API
+        # 使用新API（如果可用），否则回退到旧API
         if MINDSPORE_NEW_API:
             try:
                 context.set_context(mode=context.GRAPH_MODE)
@@ -70,10 +70,10 @@ class TFNetEvaluator:
             )
             print(f"✓ MindSpore device set to: {device_target} (legacy API)")
         
-        # Initialize logging
+        # 初始化日志
         self._setup_logging()
         
-        # Initialize components
+        # 初始化组件
         self.model = None
         self.test_dataset = None
         self.word2idx = None
@@ -87,17 +87,17 @@ class TFNetEvaluator:
             raise
     
     def _setup_logging(self):
-        """Setup logging configuration"""
+        """设置日志配置"""
         log_level = getattr(logging, self.config_manager.get("logging.level", "INFO"))
         
-        # Create logger
+        # 创建记录器
         self.logger = logging.getLogger('TFNetEvaluator')
         self.logger.setLevel(log_level)
         
-        # Clear existing handlers
+        # 清除已有的处理器
         self.logger.handlers.clear()
         
-        # Console handler
+        # 控制台处理器
         console_handler = logging.StreamHandler()
         console_handler.setLevel(log_level)
         console_format = logging.Formatter(
@@ -107,7 +107,7 @@ class TFNetEvaluator:
         self.logger.addHandler(console_handler)
     
     def load_vocabulary(self):
-        """Load vocabulary from file or build from data"""
+        """从文件加载词汇表或从数据构建词汇表"""
         vocab_path = os.path.join(self.config_manager.get("paths.output_dir"), "vocabulary.json")
         
         if os.path.exists(vocab_path):
@@ -133,12 +133,12 @@ class TFNetEvaluator:
         return vocab_size
     
     def prepare_test_data(self):
-        """Prepare test dataset"""
+        """准备测试数据集"""
         self.logger.info("Preparing test data...")
         
         dataset_config = self.config_manager.get_dataset_config()
         
-        # Create test dataset
+        # 创建测试数据集
         self.test_dataset = create_dataset(
             data_path=dataset_config["test_data_path"],
             label_path=dataset_config["test_label_path"],
@@ -152,12 +152,12 @@ class TFNetEvaluator:
         self.logger.info("Test data preparation completed")
     
     def load_model(self, vocab_size):
-        """Load trained model"""
+        """加载训练好的模型"""
         self.logger.info("Loading model...")
         
         model_config = self.config_manager.get_model_config()
         
-        # Create model
+        # 创建模型
         self.model = TFNetModel(
             hidden_size=model_config["hidden_size"],
             word_set_num=vocab_size,
@@ -165,13 +165,13 @@ class TFNetEvaluator:
             dataset_name=model_config["dataset_name"]
         )
         
-        # Load checkpoint
+        # 加载检查点
         if self.model_path and os.path.exists(self.model_path):
             self.logger.info(f"Loading model from {self.model_path}")
             param_dict = load_checkpoint(self.model_path)
             load_param_into_net(self.model, param_dict)
         else:
-            # Try to load best model
+            # 尝试加载最佳模型
             best_model_path = self.config_manager.get("paths.best_model_path")
             if os.path.exists(best_model_path):
                 self.logger.info(f"Loading best model from {best_model_path}")
@@ -181,7 +181,7 @@ class TFNetEvaluator:
                 self.logger.error("No trained model found!")
                 return False
         
-        # Initialize decoder
+        # 初始化解码器
         self.decoder = CTCDecoder(
             gloss_dict=self.word2idx,
             num_classes=vocab_size + 1,
@@ -193,54 +193,54 @@ class TFNetEvaluator:
         return True
     
     def evaluate(self):
-        """Evaluate model on test set"""
+        """在测试集上评估模型"""
         self.logger.info("Starting evaluation...")
         
-        # Prepare data and model
+        # 准备数据和模型
         vocab_size = self.load_vocabulary()
         self.prepare_test_data()
         
         if not self.load_model(vocab_size):
             return None
         
-        # Set model to evaluation mode
+        # 将模型设置为评估模式
         self.model.set_train(False)
         
-        # Evaluation metrics
+        # 评估指标
         total_samples = 0
         total_wer = 0.0
         all_predictions = []
         all_references = []
         
-        # Process test data
+        # 处理测试数据
         for batch_idx, batch_data in enumerate(self.test_dataset.create_dict_iterator()):
-            # Extract batch data
+            # 提取批次数据
             videos = batch_data['video']
             labels = batch_data['label']
             video_lengths = batch_data['videoLength']
             info = batch_data['info']
             
-            # Forward pass
+            # 前向传递
             log_probs1, _, _, _, _, lgt, _, _, _ = \
                 self.model(videos, video_lengths, is_train=False)
             
-            # Decode predictions
+            # 解码预测结果
             predictions, _ = self.decoder.decode(log_probs1, lgt, batch_first=False, probs=False)
             
-            # Process predictions and references
+            # 处理预测和参考文本
             for i, (pred, label_seq, sample_info) in enumerate(zip(predictions, labels, info)):
-                # Convert prediction to words
+                # 将预测转换为单词
                 pred_words = [word for word, _ in pred] if pred else []
                 pred_sentence = ' '.join(pred_words)
                 
-                # Convert reference to words
+                # 将参考序列转换为单词
                 if isinstance(label_seq, (list, tuple)):
                     ref_words = [self.idx2word[idx] for idx in label_seq if idx < len(self.idx2word)]
                 else:
                     ref_words = [self.idx2word[label_seq.asnumpy().item()]] if label_seq.asnumpy().item() < len(self.idx2word) else []
                 ref_sentence = ' '.join(ref_words)
                 
-                # Calculate WER for this sample
+                # 计算该样本的WER
                 sample_wer = WERCalculator.calculate_wer([ref_sentence], [pred_sentence])["wer"]
                 
                 all_predictions.append(pred_sentence)
@@ -248,18 +248,18 @@ class TFNetEvaluator:
                 total_wer += sample_wer
                 total_samples += 1
                 
-                # Log sample results
+                # 记录样本结果
                 if batch_idx % 10 == 0:
                     self.logger.info(f"Sample {total_samples}: {sample_info}")
                     self.logger.info(f"  Reference: {ref_sentence}")
                     self.logger.info(f"  Prediction: {pred_sentence}")
                     self.logger.info(f"  WER: {sample_wer:.2f}%")
         
-        # Calculate overall metrics
+        # 计算总体指标
         avg_wer = total_wer / total_samples if total_samples > 0 else 0.0
         overall_wer = WERCalculator.calculate_wer(all_references, all_predictions)
         
-        # Log results
+        # 记录结果
         self.logger.info("=" * 50)
         self.logger.info("EVALUATION RESULTS")
         self.logger.info("=" * 50)
@@ -270,7 +270,7 @@ class TFNetEvaluator:
         self.logger.info(f"Insertion rate: {overall_wer['ins_rate']:.2f}%")
         self.logger.info(f"Substitution rate: {overall_wer['sub_rate']:.2f}%")
         
-        # Save results
+        # 保存结果
         results = {
             'total_samples': total_samples,
             'average_wer': avg_wer,
@@ -293,7 +293,7 @@ class TFNetEvaluator:
         return results
 
 def main():
-    """Main function"""
+    """主入口函数"""
     import argparse
     
     parser = argparse.ArgumentParser(description='TFNet Evaluation Script')

@@ -115,8 +115,8 @@ class VideoTransform:
 
         # 调试：检查张量形状
         if len(video_tensor.shape) != 4:
-            print(f"Warning: Unexpected video tensor shape: {video_tensor.shape}")
-            print(f"Expected 4D tensor (T, H, W, C), got {len(video_tensor.shape)}D")
+            print(f"警告：意外的视频张量形状：{video_tensor.shape}")
+            print(f"期望4维张量 (T, H, W, C)，得到{len(video_tensor.shape)}维")
             # 通过添加通道维度处理灰度图像
             if len(video_tensor.shape) == 3:
                 video_tensor = np.expand_dims(video_tensor, axis=-1)
@@ -159,30 +159,30 @@ class CECSLDataset:
         self.max_frames = max_frames
         self.transform = transform or VideoTransform(is_train=is_train, crop_size=crop_size, max_frames=max_frames)
         
-        # Load labels
+        # 加载标签
         self.samples = self._load_samples()
     
     def _load_samples(self):
-        """Load samples from label file"""
+        """从标签文件加载样本"""
         samples = []
         
         with open(self.label_path, 'r', encoding="utf-8") as f:
             reader = csv.reader(f)
             for n, row in enumerate(reader):
-                if n != 0:  # Skip header
+                if n != 0:  # 跳过表头
                     video_name = row[0]
-                    translator = row[1]  # Get translator (A, B, C, etc.)
+                    translator = row[1]  # 获取翻译者 (A, B, C, 等)
                     words = row[3].split("/")
                     words = preprocess_words(words)
 
-                    # Convert words to indices
+                    # 将单词转换为索引
                     label_indices = []
                     for word in words:
                         if word in self.word2idx:
                             label_indices.append(self.word2idx[word])
 
-                    if label_indices:  # Only add if we have valid labels
-                        # Construct proper video path: data_path/translator/video_name.mp4
+                    if label_indices:  # 只有在有有效标签时才添加
+                        # 构建正确的视频路径：data_path/translator/video_name.mp4
                         video_path = os.path.join(self.data_path, translator, f"{video_name}.mp4")
                         samples.append({
                             'video_name': video_name,
@@ -198,56 +198,59 @@ class CECSLDataset:
     def __getitem__(self, idx):
         sample = self.samples[idx]
 
-        # Load video frames
+        # 加载视频帧
         video_frames = self._load_video(sample['video_path'])
         original_length = len(video_frames)
 
-        # Apply transformations
+        # 应用转换
         if self.transform:
             video_frames = self.transform(video_frames)
 
-        # Pad labels to fixed length for batching
-        max_label_length = 50  # Reasonable max label length
-        label = sample['label']
-        if len(label) > max_label_length:
-            label = label[:max_label_length]
+        # 记录真实标签长度(填充前)
+        max_label_length = 50  # 合理的最大标签长度
+        raw_label = sample['label']
+        true_label_length = min(len(raw_label), max_label_length)
+
+        # 填充或截断
+        if len(raw_label) > max_label_length:
+            padded_label = raw_label[:max_label_length]
         else:
-            # Pad with zeros (assuming 0 is padding token)
-            label = label + [0] * (max_label_length - len(label))
+            padded_label = raw_label + [0] * (max_label_length - len(raw_label))
 
         return {
             'video': video_frames,
-            'label': label,
-            'video_length': original_length,  # Use original length before padding
+            'label': padded_label,            # [S_max]
+            'label_length': true_label_length, # 真实长度，用于CTC
+            'video_length': original_length,   # 使用填充前的原始视频帧数
             'info': sample['video_name']
         }
     
     def _load_video(self, video_path):
-        """Load video frames from directory with memory optimization"""
+        """从目录加载视频帧，进行内存优化"""
         frames = []
-        max_frames = 150  # Limit max frames to reduce memory usage
+        max_frames = 150  # 限制最大帧数以减少内存使用
 
-        # Debug: Print video path (only for first few videos)
+        # 调试：打印视频路径（仅对前几个视频）
         debug_print = len(getattr(self, '_debug_count', [])) < 3
         if debug_print:
             if not hasattr(self, '_debug_count'):
                 self._debug_count = []
             self._debug_count.append(1)
-            print(f"Loading video from: {video_path}")
-            print(f"Path exists: {os.path.exists(video_path)}")
-            print(f"Is directory: {os.path.isdir(video_path)}")
+            print(f"从以下位置加载视频：{video_path}")
+            print(f"路径存在：{os.path.exists(video_path)}")
+            print(f"是目录：{os.path.isdir(video_path)}")
 
         if os.path.isdir(video_path):
-            # Load from image directory
+            # 从图像目录加载
             frame_files = sorted([f for f in os.listdir(video_path) if f.endswith(('.jpg', '.png'))])
             if debug_print:
-                print(f"Found {len(frame_files)} frame files")
+                print(f"找到{len(frame_files)}个帧文件")
                 if len(frame_files) > 0:
-                    print(f"First few files: {frame_files[:5]}")
+                    print(f"前几个文件：{frame_files[:5]}")
 
-            # Limit number of frames to avoid memory issues
+            # 限制帧数以避免内存问题
             if len(frame_files) > max_frames:
-                # Sample frames evenly across the video
+                # 在视频中均匀采样帧
                 step = len(frame_files) // max_frames
                 frame_files = frame_files[::step][:max_frames]
 
@@ -255,20 +258,20 @@ class CECSLDataset:
                 frame_path = os.path.join(video_path, frame_file)
                 frame = cv2.imread(frame_path)
                 if frame is not None:
-                    # Resize frame to reduce memory usage
+                    # 调整帧大小以减少内存使用
                     frame = cv2.resize(frame, (224, 224))
                     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     frames.append(frame)
                 else:
                     if debug_print:
-                        print(f"Failed to load frame: {frame_path}")
+                        print(f"加载帧失败：{frame_path}")
         else:
-            # Load from video file
+            # 从视频文件加载
             cap = cv2.VideoCapture(video_path)
             frame_count = 0
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             
-            # Calculate step to sample frames if video is too long
+            # 如果视频太长，计算采样帧的步长
             step = max(1, total_frames // max_frames) if total_frames > max_frames else 1
             
             while True:
@@ -277,7 +280,7 @@ class CECSLDataset:
                     break
                     
                 if frame_count % step == 0:
-                    # Resize frame to reduce memory usage
+                    # 调整帧大小以减少内存使用
                     frame = cv2.resize(frame, (224, 224))
                     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     frames.append(frame)
@@ -289,34 +292,34 @@ class CECSLDataset:
             cap.release()
 
         if debug_print:
-            print(f"Loaded {len(frames)} frames")
+            print(f"加载了{len(frames)}帧")
         
-        # Convert to numpy array and ensure proper dtype
+        # 转换为numpy数组并确保正确的数据类型
         if frames:
             frames = np.asarray(frames, dtype=np.float32)
-            # Normalize to [0, 1] range
+            # 标准化到[0, 1]范围
             frames = frames / 255.0
         else:
-            # Return empty array with proper shape if no frames loaded
+            # 如果没有加载到帧，返回正确形状的空数组
             frames = np.empty((0, 224, 224, 3), dtype=np.float32)
             
         return frames
 
 def collate_fn(videos, labels, video_lengths, infos):
-    """Collate function for batching samples - MindSpore style"""
-    # Convert to numpy arrays for processing
+    """用于批处理样本的整理函数 - MindSpore风格"""
+    # 转换为numpy数组进行处理
     videos = [np.array(v) for v in videos]
     video_lengths = [int(vl) for vl in video_lengths]
 
-    # Find max video length in batch
+    # 找到批次中的最大视频长度
     max_length = max(video_lengths)
 
-    # Pad videos to max length
+    # 将视频填充到最大长度
     padded_videos = []
     for i, video in enumerate(videos):
         video_length = video_lengths[i]
 
-        # Pad video to max length
+        # 将视频填充到最大长度
         if video_length < max_length:
             pad_length = max_length - video_length
             pad_shape = (pad_length,) + video.shape[1:]
@@ -335,9 +338,9 @@ def collate_fn(videos, labels, video_lengths, infos):
 def create_dataset(data_path, label_path, word2idx, dataset_name, 
                   batch_size=2, is_train=True, num_workers=1, 
                   prefetch_size=1, max_rowsize=16, crop_size=224, max_frames=150):
-    """Create MindSpore dataset with memory optimizations"""
+    """创建带有内存优化的MindSpore数据集"""
     
-    # Create custom dataset with memory optimizations
+    # 创建带有内存优化的自定义数据集
     dataset = CECSLDataset(
         data_path=data_path,
         label_path=label_path,
@@ -348,66 +351,71 @@ def create_dataset(data_path, label_path, word2idx, dataset_name,
         max_frames=max_frames
     )
     
-    # Use full dataset size (for small memory testing, you can add: min(len(dataset), 100))
+    # 使用完整数据集大小（对于小内存测试，可以添加：min(len(dataset), 100)）
     dataset_size = len(dataset)
     
-    # Convert to MindSpore dataset
+    # 转换为MindSpore数据集
     def generator():
         for i in range(dataset_size):
             sample = dataset[i]
-            # Ensure all data is properly formatted with simple data types
+            # 确保所有数据都使用简单数据类型正确格式化
             video = sample['video']
             if isinstance(video, list):
                 video = np.array(video, dtype=np.float32)
             elif isinstance(video, np.ndarray):
                 video = video.astype(np.float32)
             
-            # Make sure video has the right shape (T, H, W, C)
+            # 确保视频有正确的形状 (T, H, W, C) 或 (T, C, H, W)
             if video.ndim == 4:
-                pass  # Already correct shape
-            elif video.ndim == 3:
-                video = np.expand_dims(video, axis=0)  # Add time dimension
+                pass
+            else:
+                raise ValueError(f"视频张量维度不正确: {video.shape}")
             
-            # Limit max frames per video to reduce memory
+            # 限制每个视频的最大帧数以减少内存
             if video.shape[0] > max_frames:
                 indices = np.linspace(0, video.shape[0] - 1, max_frames, dtype=int)
                 video = video[indices]
             
             label = np.array(sample['label'], dtype=np.int32)
-            video_length = min(int(sample['video_length']), max_frames)  # Cap video length
-            label_length = len(sample['label'])  # Label length as integer
+            # 使用真实标签长度(未填充部分)
+            label_length = int(sample.get('label_length', np.count_nonzero(label)))
+            # 保障最小为1（CTC允许空吗? 为安全若为0则置1并用blank填充）
+            if label_length == 0:
+                label_length = 1
+            
+            video_length = min(int(sample['video_length']), max_frames)  # 限制视频长度
             
             yield (video, label, video_length, label_length)
     
-    # Create dataset with memory optimizations
+    # 创建带有内存优化的数据集
     ms_dataset = ds.GeneratorDataset(
         generator,
         column_names=['video', 'label', 'videoLength', 'labelLength'],
         shuffle=is_train,
-        num_parallel_workers=min(num_workers, 2),  # Limit workers to save memory
-        max_rowsize=max_rowsize  # GPU optimization for memory efficiency
+        num_parallel_workers=min(num_workers, 2),  # 限制工作进程数以节省内存
+        max_rowsize=max_rowsize  # GPU优化以提高内存效率
     )
     
-    # Apply data augmentation operations if training
+    # 如果是训练则应用数据增强操作
     if is_train:
-        # Add random operations for data augmentation
-        # Note: Some operations might need to be moved to custom transforms
+        # 为数据增强添加随机操作
+        # 注意：一些操作可能需要移动到自定义转换中
         pass
     
-    # Set prefetch for better GPU utilization (before batching)
+    # 设置预取以提高GPU利用率（在批处理之前）
     try:
         ms_dataset = ms_dataset.prefetch(buffer_size=prefetch_size)
-        print(f"✓ Prefetch enabled with buffer size: {prefetch_size}")
+        print(f"✓ 预取已启用，缓冲区大小：{prefetch_size}")
     except AttributeError:
-        print(f"Warning: Prefetch not available, skipping prefetch optimization")
+        print(f"警告：预取不可用，跳过预取优化")
     
-    # Batch dataset with optimizations
+    # 使用优化进行批处理数据集
     ms_dataset = ms_dataset.batch(
         batch_size=batch_size,
-        drop_remainder=True  # Drop incomplete batches to maintain consistent memory usage
+        drop_remainder=True  # 丢弃不完整的批次以保持一致的内存使用
     )
     
-    # Enable repeat for training (helps with GPU utilization)
+    # 为训练启用重复（有助于GPU利用率）
     if is_train:
         ms_dataset = ms_dataset.repeat()
     

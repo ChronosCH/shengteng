@@ -17,6 +17,7 @@ import mindspore.ops as ops
 from mindspore import context, save_checkpoint, load_checkpoint, load_param_into_net, Tensor
 from mindspore.train import Model
 from mindspore.train.callback import ModelCheckpoint, CheckpointConfig, LossMonitor, TimeMonitor
+import numpy as np  # 修复: 训练循环中使用 np.ndarray 判定但未导入
 
 # 尝试导入新API，如果不可用则回退到旧版本
 try:
@@ -85,16 +86,16 @@ class GPUTFNetTrainer:
             raise
 
     def _setup_gpu_context(self):
-        """Setup GPU context with optimizations"""
+        """设置带有优化的GPU上下文"""
         try:
             device_target = self.config_manager.get("model.device_target", "GPU")
             device_id = self.config_manager.get("model.device_id", 0)
             
-            # Check if GPU is available
+            # 检查是否有可用的GPU
             if not self._check_gpu_availability():
                 raise RuntimeError("GPU not available or MindSpore GPU version not installed")
 
-            # Set context for GPU with optimizations
+            # 使用配置中的优化设置设置上下文
             gpu_config = self.config_manager.get("gpu_optimization", {})
             
             if gpu_config.get("enable_graph_mode", True):
@@ -104,7 +105,7 @@ class GPUTFNetTrainer:
                 mode = context.PYNATIVE_MODE
                 print("✓ Using PYNATIVE_MODE for debugging")
 
-            # Configure context
+            # 配置context
             context.set_context(
                 mode=mode,
                 device_target=device_target,
@@ -113,26 +114,26 @@ class GPUTFNetTrainer:
                 save_graphs_path="./graphs",
             )
 
-            # Enable memory optimization (using max_device_memory instead)
+            # 启用内存优化（使用 max_device_memory）
             if gpu_config.get("enable_mem_reuse", True):
                 try:
-                    # Use max_device_memory for memory optimization
+                    # 使用 max_device_memory 进行内存优化
                     max_memory = gpu_config.get("max_device_memory", "4GB")
                     context.set_context(max_device_memory=max_memory)
                     print(f"✓ Memory optimization enabled (max_device_memory: {max_memory})")
                     
-                    # Additional memory optimization settings
+                    # 额外的内存优化设置
                     mempool_size = gpu_config.get("mempool_block_size", "512MB")
                     context.set_context(
-                        mempool_block_size=mempool_size,  # Smaller memory pool blocks
-                        enable_reduce_precision=True  # Enable reduce precision to save memory
+                        mempool_block_size=mempool_size,  # 更小的内存池块
+                        enable_reduce_precision=True  # 启用降精度以节省内存
                     )
                     print(f"✓ Additional memory optimizations enabled (mempool: {mempool_size})")
                     
-                    # Enable memory offload if available
+                    # 如果可用则启用内存卸载或稀疏支持
                     if gpu_config.get("enable_memory_offload", False):
                         try:
-                            context.set_context(enable_sparse=True)  # Enable sparse tensor support
+                            context.set_context(enable_sparse=True)  # 启用稀疏张量支持
                             print("✓ Sparse tensor support enabled for memory savings")
                         except Exception as sparse_e:
                             print(f"Warning: Sparse tensor not supported: {sparse_e}")
@@ -140,10 +141,10 @@ class GPUTFNetTrainer:
                 except Exception as e:
                     print(f"Warning: Memory optimization not supported: {e}")
 
-            # Disable graph kernel optimization to avoid compilation issues
+            # 禁用图内核优化以避免编译问题
             if self.config_manager.get("model.enable_graph_kernel", False):
                 try:
-                    # Graph kernel might not be available in all versions
+                    # Graph kernel 可能并非所有版本都支持
                     context.set_context(enable_graph_kernel=True)
                     print("✓ Graph kernel optimization enabled")
                 except Exception as e:
@@ -152,21 +153,21 @@ class GPUTFNetTrainer:
                 context.set_context(enable_graph_kernel=False)
                 print("✓ Graph kernel optimization disabled for stability")
 
-            # Enable auto mixed precision if supported
+            # 启用自动混合精度（如支持）
             if self.config_manager.get("model.enable_auto_mixed_precision", True):
                 try:
-                    # Try different methods for auto mixed precision
+                    # 尝试不同的方法以启用自动混合精度
                     try:
                         context.set_auto_parallel_context(enable_auto_mixed_precision=True)
                         print("✓ Auto mixed precision enabled (auto_parallel_context)")
                     except:
-                        # Alternative approach
+                        # 备用方法
                         context.set_context(enable_auto_mixed_precision=True)
                         print("✓ Auto mixed precision enabled (context)")
                 except Exception as e:
                     print(f"Warning: Auto mixed precision not supported: {e}")
 
-            # Set device using new API if available
+            # 如果新API可用，则使用它设置设备
             if MINDSPORE_NEW_API:
                 try:
                     set_device(device_target, device_id)
@@ -176,7 +177,7 @@ class GPUTFNetTrainer:
             
             print(f"✓ GPU context configured successfully: {device_target}:{device_id}")
             
-            # Set memory management
+            # 打印内存管理相关信息
             max_memory = gpu_config.get("max_device_memory")
             if max_memory:
                 print(f"✓ Max device memory limit: {max_memory}")
@@ -186,15 +187,15 @@ class GPUTFNetTrainer:
             raise
 
     def _check_gpu_availability(self):
-        """Check if GPU is available"""
+        """检查GPU是否可用"""
         try:
-            # Try to get GPU device count
+            # 尝试获取GPU设备信息
             import mindspore as ms
             
-            # Simple test to check GPU availability
+            # 简单的测试以检查GPU可用性
             test_tensor = ms.Tensor([[1.0, 2.0], [3.0, 4.0]], ms.float32)
             
-            # Try to create a simple operation on GPU
+            # 尝试在GPU上创建一个简单操作
             context.set_context(device_target="GPU")
             result = test_tensor + 1
             
@@ -211,13 +212,13 @@ class GPUTFNetTrainer:
             return False
 
     def _setup_directories(self):
-        """Setup and validate directories"""
+        """设置并验证所需目录"""
         try:
-            # Create directories using config manager
+            # 使用配置管理器创建目录
             if not self.config_manager.create_directories():
                 return False
 
-            # Additional validation for critical directories
+            # 对关键目录进行额外验证
             critical_dirs = [
                 self.config_manager.get("paths.checkpoint_dir"),
                 self.config_manager.get("paths.log_dir"),
@@ -236,11 +237,11 @@ class GPUTFNetTrainer:
             return False
 
     def _validate_dataset(self):
-        """Validate dataset structure and paths"""
+        """验证数据集结构和路径"""
         try:
             dataset_config = self.config_manager.get_dataset_config()
 
-            # Check if dataset paths are configured
+            # 检查是否配置了数据集路径
             required_paths = [
                 ('train_data_path', 'Training data directory'),
                 ('train_label_path', 'Training labels file'),
@@ -257,19 +258,19 @@ class GPUTFNetTrainer:
                     all_valid = False
                     continue
 
-                # Check if path exists - determine type based on path_key name
+                # 根据 path_key 判断是文件还是目录
                 if 'label' in path_key:
-                    # Label paths are files
+                    # 标签路径应为文件
                     if not check_file_exists(path, description):
                         all_valid = False
                 else:
-                    # Data paths are directories
+                    # 数据路径应为目录
                     if not check_directory_exists(path, description):
                         all_valid = False
 
-            # Validate CE-CSL dataset structure if base path is available
+            # 如果是 CE-CSL 数据集，验证其目录结构
             if dataset_config.get('name') == 'CE-CSL':
-                # Try to find base CE-CSL path
+                # 试图找到 CE-CSL 的基路径
                 train_data_path = dataset_config.get('train_data_path', '')
                 if 'CE-CSL' in train_data_path:
                     base_path = train_data_path.split('CE-CSL')[0] + 'CE-CSL'
@@ -285,17 +286,17 @@ class GPUTFNetTrainer:
             return False
     
     def _setup_logging(self):
-        """Setup logging configuration with improved error handling"""
+        """设置日志配置并改进错误处理"""
         log_level = getattr(logging, self.config_manager.get("logging.level", "INFO"))
 
-        # Create logger
+        # 创建 logger
         self.logger = logging.getLogger('GPUTFNetTrainer')
         self.logger.setLevel(log_level)
 
-        # Clear existing handlers
+        # 清除现有处理器
         self.logger.handlers.clear()
 
-        # Console handler
+        # 控制台处理器
         console_handler = logging.StreamHandler()
         console_handler.setLevel(log_level)
         console_format = logging.Formatter(
@@ -304,13 +305,13 @@ class GPUTFNetTrainer:
         console_handler.setFormatter(console_format)
         self.logger.addHandler(console_handler)
 
-        # File handler with safe directory creation
+        # 文件处理器，确保目录存在
         if self.config_manager.get("logging.save_logs", True):
             try:
                 log_dir = self.config_manager.get_safe_path("paths.log_dir", create_if_missing=True)
                 if log_dir:
                     log_file = os.path.join(log_dir, f"gpu_training_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
-                    # Normalize path for cross-platform compatibility
+                    # 规范化路径以兼容不同平台
                     log_file = os.path.normpath(log_file)
 
                     file_handler = logging.FileHandler(log_file, encoding='utf-8')
@@ -325,12 +326,12 @@ class GPUTFNetTrainer:
                 print("Continuing with console logging only")
     
     def prepare_data(self):
-        """Prepare datasets and vocabulary with GPU optimizations"""
+        """为GPU训练准备数据集和词表"""
         self.logger.info("Preparing data for GPU training...")
         
         dataset_config = self.config_manager.get_dataset_config()
         
-        # Build vocabulary
+        # 构建词表
         self.word2idx, vocab_size, self.idx2word = build_vocabulary(
             dataset_config["train_label_path"],
             dataset_config["valid_label_path"],
@@ -340,7 +341,7 @@ class GPUTFNetTrainer:
         
         self.logger.info(f"Vocabulary size: {vocab_size}")
         
-        # Save vocabulary
+        # 保存词表
         vocab_path = os.path.join(self.config_manager.get("paths.output_dir"), "vocabulary.json")
         with open(vocab_path, 'w', encoding='utf-8') as f:
             json.dump({
@@ -349,7 +350,7 @@ class GPUTFNetTrainer:
                 'vocab_size': vocab_size
             }, f, indent=2, ensure_ascii=False)
         
-        # Create datasets with GPU optimizations
+        # 使用GPU优化创建数据集
         batch_size = self.config_manager.get("training.batch_size")
         num_workers = self.config_manager.get("training.num_workers")
         prefetch_size = self.config_manager.get("training.prefetch_size", 2)
@@ -398,14 +399,14 @@ class GPUTFNetTrainer:
         return len(self.word2idx)
         
     def build_model(self, vocab_size):
-        """Build TFNet model with GPU optimizations"""
+        """构建用于GPU的TFNet模型"""
         self.logger.info("Building TFNet model for GPU...")
         
         hidden_size = self.config_manager.get("model.hidden_size")
         device_target = self.config_manager.get("model.device_target")
         dataset_name = self.config_manager.get_dataset_config()["name"]
         
-        # Create model
+        # 创建模型实例
         self.model = TFNetModel(
             hidden_size=hidden_size,
             word_set_num=vocab_size,
@@ -416,7 +417,7 @@ class GPUTFNetTrainer:
         self.logger.info(f"Model created with hidden_size={hidden_size}, vocab_size={vocab_size}")
         self.logger.info(f"Model device target: {device_target}")
         
-        # Initialize decoder
+        # 初始化解码器
         self.decoder = CTCDecoder(
             gloss_dict=self.word2idx,
             num_classes=vocab_size,
@@ -427,13 +428,13 @@ class GPUTFNetTrainer:
         return self.model
     
     def setup_training(self, vocab_size):
-        """Setup training components with GPU optimizations"""
+        """使用GPU优化设置训练组件"""
         self.logger.info("Setting up training components...")
         
-        # Build model
+        # 构建模型
         model = self.build_model(vocab_size)
         
-        # Setup optimizer
+        # 设置优化器
         learning_rate = self.config_manager.get("training.learning_rate")
         weight_decay = self.config_manager.get("training.weight_decay")
         
@@ -443,7 +444,7 @@ class GPUTFNetTrainer:
             weight_decay=weight_decay
         )
         
-        # Setup loss function - use CTCLoss instead of SeqKD
+        # 设置损失函数 - 使用 CTCLoss 替代 SeqKD
         from mindspore.nn import CTCLoss
         blank_id = self.config_manager.get("loss.ctc_blank_id", 0)
         reduction = self.config_manager.get("loss.ctc_reduction", "mean")
@@ -454,19 +455,19 @@ class GPUTFNetTrainer:
         return model, optimizer, loss_fn
 
     def train(self):
-        """Main training loop with GPU optimizations"""
+        """带有GPU优化的主训练循环"""
         try:
             self.logger.info("=" * 60)
             self.logger.info("STARTING GPU-OPTIMIZED TRAINING")
             self.logger.info("=" * 60)
             
-            # Prepare data
+            # 准备数据
             vocab_size = self.prepare_data()
             
-            # Setup training
+            # 设置训练组件
             model, optimizer, loss_fn = self.setup_training(vocab_size)
             
-            # Training parameters
+            # 训练参数
             num_epochs = self.config_manager.get("training.num_epochs")
             save_interval = self.config_manager.get("training.save_interval")
             eval_interval = self.config_manager.get("training.eval_interval")
@@ -475,10 +476,10 @@ class GPUTFNetTrainer:
             self.logger.info(f"Training for {num_epochs} epochs")
             self.logger.info(f"Save interval: {save_interval}, Eval interval: {eval_interval}")
             
-            # Setup callbacks
+            # 设置回调
             callbacks = self._setup_callbacks()
             
-            # Training loop
+            # 训练循环
             start_time = time.time()
             
             for epoch in range(num_epochs):
@@ -487,27 +488,27 @@ class GPUTFNetTrainer:
                 
                 self.logger.info(f"Epoch {self.current_epoch}/{num_epochs}")
                 
-                # Training step
+                # 训练步骤
                 train_loss = self._train_epoch(model, optimizer, loss_fn, gradient_clip_norm)
                 
-                # Validation step
+                # 验证步骤
                 if self.current_epoch % eval_interval == 0:
                     val_wer = self._validate_epoch(model)
                     
-                    # Save best model
+                    # 保存最佳模型
                     if val_wer < self.best_wer:
                         self.best_wer = val_wer
                         self.best_epoch = self.current_epoch
                         self._save_best_model(model)
                 
-                # Save checkpoint
+                # 保存检查点
                 if self.current_epoch % save_interval == 0:
                     self._save_checkpoint(model, optimizer)
                 
                 epoch_time = time.time() - epoch_start
                 self.logger.info(f"Epoch {self.current_epoch} completed in {epoch_time:.2f}s")
                 
-                # Early stopping check
+                # 提前停止检查
                 if self._should_early_stop():
                     self.logger.info("Early stopping triggered")
                     break
@@ -524,12 +525,12 @@ class GPUTFNetTrainer:
             raise
 
     def _train_epoch(self, model, optimizer, loss_fn, gradient_clip_norm):
-        """Train for one epoch with GPU optimizations"""
+        """执行一个训练周期并进行GPU优化"""
         model.set_train(True)
         total_loss = 0.0
         batch_count = 0
         
-        # Enable data sink mode if configured
+        # 如果配置中启用，使用 data sink 模式
         enable_data_sink = self.config_manager.get("training.enable_data_sink", True)
         
         if enable_data_sink:
@@ -537,51 +538,72 @@ class GPUTFNetTrainer:
         
         for batch_idx, (data, target, data_len, target_len) in enumerate(self.train_dataset):
             try:
-                # Forward pass
-                def forward_fn(seq_data, seq_label, data_len, label_len):
-                    model_output = model(seq_data, data_len, is_train=True)
-                    # Model returns: (log_probs1, log_probs2, log_probs3, log_probs4, log_probs5, lgt_tensor, None, None, None)
+                # 统一dtype与形状处理 (B, T, C, H, W) -> 模型自己处理
+                if isinstance(target, np.ndarray):
+                    target = Tensor(target, ms.int32)
+                
+                # target 形状: (B, S_max) MindSpore CTCLoss 要求 2-D
+                if len(target.shape) == 1:
+                    target = ops.expand_dims(target, 0)
+                
+                # 处理输入长度 data_len 与 标签长度 target_len -> Tensor[int32]
+                if not isinstance(data_len, Tensor):
+                    if isinstance(data_len, (list, tuple)):
+                        data_len = Tensor([int(x) for x in data_len], ms.int32)
+                    else:
+                        data_len = Tensor([int(data_len)], ms.int32)
+                else:
+                    data_len = ops.cast(data_len, ms.int32)
+                    if len(data_len.shape) == 0:
+                        data_len = ops.expand_dims(data_len, 0)
+                
+                if not isinstance(target_len, Tensor):
+                    if isinstance(target_len, (list, tuple)):
+                        target_len = Tensor([int(x) for x in target_len], ms.int32)
+                    else:
+                        target_len = Tensor([int(target_len)], ms.int32)
+                else:
+                    target_len = ops.cast(target_len, ms.int32)
+                    if len(target_len.shape) == 0:
+                        target_len = ops.expand_dims(target_len, 0)
+                
+                # CTC 约束: input_length >= target_length >= 1
+                min_one = Tensor(1, ms.int32)
+                target_len = ops.maximum(target_len, min_one)
+                data_len = ops.maximum(data_len, target_len)  # 确保 input_len >= target_len
+                
+                # 前向计算
+                def forward_fn(seq_data, seq_label, data_len_tensor, label_len_tensor):
+                    model_output = model(seq_data, data_len_tensor, is_train=True)
                     logits = model_output[0]
                     
-                    # 统一将data_len转换为Tensor[int32]
-                    if not isinstance(data_len, Tensor):
-                        if isinstance(data_len, (list, tuple)):
-                            data_len = Tensor([int(l.item() if hasattr(l, 'item') else int(l)) for l in data_len], ms.int32)
-                        else:
-                            data_len = Tensor([int(data_len)], ms.int32)
-                    else:
-                        # 若是标量，包装成一维
-                        if len(data_len.shape) == 0:
-                            data_len = ops.expand_dims(data_len, 0)
-                        data_len = ops.cast(data_len, ms.int32)
+                    # logits 期望 shape (T, N, C)，若模型输出不同需转换
+                    # 若 logits.shape == (N, T, C) 则转置
+                    if logits.ndim == 3 and logits.shape[0] == data_len_tensor.shape[0]:
+                        # 可能是 (N, T, C) -> (T, N, C)
+                        logits = ops.transpose(logits, (1, 0, 2))
                     
-                    # 获取模型输出时间步（logits形状: T x N x C 或类似），取第0维
                     actual_time_steps = logits.shape[0]
                     ts_tensor = Tensor(actual_time_steps, ms.int32)
                     one_tensor = Tensor(1, ms.int32)
+                    data_len_tensor = ops.minimum(data_len_tensor, ts_tensor)
+                    data_len_tensor = ops.maximum(data_len_tensor, one_tensor)
                     
-                    # 保证长度在[1, actual_time_steps]
-                    data_len = ops.minimum(data_len, ts_tensor)
-                    data_len = ops.maximum(data_len, one_tensor)
+                    # 再次保证 input_length >= target_length
+                    data_len_tensor = ops.maximum(data_len_tensor, label_len_tensor)
                     
-                    loss = loss_fn(logits, seq_label, data_len, label_len)
+                    loss = loss_fn(logits, seq_label, data_len_tensor, label_len_tensor)
                     return loss
                 
-                # Compute gradients
                 grad_fn = ops.value_and_grad(forward_fn, None, optimizer.parameters)
                 loss, grads = grad_fn(data, target, data_len, target_len)
                 
-                # Gradient clipping
                 if gradient_clip_norm > 0:
                     grads = ops.clip_by_global_norm(grads, gradient_clip_norm)
-                
-                # Update parameters
                 optimizer(grads)
                 
                 total_loss += loss.asnumpy()
                 batch_count += 1
-                
-                # Print progress
                 if batch_idx % self.config_manager.get("logging.print_interval") == 0:
                     self.logger.info(f"Batch {batch_idx}, Loss: {loss.asnumpy():.6f}")
                 
@@ -594,21 +616,21 @@ class GPUTFNetTrainer:
         return avg_loss
 
     def _validate_epoch(self, model):
-        """Validate for one epoch"""
+        """执行一个验证周期"""
         model.set_train(False)
         total_wer = 0.0
         batch_count = 0
         
         for batch_idx, (data, target, data_len, target_len) in enumerate(self.valid_dataset):
             try:
-                # Forward pass
+                # 前向推断
                 logits = model(data, data_len, is_train=False)
                 
-                # Decode predictions
+                # 解码预测结果
                 predictions = self.decoder.decode(logits.asnumpy(), data_len.asnumpy())
                 references = self.decoder.decode_labels(target.asnumpy(), target_len.asnumpy())
                 
-                # Calculate WER
+                # 计算 WER
                 batch_wer = calculate_wer_score(predictions, references)
                 total_wer += batch_wer
                 batch_count += 1
@@ -622,16 +644,16 @@ class GPUTFNetTrainer:
         return avg_wer
 
     def _setup_callbacks(self):
-        """Setup training callbacks"""
+        """设置训练回调"""
         callbacks = []
         
-        # Loss monitor
+        # 损失监控器
         callbacks.append(LossMonitor(per_print_times=self.config_manager.get("logging.print_interval")))
         
-        # Time monitor
+        # 时间监控器
         callbacks.append(TimeMonitor())
         
-        # Checkpoint callback
+        # 检查点回调
         checkpoint_config = CheckpointConfig(
             save_checkpoint_steps=self.config_manager.get("training.save_interval"),
             keep_checkpoint_max=10
@@ -647,7 +669,7 @@ class GPUTFNetTrainer:
         return callbacks
 
     def _save_best_model(self, model):
-        """Save best model"""
+        """保存最佳模型"""
         try:
             best_model_path = self.config_manager.get("paths.best_model_path")
             save_checkpoint(model, best_model_path)
@@ -656,7 +678,7 @@ class GPUTFNetTrainer:
             self.logger.error(f"Failed to save best model: {e}")
 
     def _save_checkpoint(self, model, optimizer):
-        """Save training checkpoint"""
+        """保存训练检查点"""
         try:
             checkpoint_path = self.config_manager.get("paths.current_model_path")
             save_checkpoint(model, checkpoint_path)
@@ -665,12 +687,12 @@ class GPUTFNetTrainer:
             self.logger.error(f"Failed to save checkpoint: {e}")
 
     def _should_early_stop(self):
-        """Check if early stopping should be triggered"""
+        """检查是否应该触发早停"""
         patience = self.config_manager.get("training.early_stopping_patience")
         return (self.current_epoch - self.best_epoch) >= patience
 
 def main():
-    """Main training function"""
+    """主训练函数"""
     import argparse
     
     parser = argparse.ArgumentParser(description="GPU-Optimized TFNet Training")
@@ -679,7 +701,7 @@ def main():
     
     args = parser.parse_args()
     
-    # Verify environment
+    # 验证环境
     print("Checking environment...")
     print(f"Current conda environment: {os.environ.get('CONDA_DEFAULT_ENV', 'unknown')}")
     
@@ -688,10 +710,10 @@ def main():
         print("Please run: conda activate mindspore-gpu")
     
     try:
-        # Create trainer
+        # 创建训练器
         trainer = GPUTFNetTrainer(args.config)
         
-        # Start training
+        # 开始训练
         trainer.train()
         
         print("Training completed successfully!")

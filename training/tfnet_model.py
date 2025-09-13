@@ -135,8 +135,8 @@ class TFNetModel(nn.Cell):
             padded_features.append(padded)
 
         # 堆叠特征
-        framewise = ops.stack(padded_features, axis=0)  # (B, T, C)
-        framewise = self.transpose(framewise, (0, 2, 1))  # (B, C, T)
+        framewise = ops.stack(padded_features, axis=0)  # (B, T, C) -> (批次, 时间步, 通道)
+        framewise = self.transpose(framewise, (0, 2, 1))  # (B, C, T) -> (批次, 通道, 时间步)
 
         # 应用时序卷积并在Python中更新长度
         conv1d_outputs = self.conv1d(framewise, len_x_list)
@@ -149,36 +149,36 @@ class TFNetModel(nn.Cell):
             else:
                 k = int(ks[1])
                 lgt = [max(1, int(i) - k + 1) for i in lgt]
-        x = self.transpose(x, (2, 0, 1))  # (T, B, C)
+        x = self.transpose(x, (2, 0, 1))  # (T, B, C) -> (时间步, 批次, 通道)
 
-        # Fourier transform branch
-        framewise1 = self.transpose(framewise, (0, 2, 1))  # (B, T, C)
-        # Apply FFT (simplified for CPU)
-        X = self.abs(framewise1)  # Simplified FFT
-        framewise1 = self.transpose(X, (0, 2, 1))  # (B, C, T)
+        # 傅里叶变换分支
+        framewise1 = self.transpose(framewise, (0, 2, 1))  # (B, T, C) -> (批次, 时间步, 通道)
+        # 应用FFT（为CPU简化）
+        X = self.abs(framewise1)  # 简化的FFT替代
+        framewise1 = self.transpose(X, (0, 2, 1))  # (B, C, T) -> (批次, 通道, 时间步)
 
         conv1d_outputs1 = self.conv1d1(framewise1, len_x_list)
         x1 = conv1d_outputs1['visual_feat']
-        x1 = self.transpose(x1, (2, 0, 1))  # (T, B, C)
+        x1 = self.transpose(x1, (2, 0, 1))  # (T, B, C) -> (时间步, 批次, 通道)
 
-        # Apply temporal models
+        # 应用时序模型
         outputs = self.temporal_model(x, lgt)
         outputs1 = self.temporal_model1(x1, lgt)
 
-        # Generate predictions
+        # 生成预测
         log_probs1 = self.classifier11(outputs['predictions'])
         log_probs2 = self.classifier22(x)
         log_probs3 = self.classifier33(outputs1['predictions'])
         log_probs4 = self.classifier44(x1)
 
-        # Fusion prediction
+        # 融合预测
         x2 = outputs['predictions'] + outputs1['predictions']
         log_probs5 = self.classifier55(x2)
 
         if not is_train:
             log_probs1 = log_probs5
 
-        # Convert lengths to tensor (list of ints -> Tensor shape (B,))
+        # 将长度转换为张量（整数列表 -> 张量形状 (B,)）
         # 确保长度列表不为空且值都为正数
         safe_lgt = [max(1, int(l)) for l in lgt] if lgt else [1] * int(batch)
         lgt_tensor = Tensor(np.array(safe_lgt, dtype=np.int32))
@@ -186,7 +186,7 @@ class TFNetModel(nn.Cell):
         return log_probs1, log_probs2, log_probs3, log_probs4, log_probs5, lgt_tensor, None, None, None
 
 class SeqKD(nn.Cell):
-    """Sequence Knowledge Distillation loss"""
+    """序列知识蒸馏损失"""
     def __init__(self, T=8):
         super(SeqKD, self).__init__()
         self.T = T
@@ -195,12 +195,12 @@ class SeqKD(nn.Cell):
         self.softmax = nn.Softmax(axis=-1)
 
     def construct(self, logits_student, logits_teacher, use_blank=False):
-        """Compute KL divergence loss between student and teacher"""
-        # Apply temperature scaling
+        """计算学生与教师之间的KL散度损失"""
+        # 应用温度缩放
         student_log_probs = self.log_softmax(logits_student / self.T)
         teacher_probs = self.softmax(logits_teacher / self.T)
         
-        # Compute KL divergence
+        # 计算KL散度
         loss = self.kl_div(student_log_probs, teacher_probs) * (self.T ** 2)
         
         return loss

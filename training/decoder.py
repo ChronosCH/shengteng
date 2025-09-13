@@ -102,7 +102,7 @@ class WERCalculator:
     
     @staticmethod
     def _wer_single(ref, hyp):
-        """Calculate WER for a single reference-hypothesis pair"""
+        """计算单个参考-假设对的词错误率"""
         if isinstance(ref, str):
             ref = ref.strip().split()
         if isinstance(hyp, str):
@@ -130,7 +130,7 @@ class WERCalculator:
     
     @staticmethod
     def _edit_distance(ref, hyp):
-        """Calculate edit distance matrix"""
+        """计算编辑距离矩阵"""
         WER_COST_DEL = 1
         WER_COST_INS = 1
         WER_COST_SUB = 1
@@ -158,7 +158,7 @@ class WERCalculator:
     
     @staticmethod
     def _get_alignment(ref, hyp, d):
-        """Get alignment between reference and hypothesis"""
+        """获取参考与假设之间的对齐关系"""
         WER_COST_DEL = 1
         WER_COST_INS = 1
         WER_COST_SUB = 1
@@ -192,22 +192,22 @@ class WERCalculator:
         return alignlist[::-1], None
 
 def calculate_wer_score(prediction_result, target_data, idx2word, batch_size):
-    """Calculate WER score for batch predictions"""
+    """计算批量预测的WER得分"""
     hypotheses = []
     references = []
     
     for i in range(batch_size):
-        # Convert indices to words
+        # 将索引转换为词
         pred_words = [idx2word[j] for j in prediction_result[i] if j < len(idx2word)]
         target_words = [idx2word[j] for j in target_data[i] if j < len(idx2word)]
         
-        # Join words with spaces
+        # 用空格连接词
         hypothesis = ' '.join(pred_words)
         reference = ' '.join(target_words)
         
         hypotheses.append(hypothesis)
         references.append(reference)
     
-    # Calculate WER
+    # 计算WER
     wer_result = WERCalculator.calculate_wer(references, hypotheses)
     return wer_result["wer"]

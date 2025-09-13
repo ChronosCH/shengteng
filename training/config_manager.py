@@ -100,7 +100,7 @@ class ConfigManager:
         }
     
     def load_config(self, config_path: str):
-        """Load configuration from JSON file"""
+        """从JSON文件加载配置"""
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 loaded_config = json.load(f)
@@ -114,7 +114,7 @@ class ConfigManager:
             print("Using default configuration")
     
     def save_config(self, config_path: str):
-        """Save current configuration to JSON file"""
+        """将当前配置保存到JSON文件"""
         try:
             os.makedirs(os.path.dirname(config_path), exist_ok=True)
             with open(config_path, 'w', encoding='utf-8') as f:
@@ -124,7 +124,7 @@ class ConfigManager:
             print(f"Error saving config to {config_path}: {e}")
     
     def _merge_config(self, default_config: Dict, loaded_config: Dict):
-        """Recursively merge loaded config with default config"""
+        """递归合并加载的配置与默认配置"""
         for key, value in loaded_config.items():
             if key in default_config:
                 if isinstance(value, dict) and isinstance(default_config[key], dict):
@@ -135,7 +135,7 @@ class ConfigManager:
                 default_config[key] = value
     
     def get(self, key_path: str, default=None):
-        """Get configuration value using dot notation (e.g., 'model.hidden_size')"""
+        """使用点号记法获取配置值 (例如 'model.hidden_size')"""
         keys = key_path.split('.')
         value = self.config
         
@@ -147,7 +147,7 @@ class ConfigManager:
             return default
     
     def set(self, key_path: str, value):
-        """Set configuration value using dot notation"""
+        """使用点号记法设置配置值"""
         keys = key_path.split('.')
         config = self.config
         
@@ -161,7 +161,7 @@ class ConfigManager:
         config[keys[-1]] = value
     
     def update_paths_for_dataset(self, dataset_name: str):
-        """Update paths based on dataset name"""
+        """根据数据集名称更新路径"""
         if dataset_name == "CE-CSL":
             self.set("dataset.train_data_path", "data/CE-CSL/video/train")
             self.set("dataset.valid_data_path", "data/CE-CSL/video/dev")
@@ -173,7 +173,7 @@ class ConfigManager:
         self.set("dataset.name", dataset_name)
     
     def create_directories(self):
-        """Create necessary directories with improved error handling"""
+        """创建必要的目录，改进错误处理"""
         dirs_to_create = [
             self.get("paths.checkpoint_dir"),
             self.get("paths.log_dir"),
@@ -205,7 +205,7 @@ class ConfigManager:
         return True
 
     def ensure_directory_exists(self, dir_path):
-        """Ensure a single directory exists, create if necessary"""
+        """确保单个目录存在，必要时创建"""
         if not dir_path:
             return False
 
@@ -218,24 +218,24 @@ class ConfigManager:
             return False
 
     def get_safe_path(self, key_path, create_if_missing=True):
-        """Get path and optionally create directory if it doesn't exist"""
+        """获取路径并可选择在目录不存在时创建"""
         path = self.get(key_path)
         if path and create_if_missing:
-            # If it's a file path, create parent directory
+            # 如果是文件路径，创建父目录
             if key_path.endswith('_path') and not key_path.endswith('_dir'):
                 parent_dir = os.path.dirname(path)
                 if parent_dir:
                     self.ensure_directory_exists(parent_dir)
-            # If it's a directory path, create the directory
+            # 如果是目录路径，创建目录
             elif key_path.endswith('_dir'):
                 self.ensure_directory_exists(path)
         return path
     
     def validate_config(self) -> bool:
-        """Validate configuration parameters"""
+        """验证配置参数"""
         errors = []
         
-        # Check required paths
+        # 检查必需的路径
         required_paths = [
             "dataset.train_data_path",
             "dataset.train_label_path"
@@ -246,7 +246,7 @@ class ConfigManager:
             if not path or not os.path.exists(path):
                 errors.append(f"Required path not found: {path_key} = {path}")
         
-        # Check numeric parameters
+        # 检查数值参数
         if self.get("training.batch_size", 0) <= 0:
             errors.append("batch_size must be positive")
         
@@ -266,12 +266,12 @@ class ConfigManager:
         return True
     
     def print_config(self):
-        """Print current configuration"""
+        """打印当前配置"""
         print("Current Configuration:")
         print(json.dumps(self.config, indent=2, ensure_ascii=False))
     
     def get_training_config(self) -> Dict[str, Any]:
-        """Get training-specific configuration"""
+        """获取训练相关配置"""
         return {
             "batch_size": self.get("training.batch_size"),
             "learning_rate": self.get("training.learning_rate"),
@@ -282,7 +282,7 @@ class ConfigManager:
         }
     
     def get_model_config(self) -> Dict[str, Any]:
-        """Get model-specific configuration"""
+        """获取模型相关配置"""
         return {
             "hidden_size": self.get("model.hidden_size"),
             "device_target": self.get("model.device_target"),
@@ -290,7 +290,7 @@ class ConfigManager:
         }
     
     def get_dataset_config(self) -> Dict[str, Any]:
-        """Get dataset-specific configuration"""
+        """获取数据集相关配置"""
         return {
             "name": self.get("dataset.name"),
             "train_data_path": self.get("dataset.train_data_path"),
