@@ -84,8 +84,8 @@ class Settings(BaseSettings):
     MEDIAPIPE_MAX_NUM_HANDS: int = Field(default=2, ge=1, le=4)
     
     # CSLR模型设置 - 更新为新训练的模型
-    CSLR_MODEL_PATH: str = "training/output/enhanced_cecsl_final_model.ckpt"
-    CSLR_VOCAB_PATH: str = "training/output/enhanced_vocab.json"  # 使用训练输出的词表
+    CSLR_MODEL_PATH: str = r"D:\shengteng\models\best_model.ckpt"
+    CSLR_VOCAB_PATH: str = "backend/models/vocab.json"  # 新词汇表路径
     CSLR_CONFIDENCE_THRESHOLD: float = Field(default=0.6, ge=0.1, le=1.0)
     CSLR_MAX_SEQUENCE_LENGTH: int = Field(default=100, ge=10, le=500)
     CSLR_ENABLE_CACHE: bool = True
@@ -119,6 +119,9 @@ class Settings(BaseSettings):
     INFERENCE_BATCH_SIZE: int = Field(default=1, ge=1, le=32)
     REQUEST_TIMEOUT: float = Field(default=30.0, ge=5.0, le=300.0)
     WEBSOCKET_PING_INTERVAL: int = Field(default=20, ge=5, le=60)
+
+    # 帧模型开关（默认关闭，使用 MediaPipe+CSLR）
+    USE_FRAME_MODEL: bool = False
     
     # 缓存设置
     CACHE_DEFAULT_TTL: int = Field(default=3600, ge=60, le=86400)  # 1小时

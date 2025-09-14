@@ -19,16 +19,19 @@ from typing import List, Dict, Optional, Any, Tuple
 import numpy as np
 
 from utils.logger import setup_logger
+from utils.config import get_settings
 
 # 新增：引入 MindSpore 与训练模型定义（用于帧模型推理）
 try:
     import mindspore as ms
     from mindspore import Tensor
     from mindspore import load_checkpoint, load_param_into_net
-    from training.enhanced_cecsl_trainer import EnhancedCECSLConfig, ImprovedCECSLModel
+    from training.tfnet_model import TFNetModel
+    from training.config_manager import ConfigManager
     MS_AVAILABLE = True
-except Exception:
+except Exception as e:
     MS_AVAILABLE = False
+    print(f"MindSpore 或训练模块导入失败: {e}")
 
 logger = setup_logger(__name__)
 
@@ -97,11 +100,20 @@ class SignRecognitionService:
         self.gloss_dict = self._load_or_create_gloss_dict()
 
         # 新增：帧模型推理相关
-        self.use_frame_model = True  # 离线识别改为使用帧模型
+        # 只有在MindSpore可用时才启用帧模型
+        # 由配置控制是否启用帧模型（默认False，回退到 MediaPipe+CSLR）
+        try:
+            settings = get_settings()
+            self.use_frame_model = MS_AVAILABLE and bool(getattr(settings, 'USE_FRAME_MODEL', False))
+        except Exception:
+            self.use_frame_model = False
         self.frame_image_size = (112, 112)
         self.frame_seq_len = 64
         if self.use_frame_model:
             self.window_length = self.frame_seq_len  # 统一窗口长度
+            logger.info("✅ MindSpore 可用，将使用帧模型推理")
+        else:
+            logger.warning("⚠️ MindSpore 不可用，将使用 MediaPipe + CSLR 备用方案")
         self.frame_model = None
         self.frame_model_ready = False
 
@@ -138,105 +150,108 @@ class SignRecognitionService:
 
     async def _run_pipeline(self, task_id: str, file_path: str) -> RecognitionResult:
         # 离线识别：如启用帧模型，直接用训练网络对原始帧滑窗分类
-        if self.use_frame_model:
-            if not MS_AVAILABLE:
-                raise RuntimeError("MindSpore 不可用，无法使用帧模型推理")
+        if self.use_frame_model and MS_AVAILABLE:
+            logger.info("使用 MindSpore 帧模型进行推理")
             await self._ensure_frame_model_loaded()
+            return await self._run_frame_model_pipeline(task_id, file_path)
+        else:
+            logger.info("使用 MediaPipe + CSLR 备用方案进行推理")
+            return await self._run_mediapipe_pipeline(task_id, file_path)
 
-            cap = cv2.VideoCapture(file_path)
-            if not cap.isOpened():
-                raise RuntimeError("无法打开视频文件")
+    async def _run_frame_model_pipeline(self, task_id: str, file_path: str) -> RecognitionResult:
+        """使用 MindSpore 帧模型的推理流程"""
+        cap = cv2.VideoCapture(file_path)
+        if not cap.isOpened():
+            raise RuntimeError("无法打开视频文件")
 
-            fps = cap.get(cv2.CAP_PROP_FPS) or 25
-            frame_interval = int(max(1, round(fps / self.target_fps)))
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS) or 25
+        frame_interval = int(max(1, round(fps / self.target_fps)))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-            # 读取并预处理为 (T,F) 序列
-            frames_flat: List[np.ndarray] = []
-            frame_indices: List[int] = []
-            fid = 0
-            processed = 0
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                if fid % frame_interval == 0:
-                    flat = self._preprocess_frame_to_flat(frame)
-                    frames_flat.append(flat)
-                    frame_indices.append(fid)
-                    processed += 1
-                    if processed % 50 == 0:
-                        await self._update_task(task_id, progress=min(0.8, 0.1 + 0.6 * processed / max(1, total_frames)))
-                fid += 1
-            cap.release()
+        # 读取并预处理为 (T,F) 序列
+        frames_flat: List[np.ndarray] = []
+        frame_indices: List[int] = []
+        fid = 0
+        processed = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            if fid % frame_interval == 0:
+                flat = self._preprocess_frame_to_flat(frame)
+                frames_flat.append(flat)
+                frame_indices.append(fid)
+                processed += 1
+                if processed % 50 == 0:
+                    await self._update_task(task_id, progress=min(0.8, 0.1 + 0.6 * processed / max(1, total_frames)))
+            fid += 1
+        cap.release()
 
-            if not frames_flat:
-                raise RuntimeError("未获取到有效帧")
+        if not frames_flat:
+            raise RuntimeError("未获取到有效帧")
 
-            # 按窗口滑动并分类
-            win = self.window_length
-            step = int(win * (1 - self.window_overlap)) or 1
-            T = len(frames_flat)
-            idx = 0
+        # 按窗口滑动并分类
+        win = self.window_length
+        step = int(win * (1 - self.window_overlap)) or 1
+        T = len(frames_flat)
+        idx = 0
 
-            segments: List[RecognitionSegment] = []
-            gloss_full: List[str] = []
-            confidences: List[float] = []
+        segments: List[RecognitionSegment] = []
+        gloss_full: List[str] = []
+        confidences: List[float] = []
 
-            while idx < T:
-                window_frames = frames_flat[idx: idx + win]
-                if len(window_frames) < win:
-                    # 末尾不足则零填充
-                    pad = [np.zeros_like(window_frames[0])] * (win - len(window_frames))
-                    window_frames = window_frames + pad
-                x = np.stack(window_frames, axis=0).astype(np.float32)  # (T,F)
-                pred_label, prob = await self._predict_window_frames(x)
+        while idx < T:
+            window_frames = frames_flat[idx: idx + win]
+            if len(window_frames) < win:
+                # 末尾不足则零填充
+                pad = [np.zeros_like(window_frames[0])] * (win - len(window_frames))
+                window_frames = window_frames + pad
+            x = np.stack(window_frames, axis=0).astype(np.float32)  # (T,C,H,W)
+            pred_label, prob = await self._predict_window_frames(x)
 
-                if pred_label:
-                    start_f = frame_indices[idx] if idx < len(frame_indices) else 0
-                    end_f = frame_indices[min(idx + win - 1, len(frame_indices) - 1)] if frame_indices else start_f
-                    segments.append(RecognitionSegment(
-                        gloss_sequence=[pred_label],
-                        start_frame=start_f,
-                        end_frame=end_f,
-                        confidence=float(prob),
-                    ))
-                    gloss_full.append(pred_label)
-                    confidences.append(float(prob))
+            # 忽略空白或仅空格的标签
+            if pred_label and str(pred_label).strip():
+                start_f = frame_indices[idx] if idx < len(frame_indices) else 0
+                end_f = frame_indices[min(idx + win - 1, len(frame_indices) - 1)] if frame_indices else start_f
+                segments.append(RecognitionSegment(
+                    gloss_sequence=[pred_label],
+                    start_frame=start_f,
+                    end_frame=end_f,
+                    confidence=float(prob),
+                ))
+                gloss_full.append(pred_label)
+                confidences.append(float(prob))
 
-                idx += step
-                await self._update_task(task_id, progress=min(0.9, 0.8 + 0.1 * idx / max(1, T)))
+            idx += step
+            await self._update_task(task_id, progress=min(0.9, 0.8 + 0.1 * idx / max(1, T)))
 
-            # 时间戳
-            for seg in segments:
-                seg.start_time = seg.start_frame / fps if fps > 0 else 0.0
-                seg.end_time = seg.end_frame / fps if fps > 0 else seg.start_time
+        # 时间戳
+        for seg in segments:
+            seg.start_time = seg.start_frame / fps if fps > 0 else 0.0
+            seg.end_time = seg.end_frame / fps if fps > 0 else seg.start_time
 
-            # 合并相邻重复
-            merged_gloss: List[str] = []
-            for g in gloss_full:
-                if not merged_gloss or merged_gloss[-1] != g:
-                    merged_gloss.append(g)
+        # 合并相邻重复
+        merged_gloss: List[str] = []
+        for g in gloss_full:
+            if not merged_gloss or merged_gloss[-1] != g:
+                merged_gloss.append(g)
 
-            text = self._translate_gloss_to_text(merged_gloss)
-            overall_conf = float(np.mean(confidences)) if confidences else 0.0
-            srt_path = self._generate_srt(task_id, segments, text)
+        text = self._translate_gloss_to_text(merged_gloss)
+        overall_conf = float(np.mean(confidences)) if confidences else 0.0
+        srt_path = self._generate_srt(task_id, segments, text)
 
-            return RecognitionResult(
-                task_id=task_id,
-                file_path=file_path,
-                gloss_sequence=merged_gloss,
-                text=text,
-                segments=segments,
-                overall_confidence=overall_conf,
-                frame_count=fid,
-                fps=fps,
-                duration=fid / fps if fps > 0 else 0.0,
-                srt_path=srt_path,
-            )
-
-        # 改进的 MediaPipe 流程
-        return await self._run_mediapipe_pipeline(task_id, file_path)
+        return RecognitionResult(
+            task_id=task_id,
+            file_path=file_path,
+            gloss_sequence=merged_gloss,
+            text=text,
+            segments=segments,
+            overall_confidence=overall_conf,
+            frame_count=fid,
+            fps=fps,
+            duration=fid / fps if fps > 0 else 0.0,
+            srt_path=srt_path,
+        )
 
     async def _run_mediapipe_pipeline(self, task_id: str, file_path: str) -> RecognitionResult:
         """使用MediaPipe + CSLR的视频识别流程"""
@@ -494,11 +509,22 @@ class SignRecognitionService:
         # 复用 CSLR 的词表作为 idx 映射
         vocab_size = len(getattr(self.cslr_service, 'vocab', {}) or {})
         if vocab_size <= 0:
-            raise RuntimeError("词表未加载或为空")
-        cfg = EnhancedCECSLConfig()
-        cfg.vocab_size = vocab_size
-        cfg.image_size = self.frame_image_size
-        cfg.max_sequence_length = self.frame_seq_len
+            try:
+                if hasattr(self.cslr_service, 'load_model'):
+                    await self.cslr_service.load_model()
+                elif hasattr(self.cslr_service, '_load_vocabulary'):
+                    await self.cslr_service._load_vocabulary()  # type: ignore[attr-defined]
+            except Exception as e:
+                raise RuntimeError(f"词表加载失败: {e}")
+            vocab_size = len(getattr(self.cslr_service, 'vocab', {}) or {})
+            if vocab_size <= 0:
+                raise RuntimeError("词表未加载或为空")
+        
+        # 创建配置管理器并获取配置
+        config_manager = ConfigManager()
+        config = config_manager.config
+        hidden_size = config.get('model', {}).get('hidden_size', 1024)
+        
         try:
             # 设备设置（尽量兼容）
             if hasattr(ms, 'set_device'):
@@ -511,11 +537,21 @@ class SignRecognitionService:
         except Exception:
             pass
         # 构建网络并加载 ckpt
-        self.frame_model = ImprovedCECSLModel(cfg, vocab_size)
+        self.frame_model = TFNetModel(hidden_size=hidden_size, word_set_num=vocab_size, device_target="CPU")
         ckpt_path = getattr(self.cslr_service.config, 'model_path', None)
         if not ckpt_path or not os.path.exists(ckpt_path):
             raise RuntimeError(f"模型权重不存在: {ckpt_path}")
         params = load_checkpoint(ckpt_path)
+        # 尝试从权重中推断 hidden_size，必要时重建网络以避免维度不匹配
+        try:
+            w = params.get('conv1d.temporal_conv.0.weight')
+            if w is not None and hasattr(w, 'data') and hasattr(w.data, 'shape'):
+                inferred_hidden = int(w.data.shape[0])
+                if inferred_hidden > 0 and inferred_hidden != hidden_size:
+                    hidden_size = inferred_hidden
+                    self.frame_model = TFNetModel(hidden_size=hidden_size, word_set_num=vocab_size, device_target="CPU")
+        except Exception:
+            pass
         # 统计匹配度
         try:
             net_params = {p.name: p for p in self.frame_model.get_parameters()}
@@ -556,23 +592,39 @@ class SignRecognitionService:
          img = img.astype(np.float32)
          if img.max() > 1.0:
              img = img / 255.0
-         # (H,W,C) -> (C,H,W) -> flatten
+         # (H,W,C) -> (C,H,W)
          chw = np.transpose(img, (2, 0, 1))
-         flat = chw.reshape(-1)
-         return flat
+         return chw
 
     async def _predict_window_frames(self, x_tf: np.ndarray) -> Tuple[str, float]:
-         # x_tf: (T,F) -> (1,T,F)
+         # x_tf: (T,C,H,W) -> (1,T,C,H,W)
          if not self.frame_model_ready:
              await self._ensure_frame_model_loaded()
          x = x_tf[None, ...]
-         logits = self.frame_model(Tensor(x, ms.float32))  # (1, vocab)
-         probs = logits.asnumpy().astype(np.float64)
-         # softmax
-         probs = np.exp(probs - probs.max(axis=-1, keepdims=True))
-         probs = probs / np.sum(probs, axis=-1, keepdims=True)
-         idx = int(np.argmax(probs[0]))
-         conf = float(probs[0, idx])
+         out = self.frame_model(Tensor(x, ms.float32))
+         # 兼容返回元组的模型输出，取融合分类头 logits（index 4），否则取第一个
+         if isinstance(out, (tuple, list)):
+             logits = out[4] if len(out) > 4 else out[0]
+         else:
+             logits = out
+         arr = logits.asnumpy()
+         # 统一为 (classes,) 概率向量：对时间/批次维做平均
+         if arr.ndim == 3:  # (T, B, C)
+             vec = arr.mean(axis=(0, 1))
+         elif arr.ndim == 2:  # (B, C)
+             vec = arr.mean(axis=0)
+         elif arr.ndim == 1:  # (C,)
+             vec = arr
+         else:
+             # 回退：展平到 (C,)
+             vec = arr.reshape(-1)
+         vec = vec.astype(np.float64)
+         # softmax 归一化
+         vec = np.exp(vec - np.max(vec))
+         denom = float(np.sum(vec)) if float(np.sum(vec)) > 0 else 1.0
+         probs = vec / denom
+         idx = int(np.argmax(probs))
+         conf = float(probs[idx])
          # idx->词：优先使用 idx2word，回退 reverse_vocab
          idx2word = getattr(self.cslr_service, 'idx2word', None)
          if isinstance(idx2word, list) and idx < len(idx2word):

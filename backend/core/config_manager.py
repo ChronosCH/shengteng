@@ -39,8 +39,8 @@ class RedisConfig:
 @dataclass
 class CSLRConfig:
     """CSLR服务配置"""
-    model_path: str = "models/cslr_model.ckpt"
-    vocab_path: str = "data/vocab.json"
+    model_path: str = r"D:\shengteng\models\best_model.ckpt"
+    vocab_path: str = r"D:\shengteng\training\output_gpu\vocabulary.json"
     confidence_threshold: float = 0.5
     max_sequence_length: int = 100
     batch_size: int = 1

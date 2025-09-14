@@ -266,8 +266,11 @@ class UpdateCSLRConfig(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """根路径 - 返回系统状态页面"""
-    learning_status = "✅ 可用" if LEARNING_AVAILABLE and learning_service else "❌ 不可用"
-    recognition_status = "✅ 可用" if SIGN_RECOGNITION_AVAILABLE and sign_recognition_service else "❌ 不可用"
+    learning_svc = getattr(app.state, "learning_service", None)
+    recognition_svc = getattr(app.state, "sign_recognition_service", None)
+    
+    learning_status = "✅ 可用" if LEARNING_AVAILABLE and learning_svc else "❌ 不可用"
+    recognition_status = "✅ 可用" if SIGN_RECOGNITION_AVAILABLE and recognition_svc else "❌ 不可用"
     
     return f"""
     <html>
@@ -344,9 +347,12 @@ async def root():
 @app.get("/api/health", response_model=HealthResponse)
 async def health_check():
     """健康检查端点"""
+    learning_svc = getattr(app.state, "learning_service", None)
+    recognition_svc = getattr(app.state, "sign_recognition_service", None)
+    
     services_status = {
-        "learning_training": "ready" if LEARNING_AVAILABLE and learning_service else "not_available",
-        "sign_recognition": "ready" if SIGN_RECOGNITION_AVAILABLE and sign_recognition_service else "not_available",
+        "learning_training": "ready" if LEARNING_AVAILABLE and learning_svc else "not_available",
+        "sign_recognition": "ready" if SIGN_RECOGNITION_AVAILABLE and recognition_svc else "not_available",
         "file_manager": "ready",
     }
 
@@ -363,20 +369,23 @@ async def health_check():
 async def api_status():
     """API状态检查"""
     try:
+        learning_svc = getattr(app.state, "learning_service", None)
+        recognition_svc = getattr(app.state, "sign_recognition_service", None)
+        
         status_info = {
             "status": "active",
             "timestamp": time.time(),
             "services": {
-                "learning_training": LEARNING_AVAILABLE and learning_service is not None,
-                "sign_recognition": SIGN_RECOGNITION_AVAILABLE and sign_recognition_service is not None,
+                "learning_training": LEARNING_AVAILABLE and learning_svc is not None,
+                "sign_recognition": SIGN_RECOGNITION_AVAILABLE and recognition_svc is not None,
                 "file_manager": True
             }
         }
         
         # 添加学习服务统计
-        if LEARNING_AVAILABLE and learning_service:
+        if LEARNING_AVAILABLE and learning_svc:
             try:
-                learning_stats = await learning_service.get_system_stats()
+                learning_stats = await learning_svc.get_system_stats()
                 status_info["learning_stats"] = learning_stats
             except Exception as e:
                 logger.warning(f"获取学习统计失败: {e}")
@@ -535,23 +544,34 @@ async def ws_sign_recognition(websocket: WebSocket):
 # 新增：连续手语识别上传与状态查询端点
 @app.post("/api/sign-recognition/upload-video", response_model=VideoUploadResponse)
 async def sign_recognition_upload_video(file: UploadFile = File(...)):
-    if not (SIGN_RECOGNITION_AVAILABLE and sign_recognition_service):
+    # 从 app.state 获取服务实例
+    sign_recognition_svc = getattr(app.state, "sign_recognition_service", None)
+    file_mgr = getattr(app.state, "file_manager", None)
+    
+    if not (SIGN_RECOGNITION_AVAILABLE and sign_recognition_svc):
         raise HTTPException(status_code=503, detail="连续手语识别服务不可用")
-    if not file_manager:
+    if not file_mgr:
         raise HTTPException(status_code=503, detail="文件管理器未初始化")
-    file_info = await file_manager.save_file(file)
+    
+    file_info = await file_mgr.save_file(file)
     if file_info.get("file_type") != "video":
         raise HTTPException(status_code=400, detail="请上传视频文件")
-    task_id = await sign_recognition_service.start_video_recognition(file_info["file_path"])
+    
+    task_id = await sign_recognition_svc.start_video_recognition(file_info["file_path"])
     return VideoUploadResponse(success=True, task_id=task_id, message="上传成功，任务已开始", status="uploaded")
 
 @app.get("/api/sign-recognition/status/{task_id}", response_model=VideoStatusResponse)
 async def sign_recognition_status(task_id: str):
-    if not (SIGN_RECOGNITION_AVAILABLE and sign_recognition_service):
+    # 从 app.state 获取服务实例
+    sign_recognition_svc = getattr(app.state, "sign_recognition_service", None)
+    
+    if not (SIGN_RECOGNITION_AVAILABLE and sign_recognition_svc):
         raise HTTPException(status_code=503, detail="连续手语识别服务不可用")
-    task = await sign_recognition_service.get_task(task_id)
+    
+    task = await sign_recognition_svc.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
+    
     return VideoStatusResponse(
         task_id=task_id,
         status=str(task.get("status", "processing")),

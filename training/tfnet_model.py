@@ -3,7 +3,7 @@ import mindspore.nn as nn
 import mindspore.ops as ops
 from mindspore import Tensor
 import numpy as np
-from modules import Identity, TemporalConv, NormLinear, BiLSTMLayer, ResNet34Backbone
+from training.modules import Identity, TemporalConv, NormLinear, BiLSTMLayer, ResNet34Backbone
 
 class TFNetModel(nn.Cell):
     """基于MindSpore的TFNet模型实现"""

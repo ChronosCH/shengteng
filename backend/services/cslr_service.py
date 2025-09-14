@@ -585,12 +585,11 @@ class CSLRService:
             processed_sequence = []
             final_confidence = 0.0
 
+        # 仅返回 PredictionResult 支持的字段，由外层补充 inference_time/timestamp/status
         return {
             "text": text,
             "confidence": final_confidence,
             "gloss_sequence": processed_sequence,
-            "raw_sequence": gloss_sequence,
-            "sequence_length": len(processed_sequence)
         }
     
     def _apply_language_rules(self, sequence: List[str]) -> List[str]:
@@ -796,3 +795,7 @@ class CSLRService:
         prediction = np.exp(prediction) / np.sum(np.exp(prediction), axis=-1, keepdims=True)
         
         return prediction
+    
+    async def start(self):
+        """服务启动时自动加载模型和词表"""
+        await self.load_model()

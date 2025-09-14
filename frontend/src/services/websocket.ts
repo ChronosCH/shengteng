@@ -46,7 +46,9 @@ export class WebSocketService {
         this.url = envUrl
       } else if (import.meta.env.VITE_WS_BASE_URL) {
         // 使用环境变量配置的WebSocket URL
-        this.url = `${import.meta.env.VITE_WS_BASE_URL}/ws/sign-recognition`
+        this.url =
+          import.meta.env.VITE_WS_URL ||
+          `ws://localhost:8000/ws/sign-recognition`
       } else if (typeof window !== 'undefined') {
         // 浏览器环境，根据当前页面URL动态生成
         const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'

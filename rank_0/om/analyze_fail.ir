@@ -5,29 +5,22 @@
 ----------------------------------------------------
 - Caught exception:
 ----------------------------------------------------
-MatMul inputs should have the same dimension size and equal to 2.
+TupleGetItem evaluator index should be in range[-3, 3), but got 3.
 
 ----------------------------------------------------
 - C++ Call Stack: (For framework developers)
 ----------------------------------------------------
-kins/agent-working-dir/workspace/executor0/mindspore/mindspore/ops/infer/ops_func_impl//matmul.cc:73 mindspore::ops::MatMulFuncImpl::InferShape2D
+kins/agent-working-dir/workspace/executor0/mindspore/mindspore/ops/infer//sequence_getitem.cc:99 mindspore::ops::SequenceGetItemInnerInfer
 
 ----------------------------------------------------
 - The Traceback of Net Construct Code:
 ----------------------------------------------------
-# 0 In file D:\shengteng\training\tfnet_model.py:97~103, 8~34
+# 0 In file D:\shengteng\training\tfnet_model.py:102~118, 8~34
         for i in range(int(batch)):
         ^
-# 1 In file D:\shengteng\training\tfnet_model.py:109~111, 8~42
-        for features in feature_list:
-# 2 In file D:\shengteng\training\tfnet_model.py:147~148, 8~35
-        if not is_train:
-# 3 In file D:\shengteng\training\tfnet_model.py:138, 21~62
-        log_probs1 = self.classifier11(outputs['predictions'])
-                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 4 In file D:\shengteng\training\modules.py:85, 18~51
-        outputs = self.matmul(x, normalized_weight)
-                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 1 In file D:\shengteng\training\tfnet_model.py:80, 8~60
+        batch, temp, channel, height, width = seq_data.shape
+        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # ===============================================================================================
 # The following shows the IR when the function graphs evaluation fails to help locate the problem.
@@ -35,1097 +28,478 @@ kins/agent-working-dir/workspace/executor0/mindspore/mindspore/ops/infer/ops_fun
 # Refer to https://www.mindspore.cn/search?inputValue=analyze_fail.ir to get more instructions.
 # ===============================================================================================
 
-# IR entry: @tfnet_model_TFNetModel_construct_85
+# IR entry: @training_tfnet_model_TFNetModel_construct_24
 # Total subgraphs: 0
 
 # Attrs:
-training: 1
+training: 0
 
-# Total params: 117
+# Total params: 1
 # Params:
 %para1_seq_data: <null>
-%para2_data_len: <null>
-%para3_is_train: <null>
-%para4_conv2d.conv1.weight: <Ref[Tensor[Float32]], (64, 3, 7, 7), ref_key=conv2d.conv1.weight, is_parameter>  :  has_default
-%para5_conv2d.bn1.gamma: <Ref[Tensor[Float32]], (64), ref_key=conv2d.bn1.gamma, is_parameter>  :  has_default
-%para6_conv2d.bn1.beta: <Ref[Tensor[Float32]], (64), ref_key=conv2d.bn1.beta, is_parameter>  :  has_default
-%para7_conv2d.bn1.moving_mean: <Ref[Tensor[Float32]], (64), ref_key=conv2d.bn1.moving_mean, is_parameter>  :  has_default
-%para8_conv2d.bn1.moving_variance: <Ref[Tensor[Float32]], (64), ref_key=conv2d.bn1.moving_variance, is_parameter>  :  has_default
-%para9_conv2d.layer1.0.weight: <Ref[Tensor[Float32]], (64, 64, 3, 3), ref_key=conv2d.layer1.0.weight, is_parameter>  :  has_default
-%para10_conv2d.layer1.1.gamma: <Ref[Tensor[Float32]], (64), ref_key=conv2d.layer1.1.gamma, is_parameter>  :  has_default
-%para11_conv2d.layer1.1.beta: <Ref[Tensor[Float32]], (64), ref_key=conv2d.layer1.1.beta, is_parameter>  :  has_default
-%para12_conv2d.layer1.1.moving_mean: <Ref[Tensor[Float32]], (64), ref_key=conv2d.layer1.1.moving_mean, is_parameter>  :  has_default
-%para13_conv2d.layer1.1.moving_variance: <Ref[Tensor[Float32]], (64), ref_key=conv2d.layer1.1.moving_variance, is_parameter>  :  has_default
-%para14_conv2d.layer1.3.weight: <Ref[Tensor[Float32]], (64, 64, 3, 3), ref_key=conv2d.layer1.3.weight, is_parameter>  :  has_default
-%para15_conv2d.layer1.4.gamma: <Ref[Tensor[Float32]], (64), ref_key=conv2d.layer1.4.gamma, is_parameter>  :  has_default
-%para16_conv2d.layer1.4.beta: <Ref[Tensor[Float32]], (64), ref_key=conv2d.layer1.4.beta, is_parameter>  :  has_default
-%para17_conv2d.layer1.4.moving_mean: <Ref[Tensor[Float32]], (64), ref_key=conv2d.layer1.4.moving_mean, is_parameter>  :  has_default
-%para18_conv2d.layer1.4.moving_variance: <Ref[Tensor[Float32]], (64), ref_key=conv2d.layer1.4.moving_variance, is_parameter>  :  has_default
-%para19_conv2d.layer1.6.weight: <Ref[Tensor[Float32]], (64, 64, 3, 3), ref_key=conv2d.layer1.6.weight, is_parameter>  :  has_default
-%para20_conv2d.layer1.7.gamma: <Ref[Tensor[Float32]], (64), ref_key=conv2d.layer1.7.gamma, is_parameter>  :  has_default
-%para21_conv2d.layer1.7.beta: <Ref[Tensor[Float32]], (64), ref_key=conv2d.layer1.7.beta, is_parameter>  :  has_default
-%para22_conv2d.layer1.7.moving_mean: <Ref[Tensor[Float32]], (64), ref_key=conv2d.layer1.7.moving_mean, is_parameter>  :  has_default
-%para23_conv2d.layer1.7.moving_variance: <Ref[Tensor[Float32]], (64), ref_key=conv2d.layer1.7.moving_variance, is_parameter>  :  has_default
-%para24_conv2d.layer2.0.weight: <Ref[Tensor[Float32]], (128, 64, 3, 3), ref_key=conv2d.layer2.0.weight, is_parameter>  :  has_default
-%para25_conv2d.layer2.1.gamma: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.1.gamma, is_parameter>  :  has_default
-%para26_conv2d.layer2.1.beta: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.1.beta, is_parameter>  :  has_default
-%para27_conv2d.layer2.1.moving_mean: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.1.moving_mean, is_parameter>  :  has_default
-%para28_conv2d.layer2.1.moving_variance: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.1.moving_variance, is_parameter>  :  has_default
-%para29_conv2d.layer2.3.weight: <Ref[Tensor[Float32]], (128, 128, 3, 3), ref_key=conv2d.layer2.3.weight, is_parameter>  :  has_default
-%para30_conv2d.layer2.4.gamma: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.4.gamma, is_parameter>  :  has_default
-%para31_conv2d.layer2.4.beta: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.4.beta, is_parameter>  :  has_default
-%para32_conv2d.layer2.4.moving_mean: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.4.moving_mean, is_parameter>  :  has_default
-%para33_conv2d.layer2.4.moving_variance: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.4.moving_variance, is_parameter>  :  has_default
-%para34_conv2d.layer2.6.weight: <Ref[Tensor[Float32]], (128, 128, 3, 3), ref_key=conv2d.layer2.6.weight, is_parameter>  :  has_default
-%para35_conv2d.layer2.7.gamma: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.7.gamma, is_parameter>  :  has_default
-%para36_conv2d.layer2.7.beta: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.7.beta, is_parameter>  :  has_default
-%para37_conv2d.layer2.7.moving_mean: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.7.moving_mean, is_parameter>  :  has_default
-%para38_conv2d.layer2.7.moving_variance: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.7.moving_variance, is_parameter>  :  has_default
-%para39_conv2d.layer2.9.weight: <Ref[Tensor[Float32]], (128, 128, 3, 3), ref_key=conv2d.layer2.9.weight, is_parameter>  :  has_default
-%para40_conv2d.layer2.10.gamma: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.10.gamma, is_parameter>  :  has_default
-%para41_conv2d.layer2.10.beta: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.10.beta, is_parameter>  :  has_default
-%para42_conv2d.layer2.10.moving_mean: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.10.moving_mean, is_parameter>  :  has_default
-%para43_conv2d.layer2.10.moving_variance: <Ref[Tensor[Float32]], (128), ref_key=conv2d.layer2.10.moving_variance, is_parameter>  :  has_default
-%para44_conv2d.layer3.0.weight: <Ref[Tensor[Float32]], (256, 128, 3, 3), ref_key=conv2d.layer3.0.weight, is_parameter>  :  has_default
-%para45_conv2d.layer3.1.gamma: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.1.gamma, is_parameter>  :  has_default
-%para46_conv2d.layer3.1.beta: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.1.beta, is_parameter>  :  has_default
-%para47_conv2d.layer3.1.moving_mean: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.1.moving_mean, is_parameter>  :  has_default
-%para48_conv2d.layer3.1.moving_variance: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.1.moving_variance, is_parameter>  :  has_default
-%para49_conv2d.layer3.3.weight: <Ref[Tensor[Float32]], (256, 256, 3, 3), ref_key=conv2d.layer3.3.weight, is_parameter>  :  has_default
-%para50_conv2d.layer3.4.gamma: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.4.gamma, is_parameter>  :  has_default
-%para51_conv2d.layer3.4.beta: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.4.beta, is_parameter>  :  has_default
-%para52_conv2d.layer3.4.moving_mean: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.4.moving_mean, is_parameter>  :  has_default
-%para53_conv2d.layer3.4.moving_variance: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.4.moving_variance, is_parameter>  :  has_default
-%para54_conv2d.layer3.6.weight: <Ref[Tensor[Float32]], (256, 256, 3, 3), ref_key=conv2d.layer3.6.weight, is_parameter>  :  has_default
-%para55_conv2d.layer3.7.gamma: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.7.gamma, is_parameter>  :  has_default
-%para56_conv2d.layer3.7.beta: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.7.beta, is_parameter>  :  has_default
-%para57_conv2d.layer3.7.moving_mean: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.7.moving_mean, is_parameter>  :  has_default
-%para58_conv2d.layer3.7.moving_variance: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.7.moving_variance, is_parameter>  :  has_default
-%para59_conv2d.layer3.9.weight: <Ref[Tensor[Float32]], (256, 256, 3, 3), ref_key=conv2d.layer3.9.weight, is_parameter>  :  has_default
-%para60_conv2d.layer3.10.gamma: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.10.gamma, is_parameter>  :  has_default
-%para61_conv2d.layer3.10.beta: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.10.beta, is_parameter>  :  has_default
-%para62_conv2d.layer3.10.moving_mean: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.10.moving_mean, is_parameter>  :  has_default
-%para63_conv2d.layer3.10.moving_variance: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.10.moving_variance, is_parameter>  :  has_default
-%para64_conv2d.layer3.12.weight: <Ref[Tensor[Float32]], (256, 256, 3, 3), ref_key=conv2d.layer3.12.weight, is_parameter>  :  has_default
-%para65_conv2d.layer3.13.gamma: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.13.gamma, is_parameter>  :  has_default
-%para66_conv2d.layer3.13.beta: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.13.beta, is_parameter>  :  has_default
-%para67_conv2d.layer3.13.moving_mean: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.13.moving_mean, is_parameter>  :  has_default
-%para68_conv2d.layer3.13.moving_variance: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.13.moving_variance, is_parameter>  :  has_default
-%para69_conv2d.layer3.15.weight: <Ref[Tensor[Float32]], (256, 256, 3, 3), ref_key=conv2d.layer3.15.weight, is_parameter>  :  has_default
-%para70_conv2d.layer3.16.gamma: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.16.gamma, is_parameter>  :  has_default
-%para71_conv2d.layer3.16.beta: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.16.beta, is_parameter>  :  has_default
-%para72_conv2d.layer3.16.moving_mean: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.16.moving_mean, is_parameter>  :  has_default
-%para73_conv2d.layer3.16.moving_variance: <Ref[Tensor[Float32]], (256), ref_key=conv2d.layer3.16.moving_variance, is_parameter>  :  has_default
-%para74_conv2d.layer4.0.weight: <Ref[Tensor[Float32]], (512, 256, 3, 3), ref_key=conv2d.layer4.0.weight, is_parameter>  :  has_default
-%para75_conv2d.layer4.1.gamma: <Ref[Tensor[Float32]], (512), ref_key=conv2d.layer4.1.gamma, is_parameter>  :  has_default
-%para76_conv2d.layer4.1.beta: <Ref[Tensor[Float32]], (512), ref_key=conv2d.layer4.1.beta, is_parameter>  :  has_default
-%para77_conv2d.layer4.1.moving_mean: <Ref[Tensor[Float32]], (512), ref_key=conv2d.layer4.1.moving_mean, is_parameter>  :  has_default
-%para78_conv2d.layer4.1.moving_variance: <Ref[Tensor[Float32]], (512), ref_key=conv2d.layer4.1.moving_variance, is_parameter>  :  has_default
-%para79_conv2d.layer4.3.weight: <Ref[Tensor[Float32]], (512, 512, 3, 3), ref_key=conv2d.layer4.3.weight, is_parameter>  :  has_default
-%para80_conv2d.layer4.4.gamma: <Ref[Tensor[Float32]], (512), ref_key=conv2d.layer4.4.gamma, is_parameter>  :  has_default
-%para81_conv2d.layer4.4.beta: <Ref[Tensor[Float32]], (512), ref_key=conv2d.layer4.4.beta, is_parameter>  :  has_default
-%para82_conv2d.layer4.4.moving_mean: <Ref[Tensor[Float32]], (512), ref_key=conv2d.layer4.4.moving_mean, is_parameter>  :  has_default
-%para83_conv2d.layer4.4.moving_variance: <Ref[Tensor[Float32]], (512), ref_key=conv2d.layer4.4.moving_variance, is_parameter>  :  has_default
-%para84_conv2d.layer4.6.weight: <Ref[Tensor[Float32]], (512, 512, 3, 3), ref_key=conv2d.layer4.6.weight, is_parameter>  :  has_default
-%para85_conv2d.layer4.7.gamma: <Ref[Tensor[Float32]], (512), ref_key=conv2d.layer4.7.gamma, is_parameter>  :  has_default
-%para86_conv2d.layer4.7.beta: <Ref[Tensor[Float32]], (512), ref_key=conv2d.layer4.7.beta, is_parameter>  :  has_default
-%para87_conv2d.layer4.7.moving_mean: <Ref[Tensor[Float32]], (512), ref_key=conv2d.layer4.7.moving_mean, is_parameter>  :  has_default
-%para88_conv2d.layer4.7.moving_variance: <Ref[Tensor[Float32]], (512), ref_key=conv2d.layer4.7.moving_variance, is_parameter>  :  has_default
-%para89_conv1d.temporal_conv.0.weight: <Ref[Tensor[Float32]], (1024, 512, 1, 5), ref_key=conv1d.temporal_conv.0.weight, is_parameter>  :  has_default
-%para90_conv1d.temporal_conv.0.bias: <Ref[Tensor[Float32]], (1024), ref_key=conv1d.temporal_conv.0.bias, is_parameter>  :  has_default
-%para91_conv1d.temporal_conv.1.gamma: <Ref[Tensor[Float32]], (1024), ref_key=conv1d.temporal_conv.1.gamma, is_parameter>  :  has_default
-%para92_conv1d.temporal_conv.1.beta: <Ref[Tensor[Float32]], (1024), ref_key=conv1d.temporal_conv.1.beta, is_parameter>  :  has_default
-%para93_conv1d.temporal_conv.1.moving_mean: <Ref[Tensor[Float32]], (1024), ref_key=conv1d.temporal_conv.1.moving_mean, is_parameter>  :  has_default
-%para94_conv1d.temporal_conv.1.moving_variance: <Ref[Tensor[Float32]], (1024), ref_key=conv1d.temporal_conv.1.moving_variance, is_parameter>  :  has_default
-%para95_conv1d.temporal_conv.4.weight: <Ref[Tensor[Float32]], (1024, 1024, 1, 5), ref_key=conv1d.temporal_conv.4.weight, is_parameter>  :  has_default
-%para96_conv1d.temporal_conv.4.bias: <Ref[Tensor[Float32]], (1024), ref_key=conv1d.temporal_conv.4.bias, is_parameter>  :  has_default
-%para97_conv1d.temporal_conv.5.gamma: <Ref[Tensor[Float32]], (1024), ref_key=conv1d.temporal_conv.5.gamma, is_parameter>  :  has_default
-%para98_conv1d.temporal_conv.5.beta: <Ref[Tensor[Float32]], (1024), ref_key=conv1d.temporal_conv.5.beta, is_parameter>  :  has_default
-%para99_conv1d.temporal_conv.5.moving_mean: <Ref[Tensor[Float32]], (1024), ref_key=conv1d.temporal_conv.5.moving_mean, is_parameter>  :  has_default
-%para100_conv1d.temporal_conv.5.moving_variance: <Ref[Tensor[Float32]], (1024), ref_key=conv1d.temporal_conv.5.moving_variance, is_parameter>  :  has_default
-%para101_temporal_model.rnn.weight_ih_l0: <Ref[Tensor[Float32]], (4096, 1024), ref_key=temporal_model.rnn.weight_ih_l0, is_parameter>  :  has_default
-%para102_temporal_model.rnn.weight_ih_l0_reverse: <Ref[Tensor[Float32]], (4096, 1024), ref_key=temporal_model.rnn.weight_ih_l0_reverse, is_parameter>  :  has_default
-%para103_temporal_model.rnn.weight_ih_l1: <Ref[Tensor[Float32]], (4096, 2048), ref_key=temporal_model.rnn.weight_ih_l1, is_parameter>  :  has_default
-%para104_temporal_model.rnn.weight_ih_l1_reverse: <Ref[Tensor[Float32]], (4096, 2048), ref_key=temporal_model.rnn.weight_ih_l1_reverse, is_parameter>  :  has_default
-%para105_temporal_model.rnn.weight_hh_l0: <Ref[Tensor[Float32]], (4096, 1024), ref_key=temporal_model.rnn.weight_hh_l0, is_parameter>  :  has_default
-%para106_temporal_model.rnn.weight_hh_l0_reverse: <Ref[Tensor[Float32]], (4096, 1024), ref_key=temporal_model.rnn.weight_hh_l0_reverse, is_parameter>  :  has_default
-%para107_temporal_model.rnn.weight_hh_l1: <Ref[Tensor[Float32]], (4096, 1024), ref_key=temporal_model.rnn.weight_hh_l1, is_parameter>  :  has_default
-%para108_temporal_model.rnn.weight_hh_l1_reverse: <Ref[Tensor[Float32]], (4096, 1024), ref_key=temporal_model.rnn.weight_hh_l1_reverse, is_parameter>  :  has_default
-%para109_temporal_model.rnn.bias_ih_l0: <Ref[Tensor[Float32]], (4096), ref_key=temporal_model.rnn.bias_ih_l0, is_parameter>  :  has_default
-%para110_temporal_model.rnn.bias_ih_l0_reverse: <Ref[Tensor[Float32]], (4096), ref_key=temporal_model.rnn.bias_ih_l0_reverse, is_parameter>  :  has_default
-%para111_temporal_model.rnn.bias_ih_l1: <Ref[Tensor[Float32]], (4096), ref_key=temporal_model.rnn.bias_ih_l1, is_parameter>  :  has_default
-%para112_temporal_model.rnn.bias_ih_l1_reverse: <Ref[Tensor[Float32]], (4096), ref_key=temporal_model.rnn.bias_ih_l1_reverse, is_parameter>  :  has_default
-%para113_temporal_model.rnn.bias_hh_l0: <Ref[Tensor[Float32]], (4096), ref_key=temporal_model.rnn.bias_hh_l0, is_parameter>  :  has_default
-%para114_temporal_model.rnn.bias_hh_l0_reverse: <Ref[Tensor[Float32]], (4096), ref_key=temporal_model.rnn.bias_hh_l0_reverse, is_parameter>  :  has_default
-%para115_temporal_model.rnn.bias_hh_l1: <Ref[Tensor[Float32]], (4096), ref_key=temporal_model.rnn.bias_hh_l1, is_parameter>  :  has_default
-%para116_temporal_model.rnn.bias_hh_l1_reverse: <Ref[Tensor[Float32]], (4096), ref_key=temporal_model.rnn.bias_hh_l1_reverse, is_parameter>  :  has_default
-%para117_classifier22.weight: <Ref[Tensor[Float32]], (1024, 3733), ref_key=classifier22.weight, is_parameter>  :  has_default
 
 subgraph attr:
-training: 1
-subgraph instance: tfnet_model_TFNetModel_construct_85 : 000002E40FB04090
-# In file D:\shengteng\training\tfnet_model.py:71~153, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
-subgraph @tfnet_model_TFNetModel_construct_85() {
-  %0(CNode_99) = resolve(NameSpace[Entry: 'tfnet_model.TFNetModel.construct'], tfnet_model.TFNetModel.construct)
+training: 0
+subgraph instance: training_tfnet_model_TFNetModel_construct_24 : 000001AED5E20E30
+# In file D:\shengteng\training\tfnet_model.py:76~186, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
+subgraph @training_tfnet_model_TFNetModel_construct_24() {
+  %0(CNode_32) = resolve(NameSpace[Entry: 'training.tfnet_model.TFNetModel.construct'], training.tfnet_model.TFNetModel.construct)
       : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
       #scope: (Default)
 
 #------------------------> 0
-  %1(CNode_100) = %0(%para1_seq_data, %para2_len_x, %para3_is_train)
-      : (<Tensor[Float32], (2, 300, 3, 224, 224)>, <List[Int64*2], ListShape[NoShape, NoShape]>, <Bool, NoShape>) -> (<null>)
+  %1(CNode_33) = %0(%para1_seq_data, None, Bool(1))
+      : (<Tensor[Float32], (1, 64, 37632)>, <None, NoShape>, <Bool, NoShape>) -> (<null>)
       #scope: (Default)
   Return(%1)
       : (<null>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:76~84, 8~49/        if len_x is None:/
+      # In file D:\shengteng\training\tfnet_model.py:81~89, 8~49/        if len_x is None:/
 }
 # Order:
-#   1: @tfnet_model_TFNetModel_construct_85:CNode_99{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> Entry: 'tfnet_model.TFNetModel.construct', [2]: ValueNode<Symbol> tfnet_model.TFNetModel.construct}
-#   2: @tfnet_model_TFNetModel_construct_85:CNode_100{[0]: CNode_99, [1]: param_seq_data, [2]: param_len_x, [3]: param_is_train}
-#   3: @tfnet_model_TFNetModel_construct_85:CNode_101{[0]: ValueNode<Primitive> Return, [1]: CNode_100}
+#   1: @training_tfnet_model_TFNetModel_construct_24:CNode_32{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> Entry: 'training.tfnet_model.TFNetModel.construct', [2]: ValueNode<Symbol> training.tfnet_model.TFNetModel.construct}
+#   2: @training_tfnet_model_TFNetModel_construct_24:CNode_33{[0]: CNode_32, [1]: param_seq_data, [2]: ValueNode<None> None, [3]: ValueNode<BoolImm> true}
+#   3: @training_tfnet_model_TFNetModel_construct_24:CNode_34{[0]: ValueNode<Primitive> Return, [1]: CNode_33}
 
 
 subgraph attr:
-training: 1
-subgraph instance: tfnet_model_TFNetModel_construct_86 : 000002E40FB0FDB0
-# In file D:\shengteng\training\tfnet_model.py:71~153, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
-subgraph @tfnet_model_TFNetModel_construct_86(%para0_seq_data, %para0_len_x, %para0_is_train) {
-  %0(CNode_102) = resolve(NameSpace[Ast: 'Namespace:mindspore._extends.parse.trope'], is_)
+training: 0
+subgraph instance: training_tfnet_model_TFNetModel_construct_25 : 000001AED66B38C0
+# In file D:\shengteng\training\tfnet_model.py:76~186, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
+subgraph @training_tfnet_model_TFNetModel_construct_25(%para0_seq_data, %para0_len_x, %para0_is_train) {
+  %0(CNode_35) = resolve(NameSpace[Ast: 'Namespace:mindspore._extends.parse.trope'], is_)
       : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:76, 11~24/        if len_x is None:/
-  %1(CNode_103) = %0(%para0_len_x, None)
-      : (<List[Int64*2], ListShape[NoShape, NoShape]>, <None, NoShape>) -> (<Bool, NoShape>)
+      # In file D:\shengteng\training\tfnet_model.py:81, 11~24/        if len_x is None:/
+  %1(CNode_36) = %0(%para0_len_x, None)
+      : (<None, NoShape>, <None, NoShape>) -> (<Bool, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:76, 11~24/        if len_x is None:/
-  %2(CNode_104) = Cond(%1, Bool(0))
+      # In file D:\shengteng\training\tfnet_model.py:81, 11~24/        if len_x is None:/
+  %2(CNode_37) = Cond(%1, Bool(0))
       : (<Bool, NoShape>, <Bool, NoShape>) -> (<Bool, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:76~84, 8~49/        if len_x is None:/
-  %3(CNode_105) = Switch(%2, @tfnet_model_TFNetModel_construct_106, @tfnet_model_TFNetModel_construct_107)
+      # In file D:\shengteng\training\tfnet_model.py:81~89, 8~49/        if len_x is None:/
+  %3(CNode_38) = Switch(%2, @training_tfnet_model_TFNetModel_construct_39, @training_tfnet_model_TFNetModel_construct_40)
       : (<Bool, NoShape>, <Func, NoShape>, <Func, NoShape>) -> (<Func, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:76~84, 8~49/        if len_x is None:/
-  %4(CNode_108) = %3()
+      # In file D:\shengteng\training\tfnet_model.py:81~89, 8~49/        if len_x is None:/
+  %4(CNode_41) = %3()
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:76~84, 8~49/        if len_x is None:/
+      # In file D:\shengteng\training\tfnet_model.py:81~89, 8~49/        if len_x is None:/
 
 #------------------------> 1
-  %5(CNode_109) = call @tfnet_model_TFNetModel_construct_87(%4)
-      : (<List[Int64*2], ListShape[NoShape, NoShape]>) -> (<null>)
+  %5(CNode_42) = call @training_tfnet_model_TFNetModel_construct_26(%4)
+      : (<List[Int64], ListShape[NoShape]>) -> (<null>)
       #scope: (Default)
   Return(%5)
       : (<null>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:76~84, 8~49/        if len_x is None:/
+      # In file D:\shengteng\training\tfnet_model.py:81~89, 8~49/        if len_x is None:/
 }
 # Order:
-#   1: @tfnet_model_TFNetModel_construct_86:CNode_110{[0]: ValueNode<Primitive> getattr, [1]: param_seq_data, [2]: ValueNode<StringImm> shape}
-#   2: @tfnet_model_TFNetModel_construct_86:CNode_111{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
-#   3: @tfnet_model_TFNetModel_construct_86:batch{[0]: CNode_111, [1]: CNode_110, [2]: ValueNode<Int64Imm> 0}
-#   4: @tfnet_model_TFNetModel_construct_86:temp{[0]: CNode_111, [1]: CNode_110, [2]: ValueNode<Int64Imm> 1}
-#   5: @tfnet_model_TFNetModel_construct_86:channel{[0]: CNode_111, [1]: CNode_110, [2]: ValueNode<Int64Imm> 2}
-#   6: @tfnet_model_TFNetModel_construct_86:height{[0]: CNode_111, [1]: CNode_110, [2]: ValueNode<Int64Imm> 3}
-#   7: @tfnet_model_TFNetModel_construct_86:width{[0]: CNode_111, [1]: CNode_110, [2]: ValueNode<Int64Imm> 4}
-#   8: @tfnet_model_TFNetModel_construct_86:CNode_102{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> Ast: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> is_}
-#   9: @tfnet_model_TFNetModel_construct_86:CNode_103{[0]: CNode_102, [1]: param_len_x, [2]: ValueNode<None> None}
-#  10: @tfnet_model_TFNetModel_construct_86:CNode_104{[0]: ValueNode<Primitive> Cond, [1]: CNode_103, [2]: ValueNode<BoolImm> false}
-#  11: @tfnet_model_TFNetModel_construct_86:CNode_112{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:tfnet_model', [2]: ValueNode<Symbol> int}
-#  12: @tfnet_model_TFNetModel_construct_86:CNode_113{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:tfnet_model', [2]: ValueNode<Symbol> isinstance}
-#  13: @tfnet_model_TFNetModel_construct_86:CNode_114{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:tfnet_model', [2]: ValueNode<Symbol> list}
-#  14: @tfnet_model_TFNetModel_construct_86:CNode_115{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:tfnet_model', [2]: ValueNode<Symbol> tuple}
-#  15: @tfnet_model_TFNetModel_construct_86:CNode_116{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:tfnet_model', [2]: ValueNode<Symbol> np}
-#  16: @tfnet_model_TFNetModel_construct_86:CNode_105{[0]: ValueNode<Primitive> Switch, [1]: CNode_104, [2]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_106, [3]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_107}
-#  17: @tfnet_model_TFNetModel_construct_86:CNode_108{[0]: CNode_105}
-#  18: @tfnet_model_TFNetModel_construct_86:CNode_109{[0]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_87, [1]: CNode_108}
-#  19: @tfnet_model_TFNetModel_construct_86:CNode_117{[0]: ValueNode<Primitive> Return, [1]: CNode_109}
-#  20: @tfnet_model_TFNetModel_construct_86:CNode_118{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:tfnet_model', [2]: ValueNode<Symbol> len}
-#  21: @tfnet_model_TFNetModel_construct_86:CNode_119{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:tfnet_model', [2]: ValueNode<Symbol> range}
-#  22: @tfnet_model_TFNetModel_construct_86:CNode_120{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:tfnet_model', [2]: ValueNode<Symbol> min}
-#  23: @tfnet_model_TFNetModel_construct_86:CNode_121{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:tfnet_model', [2]: ValueNode<Symbol> max}
-#  24: @tfnet_model_TFNetModel_construct_86:CNode_122{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> pad_sequence}
-#  25: @tfnet_model_TFNetModel_construct_86:CNode_123{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:tfnet_model', [2]: ValueNode<Symbol> ops}
-#  26: @tfnet_model_TFNetModel_construct_86:CNode_124{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:tfnet_model', [2]: ValueNode<Symbol> ms}
+#   1: @training_tfnet_model_TFNetModel_construct_25:CNode_43{[0]: ValueNode<Primitive> getattr, [1]: param_seq_data, [2]: ValueNode<StringImm> shape}
+#   2: @training_tfnet_model_TFNetModel_construct_25:CNode_44{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
+#   3: @training_tfnet_model_TFNetModel_construct_25:batch{[0]: CNode_44, [1]: CNode_43, [2]: ValueNode<Int64Imm> 0}
+#   4: @training_tfnet_model_TFNetModel_construct_25:temp{[0]: CNode_44, [1]: CNode_43, [2]: ValueNode<Int64Imm> 1}
+#   5: @training_tfnet_model_TFNetModel_construct_25:channel{[0]: CNode_44, [1]: CNode_43, [2]: ValueNode<Int64Imm> 2}
+#   6: @training_tfnet_model_TFNetModel_construct_25:height{[0]: CNode_44, [1]: CNode_43, [2]: ValueNode<Int64Imm> 3}
+#   7: @training_tfnet_model_TFNetModel_construct_25:width{[0]: CNode_44, [1]: CNode_43, [2]: ValueNode<Int64Imm> 4}
+#   8: @training_tfnet_model_TFNetModel_construct_25:CNode_35{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> Ast: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> is_}
+#   9: @training_tfnet_model_TFNetModel_construct_25:CNode_36{[0]: CNode_35, [1]: param_len_x, [2]: ValueNode<None> None}
+#  10: @training_tfnet_model_TFNetModel_construct_25:CNode_37{[0]: ValueNode<Primitive> Cond, [1]: CNode_36, [2]: ValueNode<BoolImm> false}
+#  11: @training_tfnet_model_TFNetModel_construct_25:CNode_45{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:training.tfnet_model', [2]: ValueNode<Symbol> int}
+#  12: @training_tfnet_model_TFNetModel_construct_25:CNode_46{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:training.tfnet_model', [2]: ValueNode<Symbol> isinstance}
+#  13: @training_tfnet_model_TFNetModel_construct_25:CNode_47{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:training.tfnet_model', [2]: ValueNode<Symbol> list}
+#  14: @training_tfnet_model_TFNetModel_construct_25:CNode_48{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:training.tfnet_model', [2]: ValueNode<Symbol> tuple}
+#  15: @training_tfnet_model_TFNetModel_construct_25:CNode_49{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:training.tfnet_model', [2]: ValueNode<Symbol> np}
+#  16: @training_tfnet_model_TFNetModel_construct_25:CNode_38{[0]: ValueNode<Primitive> Switch, [1]: CNode_37, [2]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_39, [3]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_40}
+#  17: @training_tfnet_model_TFNetModel_construct_25:CNode_41{[0]: CNode_38}
+#  18: @training_tfnet_model_TFNetModel_construct_25:CNode_42{[0]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_26, [1]: CNode_41}
+#  19: @training_tfnet_model_TFNetModel_construct_25:CNode_50{[0]: ValueNode<Primitive> Return, [1]: CNode_42}
+#  20: @training_tfnet_model_TFNetModel_construct_25:CNode_51{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:training.tfnet_model', [2]: ValueNode<Symbol> len}
+#  21: @training_tfnet_model_TFNetModel_construct_25:CNode_52{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:training.tfnet_model', [2]: ValueNode<Symbol> range}
+#  22: @training_tfnet_model_TFNetModel_construct_25:CNode_53{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:training.tfnet_model', [2]: ValueNode<Symbol> min}
+#  23: @training_tfnet_model_TFNetModel_construct_25:CNode_54{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:training.tfnet_model', [2]: ValueNode<Symbol> ops}
+#  24: @training_tfnet_model_TFNetModel_construct_25:CNode_55{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:training.tfnet_model', [2]: ValueNode<Symbol> max}
+#  25: @training_tfnet_model_TFNetModel_construct_25:CNode_56{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:training.tfnet_model..<TFNetModel::1850633905424>', [2]: ValueNode<Symbol> pad_sequence}
 
 
 subgraph attr:
-training: 1
+training: 0
 after_block: 1
-subgraph instance: tfnet_model_TFNetModel_construct_87 : 000002E40FB13AE0
-# In file D:\shengteng\training\tfnet_model.py:71~153, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
-subgraph @tfnet_model_TFNetModel_construct_87 parent: [subgraph @tfnet_model_TFNetModel_construct_86](%para0_phi_len_x_list) {
-  %0(CNode_125) = resolve(NameSpace[Ast: 'Namespace:mindspore._extends.parse.trope'], lt)
+subgraph instance: training_tfnet_model_TFNetModel_construct_26 : 000001AED66B3E50
+# In file D:\shengteng\training\tfnet_model.py:76~186, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
+subgraph @training_tfnet_model_TFNetModel_construct_26 parent: [subgraph @training_tfnet_model_TFNetModel_construct_25](%para0_phi_len_x_list) {
+  %0(CNode_57) = resolve(NameSpace[Ast: 'Namespace:mindspore._extends.parse.trope'], lt)
       : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:86, 11~39/        if len(len_x_list) < int(batch):/
-  %1(CNode_118) = resolve(NameSpace[SymbolStr: 'Namespace:tfnet_model'], len)
+      # In file D:\shengteng\training\tfnet_model.py:91, 11~39/        if len(len_x_list) < int(batch):/
+  %1(CNode_51) = resolve(NameSpace[SymbolStr: 'Namespace:training.tfnet_model'], len)
       : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:86, 11~14/        if len(len_x_list) < int(batch):/
-  %2(CNode_126) = %1(%para0_phi_len_x_list)
-      : (<List[Int64*2], ListShape[NoShape, NoShape]>) -> (<Int64, NoShape>)
+      # In file D:\shengteng\training\tfnet_model.py:91, 11~14/        if len(len_x_list) < int(batch):/
+  %2(CNode_58) = %1(%para0_phi_len_x_list)
+      : (<List[Int64], ListShape[NoShape]>) -> (<Int64, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:86, 11~26/        if len(len_x_list) < int(batch):/
-  %3(CNode_112) = resolve(NameSpace[SymbolStr: 'Namespace:tfnet_model'], int)
+      # In file D:\shengteng\training\tfnet_model.py:91, 11~26/        if len(len_x_list) < int(batch):/
+  %3(CNode_45) = resolve(NameSpace[SymbolStr: 'Namespace:training.tfnet_model'], int)
       : (<External, NoShape>, <External, NoShape>) -> (<TypeType, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:77, 26~29/            len_x_list = [int(temp)] * int(batch)/
-  %4(CNode_111) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], getitem)
+      # In file D:\shengteng\training\tfnet_model.py:82, 26~29/            len_x_list = [int(temp)] * int(batch)/
+  %4(CNode_44) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], getitem)
       : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:75, 8~60/        batch, temp, channel, height, width = seq_data.shape/
-  %5(CNode_110) = getattr(%para0_seq_data, "shape")
-      : (<Tensor[Float32], (2, 300, 3, 224, 224)>, <String, NoShape>) -> (<Tuple[Int64*5], TupleShape(NoShape, NoShape, NoShape, NoShape, NoShape)>)
+      # In file D:\shengteng\training\tfnet_model.py:80, 8~60/        batch, temp, channel, height, width = seq_data.shape/
+  %5(CNode_43) = getattr(%para0_seq_data, "shape")
+      : (<Tensor[Float32], (1, 64, 37632)>, <String, NoShape>) -> (<Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:75, 46~60/        batch, temp, channel, height, width = seq_data.shape/
+      # In file D:\shengteng\training\tfnet_model.py:80, 46~60/        batch, temp, channel, height, width = seq_data.shape/
   %6(batch) = %4(%5, I64(0))
-      : (<Tuple[Int64*5], TupleShape(NoShape, NoShape, NoShape, NoShape, NoShape)>, <Int64, NoShape>) -> (<Int64, NoShape>)
+      : (<Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>, <Int64, NoShape>) -> (<Int64, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:75, 8~60/        batch, temp, channel, height, width = seq_data.shape/
-  %7(CNode_127) = %3(%6)
+      # In file D:\shengteng\training\tfnet_model.py:80, 8~60/        batch, temp, channel, height, width = seq_data.shape/
+  %7(CNode_59) = %3(%6)
       : (<Int64, NoShape>) -> (<Int64, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:86, 29~39/        if len(len_x_list) < int(batch):/
-  %8(CNode_128) = %0(%2, %7)
+      # In file D:\shengteng\training\tfnet_model.py:91, 29~39/        if len(len_x_list) < int(batch):/
+  %8(CNode_60) = %0(%2, %7)
       : (<Int64, NoShape>, <Int64, NoShape>) -> (<Bool, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:86, 11~39/        if len(len_x_list) < int(batch):/
-  %9(CNode_129) = Cond(%8, Bool(0))
+      # In file D:\shengteng\training\tfnet_model.py:91, 11~39/        if len(len_x_list) < int(batch):/
+  %9(CNode_61) = Cond(%8, Bool(0))
       : (<Bool, NoShape>, <Bool, NoShape>) -> (<Bool, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:86~89, 8~48/        if len(len_x_list) < int(batch):/
-  %10(CNode_130) = Switch(%9, @tfnet_model_TFNetModel_construct_131, @tfnet_model_TFNetModel_construct_132)
+      # In file D:\shengteng\training\tfnet_model.py:91~94, 8~48/        if len(len_x_list) < int(batch):/
+  %10(CNode_62) = Switch(%9, @training_tfnet_model_TFNetModel_construct_63, @training_tfnet_model_TFNetModel_construct_64)
       : (<Bool, NoShape>, <Func, NoShape>, <Func, NoShape>) -> (<Func, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:86~89, 8~48/        if len(len_x_list) < int(batch):/
-  %11(CNode_133) = %10()
+      # In file D:\shengteng\training\tfnet_model.py:91~94, 8~48/        if len(len_x_list) < int(batch):/
+  %11(CNode_65) = %10()
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:86~89, 8~48/        if len(len_x_list) < int(batch):/
+      # In file D:\shengteng\training\tfnet_model.py:91~94, 8~48/        if len(len_x_list) < int(batch):/
 
 #------------------------> 2
-  %12(CNode_134) = call @tfnet_model_TFNetModel_construct_88(%11)
-      : (<List[Int64*2], ListShape[NoShape, NoShape]>) -> (<null>)
+  %12(CNode_66) = call @training_tfnet_model_TFNetModel_construct_27(%11)
+      : (<List[Int64], ListShape[NoShape]>) -> (<null>)
       #scope: (Default)
   Return(%12)
       : (<null>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:86~89, 8~48/        if len(len_x_list) < int(batch):/
+      # In file D:\shengteng\training\tfnet_model.py:91~94, 8~48/        if len(len_x_list) < int(batch):/
 }
 # Order:
-#   1: @tfnet_model_TFNetModel_construct_135:CNode_136{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#   2: @tfnet_model_TFNetModel_construct_87:CNode_126{[0]: CNode_118, [1]: param_phi_len_x_list}
-#   3: @tfnet_model_TFNetModel_construct_135:CNode_137{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#   4: @tfnet_model_TFNetModel_construct_87:CNode_127{[0]: CNode_112, [1]: batch}
-#   5: @tfnet_model_TFNetModel_construct_87:CNode_125{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> Ast: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> lt}
-#   6: @tfnet_model_TFNetModel_construct_87:CNode_128{[0]: CNode_125, [1]: CNode_126, [2]: CNode_127}
-#   7: @tfnet_model_TFNetModel_construct_87:CNode_129{[0]: ValueNode<Primitive> Cond, [1]: CNode_128, [2]: ValueNode<BoolImm> false}
-#   8: @tfnet_model_TFNetModel_construct_87:CNode_130{[0]: ValueNode<Primitive> Switch, [1]: CNode_129, [2]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_131, [3]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_132}
-#   9: @tfnet_model_TFNetModel_construct_87:CNode_133{[0]: CNode_130}
-#  10: @tfnet_model_TFNetModel_construct_87:CNode_134{[0]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_88, [1]: CNode_133}
-#  11: @tfnet_model_TFNetModel_construct_87:CNode_138{[0]: ValueNode<Primitive> Return, [1]: CNode_134}
+#   1: @training_tfnet_model_TFNetModel_construct_67:CNode_68{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
+#   2: @training_tfnet_model_TFNetModel_construct_26:CNode_58{[0]: CNode_51, [1]: param_phi_len_x_list}
+#   3: @training_tfnet_model_TFNetModel_construct_67:CNode_69{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
+#   4: @training_tfnet_model_TFNetModel_construct_26:CNode_59{[0]: CNode_45, [1]: batch}
+#   5: @training_tfnet_model_TFNetModel_construct_26:CNode_57{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> Ast: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> lt}
+#   6: @training_tfnet_model_TFNetModel_construct_26:CNode_60{[0]: CNode_57, [1]: CNode_58, [2]: CNode_59}
+#   7: @training_tfnet_model_TFNetModel_construct_26:CNode_61{[0]: ValueNode<Primitive> Cond, [1]: CNode_60, [2]: ValueNode<BoolImm> false}
+#   8: @training_tfnet_model_TFNetModel_construct_26:CNode_62{[0]: ValueNode<Primitive> Switch, [1]: CNode_61, [2]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_63, [3]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_64}
+#   9: @training_tfnet_model_TFNetModel_construct_26:CNode_65{[0]: CNode_62}
+#  10: @training_tfnet_model_TFNetModel_construct_26:CNode_66{[0]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_27, [1]: CNode_65}
+#  11: @training_tfnet_model_TFNetModel_construct_26:CNode_70{[0]: ValueNode<Primitive> Return, [1]: CNode_66}
 
 
 subgraph attr:
-training: 1
+training: 0
 after_block: 1
-subgraph instance: tfnet_model_TFNetModel_construct_88 : 000002E435792560
-# In file D:\shengteng\training\tfnet_model.py:71~153, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
-subgraph @tfnet_model_TFNetModel_construct_88 parent: [subgraph @tfnet_model_TFNetModel_construct_86](%para0_phi_len_x_list) {
+subgraph instance: training_tfnet_model_TFNetModel_construct_27 : 000001AED66B6540
+# In file D:\shengteng\training\tfnet_model.py:76~186, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
+subgraph @training_tfnet_model_TFNetModel_construct_27 parent: [subgraph @training_tfnet_model_TFNetModel_construct_25](%para0_phi_len_x_list) {
 
 #------------------------> 3
-  %0(CNode_139) = call @tfnet_model_TFNetModel_construct_89(I64(0), I64(0), [])
+  %0(CNode_71) = call @training_tfnet_model_TFNetModel_construct_28(I64(0), I64(0), [])
       : (<Int64, NoShape>, <Int64, NoShape>, <List[], ListShape[]>) -> (<null>)
       #scope: (Default)
   Return(%0)
       : (<null>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
+      # In file D:\shengteng\training\tfnet_model.py:102~118, 8~34/        for i in range(int(batch)):/
 }
 # Order:
-#   1: @tfnet_model_TFNetModel_construct_88:CNode_140{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> reshape}
-#   2: @tfnet_model_TFNetModel_construct_88:CNode_141{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#   3: @tfnet_model_TFNetModel_construct_88:CNode_142{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> Ast: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> mul}
-#   4: @tfnet_model_TFNetModel_construct_88:CNode_143{[0]: CNode_142, [1]: batch, [2]: temp}
-#   5: @tfnet_model_TFNetModel_construct_88:CNode_144{[0]: CNode_141, [1]: CNode_143, [2]: channel, [3]: height, [4]: width}
-#   6: @tfnet_model_TFNetModel_construct_145:CNode_146{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#   7: @tfnet_model_TFNetModel_construct_88:inputs{[0]: CNode_140, [1]: param_seq_data, [2]: CNode_144}
-#   8: @tfnet_model_TFNetModel_construct_88:CNode_147{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> len}
-#   9: @tfnet_model_TFNetModel_construct_88:CNode_148{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
-#  10: @tfnet_model_TFNetModel_construct_88:CNode_149{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> iter}
-#  11: @tfnet_model_TFNetModel_construct_145:CNode_150{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  12: @tfnet_model_TFNetModel_construct_88:CNode_151{[0]: CNode_112, [1]: batch}
-#  13: @tfnet_model_TFNetModel_construct_145:CNode_152{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  14: @tfnet_model_TFNetModel_construct_88:CNode_153{[0]: CNode_119, [1]: CNode_151}
-#  15: @tfnet_model_TFNetModel_construct_88:CNode_154{[0]: CNode_149, [1]: CNode_153}
-#  16: @tfnet_model_TFNetModel_construct_88:CNode_155{[0]: CNode_147, [1]: CNode_154}
-#  17: @tfnet_model_TFNetModel_construct_145:CNode_156{[0]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_157, [1]: ValueNode<Int64Imm> 0, [2]: CNode_158, [3]: CNode_159, [4]: param_phi_len_x_list, [5]: temp, [6]: ValueNode<Int64Imm> 0, [7]: inputs, [8]: ValueNode<ValueList> [], [9]: CNode_160, [10]: CNode_161, [11]: CNode_162, [12]: param_is_train, [13]: CNode_163}
-#  18: @tfnet_model_TFNetModel_construct_88:CNode_164{[0]: ValueNode<Primitive> Return, [1]: CNode_139}
-#  19: @tfnet_model_TFNetModel_construct_88:CNode_139{[0]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_89, [1]: ValueNode<Int64Imm> 0, [2]: ValueNode<Int64Imm> 0, [3]: ValueNode<ValueList> []}
+#   1: @training_tfnet_model_TFNetModel_construct_27:CNode_72{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:training.tfnet_model..<TFNetModel::1850633905424>', [2]: ValueNode<Symbol> reshape}
+#   2: @training_tfnet_model_TFNetModel_construct_27:CNode_73{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
+#   3: @training_tfnet_model_TFNetModel_construct_27:CNode_74{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> Ast: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> mul}
+#   4: @training_tfnet_model_TFNetModel_construct_27:CNode_75{[0]: CNode_74, [1]: batch, [2]: temp}
+#   5: @training_tfnet_model_TFNetModel_construct_27:CNode_76{[0]: CNode_73, [1]: CNode_75, [2]: channel, [3]: height, [4]: width}
+#   6: @training_tfnet_model_TFNetModel_construct_77:CNode_78{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
+#   7: @training_tfnet_model_TFNetModel_construct_27:inputs{[0]: CNode_72, [1]: param_seq_data, [2]: CNode_76}
+#   8: @training_tfnet_model_TFNetModel_construct_27:CNode_79{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> len}
+#   9: @training_tfnet_model_TFNetModel_construct_27:CNode_80{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
+#  10: @training_tfnet_model_TFNetModel_construct_27:CNode_81{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> iter}
+#  11: @training_tfnet_model_TFNetModel_construct_77:CNode_82{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
+#  12: @training_tfnet_model_TFNetModel_construct_27:CNode_83{[0]: CNode_45, [1]: batch}
+#  13: @training_tfnet_model_TFNetModel_construct_77:CNode_84{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
+#  14: @training_tfnet_model_TFNetModel_construct_27:CNode_85{[0]: CNode_52, [1]: CNode_83}
+#  15: @training_tfnet_model_TFNetModel_construct_27:CNode_86{[0]: CNode_81, [1]: CNode_85}
+#  16: @training_tfnet_model_TFNetModel_construct_27:CNode_87{[0]: CNode_79, [1]: CNode_86}
+#  17: @training_tfnet_model_TFNetModel_construct_77:CNode_88{[0]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_89, [1]: ValueNode<Int64Imm> 0, [2]: CNode_90, [3]: CNode_91, [4]: param_phi_len_x_list, [5]: temp, [6]: ValueNode<Int64Imm> 0, [7]: inputs, [8]: ValueNode<ValueList> [], [9]: CNode_92, [10]: CNode_93, [11]: CNode_94, [12]: param_is_train, [13]: batch, [14]: CNode_95}
+#  18: @training_tfnet_model_TFNetModel_construct_27:CNode_96{[0]: ValueNode<Primitive> Return, [1]: CNode_71}
+#  19: @training_tfnet_model_TFNetModel_construct_27:CNode_71{[0]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_28, [1]: ValueNode<Int64Imm> 0, [2]: ValueNode<Int64Imm> 0, [3]: ValueNode<ValueList> []}
 
 
 subgraph attr:
-training: 1
-subgraph instance: tfnet_model_TFNetModel_construct_89 : 000002E435791A40
-# In file D:\shengteng\training\tfnet_model.py:71~153, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
-subgraph @tfnet_model_TFNetModel_construct_89 parent: [subgraph @tfnet_model_TFNetModel_construct_88](%para0_@CNode_90, %para0_phi_start_idx, %para0_phi_feature_list) {
-  %0(CNode_147) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], len)
+training: 0
+subgraph instance: training_tfnet_model_TFNetModel_construct_28 : 000001AED66B6AD0
+# In file D:\shengteng\training\tfnet_model.py:76~186, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
+subgraph @training_tfnet_model_TFNetModel_construct_28 parent: [subgraph @training_tfnet_model_TFNetModel_construct_27](%para0_@CNode_29, %para0_phi_start_idx, %para0_phi_feature_list) {
+  %0(CNode_79) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], len)
       : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
-  %1(CNode_149) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], iter)
+      # In file D:\shengteng\training\tfnet_model.py:102~118, 8~34/        for i in range(int(batch)):/
+  %1(CNode_81) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], iter)
       : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
-  %2(CNode_119) = resolve(NameSpace[SymbolStr: 'Namespace:tfnet_model'], range)
+      # In file D:\shengteng\training\tfnet_model.py:102~118, 8~34/        for i in range(int(batch)):/
+  %2(CNode_52) = resolve(NameSpace[SymbolStr: 'Namespace:training.tfnet_model'], range)
       : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97, 17~22/        for i in range(int(batch)):/
-  %3(CNode_112) = resolve(NameSpace[SymbolStr: 'Namespace:tfnet_model'], int)
+      # In file D:\shengteng\training\tfnet_model.py:102, 17~22/        for i in range(int(batch)):/
+  %3(CNode_45) = resolve(NameSpace[SymbolStr: 'Namespace:training.tfnet_model'], int)
       : (<External, NoShape>, <External, NoShape>) -> (<TypeType, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:77, 26~29/            len_x_list = [int(temp)] * int(batch)/
-  %4(CNode_111) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], getitem)
+      # In file D:\shengteng\training\tfnet_model.py:82, 26~29/            len_x_list = [int(temp)] * int(batch)/
+  %4(CNode_44) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], getitem)
       : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:75, 8~60/        batch, temp, channel, height, width = seq_data.shape/
-  %5(CNode_110) = getattr(%para0_seq_data, "shape")
-      : (<Tensor[Float32], (2, 300, 3, 224, 224)>, <String, NoShape>) -> (<Tuple[Int64*5], TupleShape(NoShape, NoShape, NoShape, NoShape, NoShape)>)
+      # In file D:\shengteng\training\tfnet_model.py:80, 8~60/        batch, temp, channel, height, width = seq_data.shape/
+  %5(CNode_43) = getattr(%para0_seq_data, "shape")
+      : (<Tensor[Float32], (1, 64, 37632)>, <String, NoShape>) -> (<Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:75, 46~60/        batch, temp, channel, height, width = seq_data.shape/
+      # In file D:\shengteng\training\tfnet_model.py:80, 46~60/        batch, temp, channel, height, width = seq_data.shape/
   %6(batch) = %4(%5, I64(0))
-      : (<Tuple[Int64*5], TupleShape(NoShape, NoShape, NoShape, NoShape, NoShape)>, <Int64, NoShape>) -> (<Int64, NoShape>)
+      : (<Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>, <Int64, NoShape>) -> (<Int64, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:75, 8~60/        batch, temp, channel, height, width = seq_data.shape/
-  %7(CNode_151) = %3(%6)
+      # In file D:\shengteng\training\tfnet_model.py:80, 8~60/        batch, temp, channel, height, width = seq_data.shape/
+  %7(CNode_83) = %3(%6)
       : (<Int64, NoShape>) -> (<Int64, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97, 23~33/        for i in range(int(batch)):/
-  %8(CNode_153) = %2(%7)
-      : (<Int64, NoShape>) -> (<Tuple[Int64*2], TupleShape(NoShape, NoShape)>)
+      # In file D:\shengteng\training\tfnet_model.py:102, 23~33/        for i in range(int(batch)):/
+  %8(CNode_85) = %2(%7)
+      : (<Int64, NoShape>) -> (<Tuple[Int64], TupleShape(NoShape)>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97, 17~34/        for i in range(int(batch)):/
-  %9(CNode_154) = %1(%8)
-      : (<Tuple[Int64*2], TupleShape(NoShape, NoShape)>) -> (<Tuple[Int64*2], TupleShape(NoShape, NoShape)>)
+      # In file D:\shengteng\training\tfnet_model.py:102, 17~34/        for i in range(int(batch)):/
+  %9(CNode_86) = %1(%8)
+      : (<Tuple[Int64], TupleShape(NoShape)>) -> (<Tuple[Int64], TupleShape(NoShape)>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
-  %10(CNode_155) = %0(%9)
-      : (<Tuple[Int64*2], TupleShape(NoShape, NoShape)>) -> (<Int64, NoShape>)
+      # In file D:\shengteng\training\tfnet_model.py:102~118, 8~34/        for i in range(int(batch)):/
+  %10(CNode_87) = %0(%9)
+      : (<Tuple[Int64], TupleShape(NoShape)>) -> (<Int64, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
-  %11(CNode_165) = MultitypeFuncGraph_less{(Number, Number), (String, String), (Tuple, Tuple), (Tensor, Tensor), (Number, Tensor), (Tensor, Number), (List, List)}(%para0_@CNode_90, %10)
+      # In file D:\shengteng\training\tfnet_model.py:102~118, 8~34/        for i in range(int(batch)):/
+  %11(CNode_97) = MultitypeFuncGraph_less{(Number, Number), (String, String), (Tuple, Tuple), (Tensor, Tensor), (Number, Tensor), (Tensor, Number), (List, List)}(%para0_@CNode_29, %10)
       : (<Int64, NoShape>, <Int64, NoShape>) -> (<Bool, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
-  %12(CNode_166) = Switch(%11, @tfnet_model_TFNetModel_construct_91, @tfnet_model_TFNetModel_construct_92)
+      # In file D:\shengteng\training\tfnet_model.py:102~118, 8~34/        for i in range(int(batch)):/
+  %12(CNode_98) = Switch(%11, @training_tfnet_model_TFNetModel_construct_30, @training_tfnet_model_TFNetModel_construct_99)
       : (<Bool, NoShape>, <Func, NoShape>, <Func, NoShape>) -> (<Func, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
+      # In file D:\shengteng\training\tfnet_model.py:102~118, 8~34/        for i in range(int(batch)):/
 
-#------------------------> 8
-  %13(CNode_167) = %12()
+#------------------------> 4
+  %13(CNode_100) = %12()
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
+      # In file D:\shengteng\training\tfnet_model.py:102~118, 8~34/        for i in range(int(batch)):/
   Return(%13)
       : (<null>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
+      # In file D:\shengteng\training\tfnet_model.py:102~118, 8~34/        for i in range(int(batch)):/
 }
 # Order:
-#   1: @tfnet_model_TFNetModel_construct_89:CNode_165{[0]: ValueNode<MultitypeFuncGraph> MetaFuncGraph-less.19, [1]: param_@CNode_90, [2]: CNode_155}
-#   2: @tfnet_model_TFNetModel_construct_89:CNode_166{[0]: ValueNode<Primitive> Switch, [1]: CNode_165, [2]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_91, [3]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_92}
-#   3: @tfnet_model_TFNetModel_construct_89:CNode_167{[0]: CNode_166}
-#   4: @tfnet_model_TFNetModel_construct_89:CNode_168{[0]: ValueNode<Primitive> Return, [1]: CNode_167}
+#   1: @training_tfnet_model_TFNetModel_construct_28:CNode_97{[0]: ValueNode<MultitypeFuncGraph> MetaFuncGraph-less.12, [1]: param_@CNode_29, [2]: CNode_87}
+#   2: @training_tfnet_model_TFNetModel_construct_28:CNode_98{[0]: ValueNode<Primitive> Switch, [1]: CNode_97, [2]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_30, [3]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_99}
+#   3: @training_tfnet_model_TFNetModel_construct_28:CNode_100{[0]: CNode_98}
+#   4: @training_tfnet_model_TFNetModel_construct_28:CNode_101{[0]: ValueNode<Primitive> Return, [1]: CNode_100}
 
 
 subgraph attr:
-training: 1
-subgraph instance: tfnet_model_TFNetModel_construct_91 : 000002E435798F10
-# In file D:\shengteng\training\tfnet_model.py:71~153, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
-subgraph @tfnet_model_TFNetModel_construct_91 parent: [subgraph @tfnet_model_TFNetModel_construct_89]() {
-  %0(CNode_169) = MultitypeFuncGraph_add{(Number, Number), (String, String), (Tensor, Tuple), (Number, Tensor), (Tensor, Number), (List, Tensor), (Tuple, Tensor), (NoneType, NoneType), (Tensor, List), (List, List), (Tensor, Tensor), (RowTensor, Tensor), (COOTensor, COOTensor), (Tuple, Tuple), (CSRTensor, CSRTensor), (COOTensor, Tensor), (Tensor, COOTensor), (Dictionary, Dictionary)}($(@tfnet_model_TFNetModel_construct_89:para0_@CNode_90), I64(1))
-      : (<Int64, NoShape>, <Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
-  %1(CNode_170) = StopGradient(%0)
-      : (<Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:71~153, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
-  %2(CNode_171) = resolve(NameSpace[Ast: 'Namespace:mindspore._extends.parse.trope'], add)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:103, 12~34/            start_idx += int(temp)  # Move to next sequence (fixed stride)/
-  %3(CNode_112) = resolve(NameSpace[SymbolStr: 'Namespace:tfnet_model'], int)
-      : (<External, NoShape>, <External, NoShape>) -> (<TypeType, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:77, 26~29/            len_x_list = [int(temp)] * int(batch)/
-  %4(CNode_111) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], getitem)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:75, 8~60/        batch, temp, channel, height, width = seq_data.shape/
-  %5(CNode_110) = getattr(%para0_seq_data, "shape")
-      : (<Tensor[Float32], (2, 300, 3, 224, 224)>, <String, NoShape>) -> (<Tuple[Int64*5], TupleShape(NoShape, NoShape, NoShape, NoShape, NoShape)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:75, 46~60/        batch, temp, channel, height, width = seq_data.shape/
-  %6(temp) = %4(%5, I64(1))
-      : (<Tuple[Int64*5], TupleShape(NoShape, NoShape, NoShape, NoShape, NoShape)>, <Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:75, 8~60/        batch, temp, channel, height, width = seq_data.shape/
-  %7(CNode_172) = %3(%6)
-      : (<Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:103, 25~34/            start_idx += int(temp)  # Move to next sequence (fixed stride)/
-  %8(start_idx) = %2($(@tfnet_model_TFNetModel_construct_89:para0_phi_start_idx), %7)
-      : (<Int64, NoShape>, <Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:103, 12~34/            start_idx += int(temp)  # Move to next sequence (fixed stride)/
-  %9(CNode_173) = getattr($(@tfnet_model_TFNetModel_construct_89:para0_phi_feature_list), "append")
-      : (<List[], ListShape[]>, <String, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:102, 12~31/            feature_list.append(seq_features)/
-  %10(CNode_174) = resolve(NameSpace[ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>'], conv2d)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:101, 27~38/            seq_features = self.conv2d(inputs[start_idx:end_idx])/
-  %11(CNode_175) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], getitem)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:101, 39~64/            seq_features = self.conv2d(inputs[start_idx:end_idx])/
-  %12(CNode_140) = resolve(NameSpace[ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>'], reshape)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:92, 17~29/        inputs = self.reshape(seq_data, (batch * temp, channel, height, width))/
-  %13(CNode_141) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], MakeTuple)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:92, 40~78/        inputs = self.reshape(seq_data, (batch * temp, channel, height, width))/
-  %14(CNode_142) = resolve(NameSpace[Ast: 'Namespace:mindspore._extends.parse.trope'], mul)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:92, 41~53/        inputs = self.reshape(seq_data, (batch * temp, channel, height, width))/
-  %15(batch) = %4(%5, I64(0))
-      : (<Tuple[Int64*5], TupleShape(NoShape, NoShape, NoShape, NoShape, NoShape)>, <Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:75, 8~60/        batch, temp, channel, height, width = seq_data.shape/
-  %16(CNode_143) = %14(%15, %6)
-      : (<Int64, NoShape>, <Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:92, 41~53/        inputs = self.reshape(seq_data, (batch * temp, channel, height, width))/
-  %17(channel) = %4(%5, I64(2))
-      : (<Tuple[Int64*5], TupleShape(NoShape, NoShape, NoShape, NoShape, NoShape)>, <Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:75, 8~60/        batch, temp, channel, height, width = seq_data.shape/
-  %18(height) = %4(%5, I64(3))
-      : (<Tuple[Int64*5], TupleShape(NoShape, NoShape, NoShape, NoShape, NoShape)>, <Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:75, 8~60/        batch, temp, channel, height, width = seq_data.shape/
-  %19(width) = %4(%5, I64(4))
-      : (<Tuple[Int64*5], TupleShape(NoShape, NoShape, NoShape, NoShape, NoShape)>, <Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:75, 8~60/        batch, temp, channel, height, width = seq_data.shape/
-  %20(CNode_144) = %13(%16, %17, %18, %19)
-      : (<Int64, NoShape>, <Int64, NoShape>, <Int64, NoShape>, <Int64, NoShape>) -> (<Tuple[Int64*4], TupleShape(NoShape, NoShape, NoShape, NoShape)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:92, 40~78/        inputs = self.reshape(seq_data, (batch * temp, channel, height, width))/
-  %21(inputs) = %12($(@tfnet_model_TFNetModel_construct_86:para0_seq_data), %20)
-      : (<Tensor[Float32], (2, 300, 3, 224, 224)>, <Tuple[Int64*4], TupleShape(NoShape, NoShape, NoShape, NoShape)>) -> (<Tensor[Float32], (600, 3, 224, 224)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:92, 17~79/        inputs = self.reshape(seq_data, (batch * temp, channel, height, width))/
-  %22(CNode_176) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], make_slice)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:101, 46~63/            seq_features = self.conv2d(inputs[start_idx:end_idx])/
-  %23(CNode_177) = resolve(NameSpace[Ast: 'Namespace:mindspore._extends.parse.trope'], add)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:100, 22~39/            end_idx = start_idx + lgt_i/
-  %24(CNode_120) = resolve(NameSpace[SymbolStr: 'Namespace:tfnet_model'], min)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:99, 20~23/            lgt_i = min(int(len_x_list[i]), int(temp))/
-  %25(CNode_178) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], getitem)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:99, 28~41/            lgt_i = min(int(len_x_list[i]), int(temp))/
-  %26(CNode_148) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], getitem)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
-  %27(CNode_149) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], iter)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
-  %28(CNode_119) = resolve(NameSpace[SymbolStr: 'Namespace:tfnet_model'], range)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97, 17~22/        for i in range(int(batch)):/
-  %29(CNode_151) = %3(%15)
-      : (<Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97, 23~33/        for i in range(int(batch)):/
-  %30(CNode_153) = %28(%29)
-      : (<Int64, NoShape>) -> (<Tuple[Int64*2], TupleShape(NoShape, NoShape)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97, 17~34/        for i in range(int(batch)):/
-  %31(CNode_154) = %27(%30)
-      : (<Tuple[Int64*2], TupleShape(NoShape, NoShape)>) -> (<Tuple[Int64*2], TupleShape(NoShape, NoShape)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
-  %32(i) = %26(%31, $(@tfnet_model_TFNetModel_construct_89:para0_@CNode_90))
-      : (<Tuple[Int64*2], TupleShape(NoShape, NoShape)>, <Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
-  %33(CNode_179) = %25($(@tfnet_model_TFNetModel_construct_88:para0_phi_len_x_list), %32)
-      : (<List[Int64*2], ListShape[NoShape, NoShape]>, <Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:99, 28~41/            lgt_i = min(int(len_x_list[i]), int(temp))/
-  %34(CNode_180) = %3(%33)
-      : (<Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:99, 24~42/            lgt_i = min(int(len_x_list[i]), int(temp))/
-  %35(CNode_181) = %3(%6)
-      : (<Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:99, 44~53/            lgt_i = min(int(len_x_list[i]), int(temp))/
-  %36(lgt_i) = %24(%34, %35)
-      : (<Int64, NoShape>, <Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:99, 20~54/            lgt_i = min(int(len_x_list[i]), int(temp))/
-  %37(end_idx) = %23($(@tfnet_model_TFNetModel_construct_89:para0_phi_start_idx), %36)
-      : (<Int64, NoShape>, <Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:100, 22~39/            end_idx = start_idx + lgt_i/
-  %38(CNode_182) = %22($(@tfnet_model_TFNetModel_construct_89:para0_phi_start_idx), %37, None)
-      : (<Int64, NoShape>, <Int64, NoShape>, <None, NoShape>) -> (<Slice[Int64 : Int64 : None], NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:101, 46~63/            seq_features = self.conv2d(inputs[start_idx:end_idx])/
-  %39(CNode_183) = %11(%21, %38)
-      : (<Tensor[Float32], (600, 3, 224, 224)>, <Slice[Int64 : Int64 : None], NoShape>) -> (<Tensor[Float32], (193, 3, 224, 224)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:101, 39~64/            seq_features = self.conv2d(inputs[start_idx:end_idx])/
-  %40(seq_features) = %10(%39)
-      : (<Tensor[Float32], (193, 3, 224, 224)>) -> (<Tensor[Float32], (193, 512)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:101, 27~65/            seq_features = self.conv2d(inputs[start_idx:end_idx])/
-  %41(feature_list) = %9(%40)
-      : (<Tensor[Float32], (193, 512)>) -> (<List[Tensor[Float32]], ListShape[(193, 512)]>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:102, 12~45/            feature_list.append(seq_features)/
-
-#------------------------> 7
-  %42(CNode_184) = call @tfnet_model_TFNetModel_construct_89(%0, %8, %41)
-      : (<Int64, NoShape>, <Int64, NoShape>, <List[Tensor[Float32]], ListShape[(193, 512)]>) -> (<null>)
-      #scope: (Default)
-  %43(CNode_185) = Depend(%42, %1) primitive_attrs: {side_effect_propagate: I64(1)} cnode_attrs: {topo_sort_rhs_first: Bool(1)}
+training: 0
+subgraph instance: training_tfnet_model_TFNetModel_construct_30 : 000001AE80123F10
+# In file D:\shengteng\training\tfnet_model.py:76~186, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
+subgraph @training_tfnet_model_TFNetModel_construct_30 parent: [subgraph @training_tfnet_model_TFNetModel_construct_28]() {
+  %0(CNode_102) = MultitypeFuncGraph_add{(Number, Number), (String, String), (Tensor, Tuple), (Number, Tensor), (Tensor, Number), (List, Tensor), (Tuple, Tensor), (NoneType, NoneType), (Tensor, List), (List, List), (Tensor, Tensor), (RowTensor, Tensor), (COOTensor, COOTensor), (Tuple, Tuple), (CSRTensor, CSRTensor), (COOTensor, Tensor), (Tensor, COOTensor), (Dictionary, Dictionary)}($(@training_tfnet_model_TFNetModel_construct_28:para0_@CNode_29), I64(1))
       : (<null>, <Int64, NoShape>) -> (<null>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
-  Return(%43)
-      : (<null>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:97~103, 8~34/        for i in range(int(batch)):/
-}
-# Order:
-#   1: @tfnet_model_TFNetModel_construct_91:i{[0]: CNode_148, [1]: CNode_154, [2]: param_@CNode_90}
-#   2: @tfnet_model_TFNetModel_construct_91:CNode_169{[0]: ValueNode<MultitypeFuncGraph> MetaFuncGraph-add.27, [1]: param_@CNode_90, [2]: ValueNode<Int64Imm> 1}
-#   3: @tfnet_model_TFNetModel_construct_91:CNode_178{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
-#   4: @tfnet_model_TFNetModel_construct_91:CNode_179{[0]: CNode_178, [1]: param_phi_len_x_list, [2]: i}
-#   5: @tfnet_model_TFNetModel_construct_186:CNode_187{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#   6: @tfnet_model_TFNetModel_construct_91:CNode_180{[0]: CNode_112, [1]: CNode_179}
-#   7: @tfnet_model_TFNetModel_construct_186:CNode_188{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#   8: @tfnet_model_TFNetModel_construct_91:CNode_181{[0]: CNode_112, [1]: temp}
-#   9: @tfnet_model_TFNetModel_construct_186:CNode_189{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  10: @tfnet_model_TFNetModel_construct_91:lgt_i{[0]: CNode_120, [1]: CNode_180, [2]: CNode_181}
-#  11: @tfnet_model_TFNetModel_construct_91:CNode_177{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> Ast: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> add}
-#  12: @tfnet_model_TFNetModel_construct_91:end_idx{[0]: CNode_177, [1]: param_phi_start_idx, [2]: lgt_i}
-#  13: @tfnet_model_TFNetModel_construct_91:CNode_174{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> conv2d}
-#  14: @tfnet_model_TFNetModel_construct_91:CNode_175{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
-#  15: @tfnet_model_TFNetModel_construct_91:CNode_176{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> make_slice}
-#  16: @tfnet_model_TFNetModel_construct_91:CNode_182{[0]: CNode_176, [1]: param_phi_start_idx, [2]: end_idx, [3]: ValueNode<None> None}
-#  17: @tfnet_model_TFNetModel_construct_91:CNode_183{[0]: CNode_175, [1]: inputs, [2]: CNode_182}
-#  18: @tfnet_model_TFNetModel_construct_186:CNode_190{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  19: @tfnet_model_TFNetModel_construct_91:seq_features{[0]: CNode_174, [1]: CNode_183}
-#  20: @tfnet_model_TFNetModel_construct_91:CNode_173{[0]: ValueNode<Primitive> getattr, [1]: param_phi_feature_list, [2]: ValueNode<StringImm> append}
-#  21: @tfnet_model_TFNetModel_construct_186:CNode_191{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  22: @tfnet_model_TFNetModel_construct_91:feature_list{[0]: CNode_173, [1]: seq_features}
-#  23: @tfnet_model_TFNetModel_construct_91:CNode_171{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> Ast: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> add}
-#  24: @tfnet_model_TFNetModel_construct_186:CNode_192{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  25: @tfnet_model_TFNetModel_construct_91:CNode_172{[0]: CNode_112, [1]: temp}
-#  26: @tfnet_model_TFNetModel_construct_91:start_idx{[0]: CNode_171, [1]: param_phi_start_idx, [2]: CNode_172}
-#  27: @tfnet_model_TFNetModel_construct_186:CNode_193{[0]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_157, [1]: CNode_90, [2]: CNode_158, [3]: CNode_159, [4]: param_phi_len_x_list, [5]: temp, [6]: start_idx, [7]: inputs, [8]: feature_list, [9]: CNode_160, [10]: CNode_161, [11]: CNode_162, [12]: param_is_train, [13]: CNode_163}
-#  28: @tfnet_model_TFNetModel_construct_91:CNode_194{[0]: ValueNode<Primitive> Return, [1]: CNode_185}
-#  29: @tfnet_model_TFNetModel_construct_91:CNode_184{[0]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_89, [1]: CNode_169, [2]: start_idx, [3]: feature_list}
-
-
-subgraph attr:
-training: 1
-subgraph instance: tfnet_model_TFNetModel_construct_92 : 000002E435791FD0
-# In file D:\shengteng\training\tfnet_model.py:71~153, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
-subgraph @tfnet_model_TFNetModel_construct_92 parent: [subgraph @tfnet_model_TFNetModel_construct_89]() {
-
-#------------------------> 9
-  %0(CNode_195) = call @tfnet_model_TFNetModel_construct_93(I64(0), [])
-      : (<Int64, NoShape>, <List[], ListShape[]>) -> (<null>)
-      #scope: (Default)
-  Return(%0)
-      : (<null>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-}
-# Order:
-#   1: @tfnet_model_TFNetModel_construct_92:CNode_196{[0]: ValueNode<Primitive> Cond, [1]: param_phi_len_x_list, [2]: ValueNode<BoolImm> false}
-#   2: @tfnet_model_TFNetModel_construct_92:CNode_197{[0]: ValueNode<Primitive> Switch, [1]: CNode_196, [2]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_198, [3]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_199}
-#   3: @tfnet_model_TFNetModel_construct_92:max_len{[0]: CNode_197}
-#   4: @tfnet_model_TFNetModel_construct_92:CNode_200{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> len}
-#   5: @tfnet_model_TFNetModel_construct_92:CNode_201{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
-#   6: @tfnet_model_TFNetModel_construct_92:CNode_202{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> iter}
-#   7: @tfnet_model_TFNetModel_construct_92:CNode_203{[0]: CNode_202, [1]: param_phi_feature_list}
-#   8: @tfnet_model_TFNetModel_construct_92:CNode_204{[0]: CNode_200, [1]: CNode_203}
-#   9: @tfnet_model_TFNetModel_construct_205:CNode_206{[0]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_207, [1]: ValueNode<Int64Imm> 0, [2]: CNode_161, [3]: max_len, [4]: ValueNode<ValueList> [], [5]: CNode_162, [6]: param_phi_len_x_list, [7]: param_is_train, [8]: CNode_163}
-#  10: @tfnet_model_TFNetModel_construct_92:CNode_208{[0]: ValueNode<Primitive> Return, [1]: CNode_195}
-#  11: @tfnet_model_TFNetModel_construct_92:CNode_195{[0]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_93, [1]: ValueNode<Int64Imm> 0, [2]: ValueNode<ValueList> []}
-
-
-subgraph attr:
-training: 1
-subgraph instance: tfnet_model_TFNetModel_construct_93 : 000002E435794C50
-# In file D:\shengteng\training\tfnet_model.py:71~153, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
-subgraph @tfnet_model_TFNetModel_construct_93 parent: [subgraph @tfnet_model_TFNetModel_construct_92](%para0_@CNode_94, %para0_phi_padded_features) {
-  %0(CNode_200) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], len)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-  %1(CNode_202) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], iter)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-  %2(CNode_203) = %1($(@tfnet_model_TFNetModel_construct_89:para0_phi_feature_list))
-      : (<List[Tensor[Float32]*2], ListShape[(193, 512), (185, 512)]>) -> (<List[Tensor[Float32]*2], ListShape[(193, 512), (185, 512)]>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-  %3(CNode_204) = %0(%2)
-      : (<List[Tensor[Float32]*2], ListShape[(193, 512), (185, 512)]>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-  %4(CNode_209) = MultitypeFuncGraph_less{(Number, Number), (String, String), (Tuple, Tuple), (Tensor, Tensor), (Number, Tensor), (Tensor, Number), (List, List)}(%para0_@CNode_94, %3)
-      : (<Int64, NoShape>, <Int64, NoShape>) -> (<Bool, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-  %5(CNode_210) = Switch(%4, @tfnet_model_TFNetModel_construct_95, @tfnet_model_TFNetModel_construct_96)
-      : (<Bool, NoShape>, <Func, NoShape>, <Func, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-
-#------------------------> 14
-  %6(CNode_211) = %5()
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-  Return(%6)
-      : (<null>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-}
-# Order:
-#   1: @tfnet_model_TFNetModel_construct_93:CNode_209{[0]: ValueNode<MultitypeFuncGraph> MetaFuncGraph-less.19, [1]: param_@CNode_94, [2]: CNode_204}
-#   2: @tfnet_model_TFNetModel_construct_93:CNode_210{[0]: ValueNode<Primitive> Switch, [1]: CNode_209, [2]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_95, [3]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_96}
-#   3: @tfnet_model_TFNetModel_construct_93:CNode_211{[0]: CNode_210}
-#   4: @tfnet_model_TFNetModel_construct_93:CNode_212{[0]: ValueNode<Primitive> Return, [1]: CNode_211}
-
-
-subgraph attr:
-training: 1
-subgraph instance: tfnet_model_TFNetModel_construct_95 : 000002E4357951E0
-# In file D:\shengteng\training\tfnet_model.py:71~153, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
-subgraph @tfnet_model_TFNetModel_construct_95 parent: [subgraph @tfnet_model_TFNetModel_construct_93]() {
-  %0(CNode_213) = MultitypeFuncGraph_add{(Number, Number), (String, String), (Tensor, Tuple), (Number, Tensor), (Tensor, Number), (List, Tensor), (Tuple, Tensor), (NoneType, NoneType), (Tensor, List), (List, List), (Tensor, Tensor), (RowTensor, Tensor), (COOTensor, COOTensor), (Tuple, Tuple), (CSRTensor, CSRTensor), (COOTensor, Tensor), (Tensor, COOTensor), (Dictionary, Dictionary)}($(@tfnet_model_TFNetModel_construct_93:para0_@CNode_94), I64(1))
-      : (<Int64, NoShape>, <Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-  %1(CNode_214) = StopGradient(%0)
-      : (<Int64, NoShape>) -> (<Int64, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:71~153, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
-  %2(CNode_215) = getattr($(@tfnet_model_TFNetModel_construct_93:para0_phi_padded_features), "append")
-      : (<List[], ListShape[]>, <String, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:111, 12~34/            padded_features.append(padded)/
-  %3(CNode_122) = resolve(NameSpace[ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>'], pad_sequence)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:110, 21~38/            padded = self.pad_sequence(features, max_len)/
-  %4(CNode_201) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], getitem)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-  %5(CNode_202) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], iter)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-  %6(CNode_203) = %5($(@tfnet_model_TFNetModel_construct_89:para0_phi_feature_list))
-      : (<List[Tensor[Float32]*2], ListShape[(193, 512), (185, 512)]>) -> (<List[Tensor[Float32]*2], ListShape[(193, 512), (185, 512)]>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-  %7(features) = %4(%6, $(@tfnet_model_TFNetModel_construct_93:para0_@CNode_94))
-      : (<List[Tensor[Float32]*2], ListShape[(193, 512), (185, 512)]>, <Int64, NoShape>) -> (<Tensor[Float32], (193, 512)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-  %8(CNode_196) = Cond($(@tfnet_model_TFNetModel_construct_88:para0_phi_len_x_list), Bool(0))
-      : (<List[Int64*2], ListShape[NoShape, NoShape]>, <Bool, NoShape>) -> (<Bool, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:106, 18~92/        max_len = max(len_x_list) if len_x_list else max([f.shape[0] for f in feature_list])/
-  %9(CNode_197) = Switch(%8, @tfnet_model_TFNetModel_construct_198, @tfnet_model_TFNetModel_construct_199)
-      : (<Bool, NoShape>, <Func, NoShape>, <Func, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:106, 18~92/        max_len = max(len_x_list) if len_x_list else max([f.shape[0] for f in feature_list])/
-  %10(max_len) = %9()
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:106, 18~92/        max_len = max(len_x_list) if len_x_list else max([f.shape[0] for f in feature_list])/
-  %11(padded) = %3(%7, %10)
-      : (<Tensor[Float32], (193, 512)>, <Int64, NoShape>) -> (<Tensor[Float32], (193, 512)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:110, 21~57/            padded = self.pad_sequence(features, max_len)/
-  %12(padded_features) = %2(%11)
-      : (<Tensor[Float32], (193, 512)>) -> (<List[Tensor[Float32]], ListShape[(193, 512)]>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:111, 12~42/            padded_features.append(padded)/
-
-#------------------------> 13
-  %13(CNode_216) = call @tfnet_model_TFNetModel_construct_93(%0, %12)
-      : (<Int64, NoShape>, <List[Tensor[Float32]], ListShape[(193, 512)]>) -> (<null>)
-      #scope: (Default)
-  %14(CNode_217) = Depend(%13, %1) primitive_attrs: {side_effect_propagate: I64(1)} cnode_attrs: {topo_sort_rhs_first: Bool(1)}
-      : (<null>, <Int64, NoShape>) -> (<null>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-  Return(%14)
-      : (<null>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:109~111, 8~42/        for features in feature_list:/
-}
-# Order:
-#   1: @tfnet_model_TFNetModel_construct_95:features{[0]: CNode_201, [1]: CNode_203, [2]: param_@CNode_94}
-#   2: @tfnet_model_TFNetModel_construct_95:CNode_213{[0]: ValueNode<MultitypeFuncGraph> MetaFuncGraph-add.27, [1]: param_@CNode_94, [2]: ValueNode<Int64Imm> 1}
-#   3: @tfnet_model_TFNetModel_construct_218:CNode_219{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#   4: @tfnet_model_TFNetModel_construct_95:padded{[0]: CNode_122, [1]: features, [2]: max_len}
-#   5: @tfnet_model_TFNetModel_construct_95:CNode_215{[0]: ValueNode<Primitive> getattr, [1]: param_phi_padded_features, [2]: ValueNode<StringImm> append}
-#   6: @tfnet_model_TFNetModel_construct_218:CNode_220{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#   7: @tfnet_model_TFNetModel_construct_95:padded_features{[0]: CNode_215, [1]: padded}
-#   8: @tfnet_model_TFNetModel_construct_218:CNode_221{[0]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_207, [1]: CNode_94, [2]: CNode_161, [3]: max_len, [4]: padded_features, [5]: CNode_162, [6]: param_phi_len_x_list, [7]: param_is_train, [8]: CNode_163}
-#   9: @tfnet_model_TFNetModel_construct_95:CNode_222{[0]: ValueNode<Primitive> Return, [1]: CNode_217}
-#  10: @tfnet_model_TFNetModel_construct_95:CNode_216{[0]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_93, [1]: CNode_213, [2]: padded_features}
-
-
-subgraph attr:
-training: 1
-subgraph instance: tfnet_model_TFNetModel_construct_96 : 000002E435792AF0
-# In file D:\shengteng\training\tfnet_model.py:71~153, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
-subgraph @tfnet_model_TFNetModel_construct_96 parent: [subgraph @tfnet_model_TFNetModel_construct_93]() {
-  %0(CNode_223) = resolve(NameSpace[Ast: 'Namespace:mindspore._extends.parse.trope'], not_)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:147, 11~23/        if not is_train:/
-  %1(CNode_224) = %0($(@tfnet_model_TFNetModel_construct_86:para0_is_train))
-      : (<Bool, NoShape>) -> (<Bool, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:147, 11~23/        if not is_train:/
-  %2(CNode_225) = Cond(%1, Bool(0))
-      : (<Bool, NoShape>, <Bool, NoShape>) -> (<Bool, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:147~148, 8~35/        if not is_train:/
-  %3(CNode_226) = Switch(%2, @tfnet_model_TFNetModel_construct_227, @tfnet_model_TFNetModel_construct_97)
-      : (<Bool, NoShape>, <Func, NoShape>, <Func, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:147~148, 8~35/        if not is_train:/
-
-#------------------------> 15
-  %4(CNode_228) = %3()
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:147~148, 8~35/        if not is_train:/
-  %5(CNode_229) = call @tfnet_model_TFNetModel_construct_230(%4)
+      # In file D:\shengteng\training\tfnet_model.py:102~118, 8~34/        for i in range(int(batch)):/
+  %1(CNode_103) = StopGradient(%0)
       : (<null>) -> (<null>)
       #scope: (Default)
-  Return(%5)
+      # In file D:\shengteng\training\tfnet_model.py:76~186, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
+  %2(CNode_104) = resolve(NameSpace[Ast: 'Namespace:mindspore._extends.parse.trope'], lt)
+      : (<External, NoShape>, <External, NoShape>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:108, 15~42/            if start_idx < inputs.shape[0] and start_idx < end_idx:/
+  %3(CNode_105) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], getitem)
+      : (<External, NoShape>, <External, NoShape>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:108, 27~42/            if start_idx < inputs.shape[0] and start_idx < end_idx:/
+  %4(CNode_72) = resolve(NameSpace[ClassMember: 'Namespace:training.tfnet_model..<TFNetModel::1850633905424>'], reshape)
+      : (<External, NoShape>, <External, NoShape>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:97, 17~29/        inputs = self.reshape(seq_data, (batch * temp, channel, height, width))/
+  %5(CNode_73) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], MakeTuple)
+      : (<External, NoShape>, <External, NoShape>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:97, 40~78/        inputs = self.reshape(seq_data, (batch * temp, channel, height, width))/
+  %6(CNode_74) = resolve(NameSpace[Ast: 'Namespace:mindspore._extends.parse.trope'], mul)
+      : (<External, NoShape>, <External, NoShape>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:97, 41~53/        inputs = self.reshape(seq_data, (batch * temp, channel, height, width))/
+  %7(CNode_44) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], getitem)
+      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:80, 8~60/        batch, temp, channel, height, width = seq_data.shape/
+  %8(CNode_43) = getattr(%para0_seq_data, "shape")
+      : (<Tensor[Float32], (1, 64, 37632)>, <String, NoShape>) -> (<Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:80, 46~60/        batch, temp, channel, height, width = seq_data.shape/
+  %9(batch) = %7(%8, I64(0))
+      : (<Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>, <Int64, NoShape>) -> (<Int64, NoShape>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:80, 8~60/        batch, temp, channel, height, width = seq_data.shape/
+  %10(temp) = %7(%8, I64(1))
+      : (<Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>, <Int64, NoShape>) -> (<Int64, NoShape>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:80, 8~60/        batch, temp, channel, height, width = seq_data.shape/
+  %11(CNode_75) = %6(%9, %10)
+      : (<Int64, NoShape>, <Int64, NoShape>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:97, 41~53/        inputs = self.reshape(seq_data, (batch * temp, channel, height, width))/
+  %12(channel) = %7(%8, I64(2))
+      : (<Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>, <Int64, NoShape>) -> (<Int64, NoShape>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:80, 8~60/        batch, temp, channel, height, width = seq_data.shape/
+
+#------------------------> 5
+  %13(height) = %7(%8, I64(3))
+      : (<Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>, <Int64, NoShape>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:80, 8~60/        batch, temp, channel, height, width = seq_data.shape/
+  %14(width) = %7(%8, I64(4))
+      : (<Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>, <null>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:80, 8~60/        batch, temp, channel, height, width = seq_data.shape/
+  %15(CNode_76) = %5(%11, %12, %13, %14)
+      : (<null>, <Int64, NoShape>, <null>, <null>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:97, 40~78/        inputs = self.reshape(seq_data, (batch * temp, channel, height, width))/
+  %16(inputs) = %4($(@training_tfnet_model_TFNetModel_construct_25:para0_seq_data), %15)
+      : (<Tensor[Float32], (1, 64, 37632)>, <null>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:97, 17~79/        inputs = self.reshape(seq_data, (batch * temp, channel, height, width))/
+  %17(CNode_106) = getattr(%16, "shape")
+      : (<null>, <null>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:108, 27~39/            if start_idx < inputs.shape[0] and start_idx < end_idx:/
+  %18(CNode_107) = %3(%17, I64(0))
+      : (<null>, <null>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:108, 27~42/            if start_idx < inputs.shape[0] and start_idx < end_idx:/
+  %19(CNode_108) = %2($(@training_tfnet_model_TFNetModel_construct_28:para0_phi_start_idx), %18)
+      : (<null>, <null>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:108, 15~42/            if start_idx < inputs.shape[0] and start_idx < end_idx:/
+  %20(CNode_109) = Cond(%19, Bool(0))
+      : (<null>, <null>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:108, 47~66/            if start_idx < inputs.shape[0] and start_idx < end_idx:/
+  %21(CNode_110) = Switch(%20, @training_tfnet_model_TFNetModel_construct_111, @training_tfnet_model_TFNetModel_construct_112)
+      : (<null>, <null>, <null>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:108, 47~66/            if start_idx < inputs.shape[0] and start_idx < end_idx:/
+  %22(CNode_113) = %21()
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:108, 47~66/            if start_idx < inputs.shape[0] and start_idx < end_idx:/
+  %23(CNode_114) = Cond(%22, Bool(0))
+      : (<null>, <null>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:108~117, 12~50/            if start_idx < inputs.shape[0] and start_idx < end_idx:/
+  %24(CNode_115) = Switch(%23, @training_tfnet_model_TFNetModel_construct_116, @training_tfnet_model_TFNetModel_construct_117)
+      : (<null>, <null>, <null>) -> (<null>)
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:108~117, 12~50/            if start_idx < inputs.shape[0] and start_idx < end_idx:/
+  %25(CNode_118) = %24()
+      #scope: (Default)
+      # In file D:\shengteng\training\tfnet_model.py:108~117, 12~50/            if start_idx < inputs.shape[0] and start_idx < end_idx:/
+  %26(CNode_119) = call @training_tfnet_model_TFNetModel_construct_120(%25)
+      : (<null>) -> (<null>)
+      #scope: (Default)
+  %27(CNode_121) = Depend(%26, %1) primitive_attrs: {side_effect_propagate: I64(1)} cnode_attrs: {topo_sort_rhs_first: Bool(1)}
+      : (<null>, <null>) -> (<null>)
+      #scope: (Default)
+  Return(%27)
       : (<null>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:147~148, 8~35/        if not is_train:/
+      # In file D:\shengteng\training\tfnet_model.py:108~117, 12~50/            if start_idx < inputs.shape[0] and start_idx < end_idx:/
 }
 # Order:
-#   1: @tfnet_model_TFNetModel_construct_96:CNode_231{[0]: ValueNode<Primitive> getattr, [1]: CNode_123, [2]: ValueNode<StringImm> stack}
-#   2: @tfnet_model_TFNetModel_construct_96:CNode_232{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#   3: @tfnet_model_TFNetModel_construct_96:CNode_233{[0]: CNode_232, [1]: param_phi_padded_features}
-#   4: @tfnet_model_TFNetModel_construct_96:CNode_234{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#   5: @tfnet_model_TFNetModel_construct_96:CNode_235{[0]: CNode_234, [1]: ValueNode<StringImm> axis}
-#   6: @tfnet_model_TFNetModel_construct_96:CNode_236{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#   7: @tfnet_model_TFNetModel_construct_96:CNode_237{[0]: CNode_236, [1]: ValueNode<Int64Imm> 0}
-#   8: @tfnet_model_TFNetModel_construct_96:CNode_238{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> make_dict}
-#   9: @tfnet_model_TFNetModel_construct_96:CNode_239{[0]: CNode_238, [1]: CNode_235, [2]: CNode_237}
-#  10: @tfnet_model_TFNetModel_construct_96:framewise{[0]: ValueNode<Primitive> DoUnpackCall, [1]: CNode_231, [2]: CNode_233, [3]: CNode_239}
-#  11: @tfnet_model_TFNetModel_construct_96:CNode_240{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> transpose}
-#  12: @tfnet_model_TFNetModel_construct_96:CNode_241{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  13: @tfnet_model_TFNetModel_construct_96:CNode_242{[0]: CNode_241, [1]: ValueNode<Int64Imm> 0, [2]: ValueNode<Int64Imm> 2, [3]: ValueNode<Int64Imm> 1}
-#  14: @tfnet_model_TFNetModel_construct_243:CNode_244{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  15: @tfnet_model_TFNetModel_construct_96:framewise{[0]: CNode_240, [1]: framewise, [2]: CNode_242}
-#  16: @tfnet_model_TFNetModel_construct_96:CNode_245{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> conv1d}
-#  17: @tfnet_model_TFNetModel_construct_243:CNode_246{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  18: @tfnet_model_TFNetModel_construct_96:conv1d_outputs{[0]: CNode_245, [1]: framewise, [2]: param_phi_len_x_list}
-#  19: @tfnet_model_TFNetModel_construct_96:CNode_247{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
-#  20: @tfnet_model_TFNetModel_construct_96:x{[0]: CNode_247, [1]: conv1d_outputs, [2]: ValueNode<StringImm> visual_feat}
-#  21: @tfnet_model_TFNetModel_construct_96:CNode_248{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
-#  22: @tfnet_model_TFNetModel_construct_96:lgt{[0]: CNode_248, [1]: conv1d_outputs, [2]: ValueNode<StringImm> feat_len}
-#  23: @tfnet_model_TFNetModel_construct_96:CNode_249{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> transpose}
-#  24: @tfnet_model_TFNetModel_construct_96:CNode_250{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  25: @tfnet_model_TFNetModel_construct_96:CNode_251{[0]: CNode_250, [1]: ValueNode<Int64Imm> 2, [2]: ValueNode<Int64Imm> 0, [3]: ValueNode<Int64Imm> 1}
-#  26: @tfnet_model_TFNetModel_construct_243:CNode_252{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  27: @tfnet_model_TFNetModel_construct_96:x{[0]: CNode_249, [1]: x, [2]: CNode_251}
-#  28: @tfnet_model_TFNetModel_construct_96:CNode_253{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> transpose}
-#  29: @tfnet_model_TFNetModel_construct_96:CNode_254{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  30: @tfnet_model_TFNetModel_construct_96:CNode_255{[0]: CNode_254, [1]: ValueNode<Int64Imm> 0, [2]: ValueNode<Int64Imm> 2, [3]: ValueNode<Int64Imm> 1}
-#  31: @tfnet_model_TFNetModel_construct_243:CNode_256{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  32: @tfnet_model_TFNetModel_construct_96:framewise1{[0]: CNode_253, [1]: framewise, [2]: CNode_255}
-#  33: @tfnet_model_TFNetModel_construct_96:CNode_257{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> abs}
-#  34: @tfnet_model_TFNetModel_construct_243:CNode_258{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  35: @tfnet_model_TFNetModel_construct_96:X{[0]: CNode_257, [1]: framewise1}
-#  36: @tfnet_model_TFNetModel_construct_96:CNode_259{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> transpose}
-#  37: @tfnet_model_TFNetModel_construct_96:CNode_260{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  38: @tfnet_model_TFNetModel_construct_96:CNode_261{[0]: CNode_260, [1]: ValueNode<Int64Imm> 0, [2]: ValueNode<Int64Imm> 2, [3]: ValueNode<Int64Imm> 1}
-#  39: @tfnet_model_TFNetModel_construct_243:CNode_262{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  40: @tfnet_model_TFNetModel_construct_96:framewise1{[0]: CNode_259, [1]: X, [2]: CNode_261}
-#  41: @tfnet_model_TFNetModel_construct_96:CNode_263{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> conv1d1}
-#  42: @tfnet_model_TFNetModel_construct_243:CNode_264{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  43: @tfnet_model_TFNetModel_construct_96:conv1d_outputs1{[0]: CNode_263, [1]: framewise1, [2]: param_phi_len_x_list}
-#  44: @tfnet_model_TFNetModel_construct_96:CNode_265{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
-#  45: @tfnet_model_TFNetModel_construct_96:x1{[0]: CNode_265, [1]: conv1d_outputs1, [2]: ValueNode<StringImm> visual_feat}
-#  46: @tfnet_model_TFNetModel_construct_96:CNode_266{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> transpose}
-#  47: @tfnet_model_TFNetModel_construct_96:CNode_267{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  48: @tfnet_model_TFNetModel_construct_96:CNode_268{[0]: CNode_267, [1]: ValueNode<Int64Imm> 2, [2]: ValueNode<Int64Imm> 0, [3]: ValueNode<Int64Imm> 1}
-#  49: @tfnet_model_TFNetModel_construct_243:CNode_269{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  50: @tfnet_model_TFNetModel_construct_96:x1{[0]: CNode_266, [1]: x1, [2]: CNode_268}
-#  51: @tfnet_model_TFNetModel_construct_96:CNode_270{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> temporal_model}
-#  52: @tfnet_model_TFNetModel_construct_243:CNode_271{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  53: @tfnet_model_TFNetModel_construct_96:outputs{[0]: CNode_270, [1]: x, [2]: lgt}
-#  54: @tfnet_model_TFNetModel_construct_96:CNode_272{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> temporal_model1}
-#  55: @tfnet_model_TFNetModel_construct_243:CNode_273{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  56: @tfnet_model_TFNetModel_construct_96:outputs1{[0]: CNode_272, [1]: x1, [2]: lgt}
-#  57: @tfnet_model_TFNetModel_construct_96:CNode_274{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> classifier11}
-#  58: @tfnet_model_TFNetModel_construct_96:CNode_275{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
-#  59: @tfnet_model_TFNetModel_construct_96:CNode_276{[0]: CNode_275, [1]: outputs, [2]: ValueNode<StringImm> predictions}
-#  60: @tfnet_model_TFNetModel_construct_243:CNode_277{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  61: @tfnet_model_TFNetModel_construct_96:log_probs1{[0]: CNode_274, [1]: CNode_276}
-#  62: @tfnet_model_TFNetModel_construct_96:CNode_278{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> classifier22}
-#  63: @tfnet_model_TFNetModel_construct_243:CNode_279{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  64: @tfnet_model_TFNetModel_construct_96:log_probs2{[0]: CNode_278, [1]: x}
-#  65: @tfnet_model_TFNetModel_construct_96:CNode_280{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> classifier33}
-#  66: @tfnet_model_TFNetModel_construct_96:CNode_281{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
-#  67: @tfnet_model_TFNetModel_construct_96:CNode_282{[0]: CNode_281, [1]: outputs1, [2]: ValueNode<StringImm> predictions}
-#  68: @tfnet_model_TFNetModel_construct_243:CNode_283{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  69: @tfnet_model_TFNetModel_construct_96:log_probs3{[0]: CNode_280, [1]: CNode_282}
-#  70: @tfnet_model_TFNetModel_construct_96:CNode_284{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> classifier44}
-#  71: @tfnet_model_TFNetModel_construct_243:CNode_285{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  72: @tfnet_model_TFNetModel_construct_96:log_probs4{[0]: CNode_284, [1]: x1}
-#  73: @tfnet_model_TFNetModel_construct_96:CNode_286{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
-#  74: @tfnet_model_TFNetModel_construct_96:CNode_287{[0]: CNode_286, [1]: outputs, [2]: ValueNode<StringImm> predictions}
-#  75: @tfnet_model_TFNetModel_construct_96:CNode_288{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
-#  76: @tfnet_model_TFNetModel_construct_96:CNode_289{[0]: CNode_288, [1]: outputs1, [2]: ValueNode<StringImm> predictions}
-#  77: @tfnet_model_TFNetModel_construct_96:CNode_290{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> Ast: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> add}
-#  78: @tfnet_model_TFNetModel_construct_96:x2{[0]: CNode_290, [1]: CNode_287, [2]: CNode_289}
-#  79: @tfnet_model_TFNetModel_construct_96:CNode_291{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>', [2]: ValueNode<Symbol> classifier55}
-#  80: @tfnet_model_TFNetModel_construct_243:CNode_292{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#  81: @tfnet_model_TFNetModel_construct_96:log_probs1{[0]: CNode_291, [1]: x2}
-#  82: @tfnet_model_TFNetModel_construct_96:CNode_223{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> Ast: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> not_}
-#  83: @tfnet_model_TFNetModel_construct_96:CNode_224{[0]: CNode_223, [1]: param_is_train}
-#  84: @tfnet_model_TFNetModel_construct_96:CNode_225{[0]: ValueNode<Primitive> Cond, [1]: CNode_224, [2]: ValueNode<BoolImm> false}
-#  85: @tfnet_model_TFNetModel_construct_96:CNode_226{[0]: ValueNode<Primitive> Switch, [1]: CNode_225, [2]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_227, [3]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_97}
-#  86: @tfnet_model_TFNetModel_construct_96:CNode_228{[0]: CNode_226}
-#  87: @tfnet_model_TFNetModel_construct_96:CNode_229{[0]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_230, [1]: CNode_228}
-#  88: @tfnet_model_TFNetModel_construct_96:CNode_293{[0]: ValueNode<Primitive> Return, [1]: CNode_229}
+#   1: @training_tfnet_model_TFNetModel_construct_30:i{[0]: CNode_80, [1]: CNode_86, [2]: param_@CNode_29}
+#   2: @training_tfnet_model_TFNetModel_construct_30:CNode_102{[0]: ValueNode<MultitypeFuncGraph> MetaFuncGraph-add.13, [1]: param_@CNode_29, [2]: ValueNode<Int64Imm> 1}
+#   3: @training_tfnet_model_TFNetModel_construct_30:CNode_122{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
+#   4: @training_tfnet_model_TFNetModel_construct_30:CNode_123{[0]: CNode_122, [1]: param_phi_len_x_list, [2]: i}
+#   5: @training_tfnet_model_TFNetModel_construct_124:CNode_125{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
+#   6: @training_tfnet_model_TFNetModel_construct_30:CNode_126{[0]: CNode_45, [1]: CNode_123}
+#   7: @training_tfnet_model_TFNetModel_construct_124:CNode_127{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
+#   8: @training_tfnet_model_TFNetModel_construct_30:CNode_128{[0]: CNode_45, [1]: temp}
+#   9: @training_tfnet_model_TFNetModel_construct_124:CNode_129{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
+#  10: @training_tfnet_model_TFNetModel_construct_30:lgt_i{[0]: CNode_53, [1]: CNode_126, [2]: CNode_128}
+#  11: @training_tfnet_model_TFNetModel_construct_30:CNode_130{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> Ast: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> add}
+#  12: @training_tfnet_model_TFNetModel_construct_30:end_idx{[0]: CNode_130, [1]: param_phi_start_idx, [2]: lgt_i}
+#  13: @training_tfnet_model_TFNetModel_construct_30:CNode_131{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
+#  14: @training_tfnet_model_TFNetModel_construct_30:CNode_132{[0]: ValueNode<Primitive> getattr, [1]: inputs, [2]: ValueNode<StringImm> shape}
+#  15: @training_tfnet_model_TFNetModel_construct_30:CNode_133{[0]: CNode_131, [1]: CNode_132, [2]: ValueNode<Int64Imm> 0}
+#  16: @training_tfnet_model_TFNetModel_construct_124:CNode_134{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
+#  17: @training_tfnet_model_TFNetModel_construct_30:end_idx{[0]: CNode_53, [1]: end_idx, [2]: CNode_133}
+#  18: @training_tfnet_model_TFNetModel_construct_30:CNode_105{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> getitem}
+#  19: @training_tfnet_model_TFNetModel_construct_30:CNode_106{[0]: ValueNode<Primitive> getattr, [1]: inputs, [2]: ValueNode<StringImm> shape}
+#  20: @training_tfnet_model_TFNetModel_construct_30:CNode_107{[0]: CNode_105, [1]: CNode_106, [2]: ValueNode<Int64Imm> 0}
+#  21: @training_tfnet_model_TFNetModel_construct_30:CNode_104{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> Ast: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> lt}
+#  22: @training_tfnet_model_TFNetModel_construct_30:CNode_108{[0]: CNode_104, [1]: param_phi_start_idx, [2]: CNode_107}
+#  23: @training_tfnet_model_TFNetModel_construct_30:CNode_109{[0]: ValueNode<Primitive> Cond, [1]: CNode_108, [2]: ValueNode<BoolImm> false}
+#  24: @training_tfnet_model_TFNetModel_construct_30:CNode_110{[0]: ValueNode<Primitive> Switch, [1]: CNode_109, [2]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_111, [3]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_112}
+#  25: @training_tfnet_model_TFNetModel_construct_30:CNode_113{[0]: CNode_110}
+#  26: @training_tfnet_model_TFNetModel_construct_30:CNode_114{[0]: ValueNode<Primitive> Cond, [1]: CNode_113, [2]: ValueNode<BoolImm> false}
+#  27: @training_tfnet_model_TFNetModel_construct_30:CNode_115{[0]: ValueNode<Primitive> Switch, [1]: CNode_114, [2]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_116, [3]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_117}
+#  28: @training_tfnet_model_TFNetModel_construct_30:CNode_118{[0]: CNode_115}
+#  29: @training_tfnet_model_TFNetModel_construct_30:CNode_119{[0]: ValueNode<FuncGraph> training_tfnet_model_TFNetModel_construct_120, [1]: CNode_118}
+#  30: @training_tfnet_model_TFNetModel_construct_30:CNode_121{[0]: ValueNode<Primitive> Depend, [1]: CNode_119, [2]: CNode_103}
+#  31: @training_tfnet_model_TFNetModel_construct_30:CNode_135{[0]: ValueNode<Primitive> Return, [1]: CNode_121}
 
 
 subgraph attr:
-training: 1
-subgraph instance: tfnet_model_TFNetModel_construct_97 : 000002E4357914B0
-# In file D:\shengteng\training\tfnet_model.py:71~153, 4~103/    def construct(self, seq_data, data_len=None, is_train=True):/
-subgraph @tfnet_model_TFNetModel_construct_97 parent: [subgraph @tfnet_model_TFNetModel_construct_96]() {
-  %0(CNode_274) = resolve(NameSpace[ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>'], classifier11)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:138, 21~38/        log_probs1 = self.classifier11(outputs['predictions'])/
-  %1(CNode_275) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], getitem)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:138, 39~61/        log_probs1 = self.classifier11(outputs['predictions'])/
-  %2(CNode_270) = resolve(NameSpace[ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>'], temporal_model)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:134, 18~37/        outputs = self.temporal_model(x, lgt)/
-  %3(CNode_249) = resolve(NameSpace[ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>'], transpose)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:121, 12~26/        x = self.transpose(x, (2, 0, 1))  # (T, B, C)/
-  %4(CNode_247) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], getitem)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:119, 12~41/        x = conv1d_outputs['visual_feat']/
-  %5(CNode_245) = resolve(NameSpace[ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>'], conv1d)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:118, 25~36/        conv1d_outputs = self.conv1d(framewise, len_x_list)/
-  %6(CNode_240) = resolve(NameSpace[ClassMember: 'Namespace:tfnet_model..<TFNetModel::3178564618864>'], transpose)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:115, 20~34/        framewise = self.transpose(framewise, (0, 2, 1))  # (B, C, T)/
-  %7(CNode_123) = resolve(NameSpace[SymbolStr: 'Namespace:tfnet_model'], ops)
+subgraph instance: _tuple_getitem_by_number_31 : 000001AE80ADCA90
+# In file D:\anaconda\envs\shengteng\Lib\site-packages\mindspore\ops\composite\multitype_ops\getitem_impl.py:127~141/@getitem.register("Tuple", "Int")/
+subgraph @_tuple_getitem_by_number_31(%para0_data, %para0_number_index) {
+  %0(height) = resolve(NameSpace[SymbolStr: 'Namespace:mindspore.ops.composite.multitype_ops.getitem_impl'], F)
       : (<External, NoShape>, <External, NoShape>) -> (<External, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:114, 20~23/        framewise = ops.stack(padded_features, axis=0)  # (B, T, C)/
-  %8(CNode_231) = getattr(%7, "stack")
+      # In file D:\shengteng\training\tfnet_model.py:80, 8~60/        batch, temp, channel, height, width = seq_data.shape/
+  %1(height) = getattr(%0, "tuple_getitem")
       : (<External, NoShape>, <String, NoShape>) -> (<Func, NoShape>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:114, 20~29/        framewise = ops.stack(padded_features, axis=0)  # (B, T, C)/
-  %9(CNode_232) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], MakeTuple)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:114, 20~54/        framewise = ops.stack(padded_features, axis=0)  # (B, T, C)/
-  %10(CNode_233) = %9($(@tfnet_model_TFNetModel_construct_93:para0_phi_padded_features))
-      : (<List[Tensor[Float32]*2], ListShape[(193, 512), (193, 512)]>) -> (<Tuple[List[Tensor[Float32]*2]], TupleShape(ListShape[(193, 512), (193, 512)])>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:114, 20~54/        framewise = ops.stack(padded_features, axis=0)  # (B, T, C)/
-  %11(CNode_238) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], make_dict)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:114, 20~54/        framewise = ops.stack(padded_features, axis=0)  # (B, T, C)/
-  %12(CNode_234) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], MakeTuple)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:114, 20~54/        framewise = ops.stack(padded_features, axis=0)  # (B, T, C)/
-  %13(CNode_235) = %12("axis")
-      : (<String, NoShape>) -> (<Tuple[String], TupleShape(NoShape)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:114, 20~54/        framewise = ops.stack(padded_features, axis=0)  # (B, T, C)/
-  %14(CNode_236) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], MakeTuple)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:114, 20~54/        framewise = ops.stack(padded_features, axis=0)  # (B, T, C)/
-  %15(CNode_237) = %14(I64(0))
-      : (<Int64, NoShape>) -> (<Tuple[Int64], TupleShape(NoShape)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:114, 20~54/        framewise = ops.stack(padded_features, axis=0)  # (B, T, C)/
-  %16(CNode_239) = %11(%13, %15)
-      : (<Tuple[String], TupleShape(NoShape)>, <Tuple[Int64], TupleShape(NoShape)>) -> (<Dictionary[[axis,],[Int64]], NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:114, 20~54/        framewise = ops.stack(padded_features, axis=0)  # (B, T, C)/
-  %17(framewise) = DoUnpackCall(%8, %10, %16)
-      : (<Func, NoShape>, <Tuple[List[Tensor[Float32]*2]], TupleShape(ListShape[(193, 512), (193, 512)])>, <Dictionary[[axis,],[Int64]], NoShape>) -> (<Tensor[Float32], (2, 193, 512)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:114, 20~54/        framewise = ops.stack(padded_features, axis=0)  # (B, T, C)/
-  %18(CNode_241) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], MakeTuple)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:115, 46~55/        framewise = self.transpose(framewise, (0, 2, 1))  # (B, C, T)/
-  %19(CNode_242) = %18(I64(0), I64(2), I64(1))
-      : (<Int64, NoShape>, <Int64, NoShape>, <Int64, NoShape>) -> (<Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:115, 46~55/        framewise = self.transpose(framewise, (0, 2, 1))  # (B, C, T)/
-  %20(framewise) = %6(%17, %19)
-      : (<Tensor[Float32], (2, 193, 512)>, <Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>) -> (<Tensor[Float32], (2, 512, 193)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:115, 20~56/        framewise = self.transpose(framewise, (0, 2, 1))  # (B, C, T)/
-  %21(conv1d_outputs) = %5(%20, $(@tfnet_model_TFNetModel_construct_88:para0_phi_len_x_list))
-      : (<Tensor[Float32], (2, 512, 193)>, <List[Int64*2], ListShape[NoShape, NoShape]>) -> (<Dictionary[[visual_feat,feat_len,],[Tensor[Float32],List[Int64*2]]], NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:118, 25~59/        conv1d_outputs = self.conv1d(framewise, len_x_list)/
-  %22(x) = %4(%21, "visual_feat")
-      : (<Dictionary[[visual_feat,feat_len,],[Tensor[Float32],List[Int64*2]]], NoShape>, <String, NoShape>) -> (<Tensor[Float32], (2, 1024, 183)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:119, 12~41/        x = conv1d_outputs['visual_feat']/
-  %23(CNode_250) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], MakeTuple)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:121, 30~39/        x = self.transpose(x, (2, 0, 1))  # (T, B, C)/
-  %24(CNode_251) = %23(I64(2), I64(0), I64(1))
-      : (<Int64, NoShape>, <Int64, NoShape>, <Int64, NoShape>) -> (<Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:121, 30~39/        x = self.transpose(x, (2, 0, 1))  # (T, B, C)/
-  %25(x) = %3(%22, %24)
-      : (<Tensor[Float32], (2, 1024, 183)>, <Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>) -> (<Tensor[Float32], (183, 2, 1024)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:121, 12~40/        x = self.transpose(x, (2, 0, 1))  # (T, B, C)/
-  %26(CNode_248) = resolve(NameSpace[CommonOPS: 'Namespace:mindspore._extends.parse.trope'], getitem)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:120, 14~40/        lgt = conv1d_outputs['feat_len']/
-  %27(lgt) = %26(%21, "feat_len")
-      : (<Dictionary[[visual_feat,feat_len,],[Tensor[Float32],List[Int64*2]]], NoShape>, <String, NoShape>) -> (<List[Int64*2], ListShape[NoShape, NoShape]>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:120, 14~40/        lgt = conv1d_outputs['feat_len']/
-  %28(outputs) = %2(%25, %27)
-      : (<Tensor[Float32], (183, 2, 1024)>, <List[Int64*2], ListShape[NoShape, NoShape]>) -> (<Dictionary[[predictions,feat_len,],[Tensor[Float32],List[Int64*2]]], NoShape>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:134, 18~45/        outputs = self.temporal_model(x, lgt)/
-  %29(CNode_276) = %1(%28, "predictions")
-      : (<Dictionary[[predictions,feat_len,],[Tensor[Float32],List[Int64*2]]], NoShape>, <String, NoShape>) -> (<Tensor[Float32], (183, 2, 1024)>)
-      #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:138, 39~61/        log_probs1 = self.classifier11(outputs['predictions'])/
+      # In file D:\shengteng\training\tfnet_model.py:80, 8~60/        batch, temp, channel, height, width = seq_data.shape/
 
-#------------------------> 16
-  %30(log_probs1) = %0(%29)
-      : (<Tensor[Float32], (183, 2, 1024)>) -> (<null>)
+#------------------------> 6
+  %2(height) = %1(%para0_data, %para0_number_index)
+      : (<Tuple[Int64*3], TupleShape(NoShape, NoShape, NoShape)>, <Int64, NoShape>) -> (<null>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:138, 21~62/        log_probs1 = self.classifier11(outputs['predictions'])/
-  Return(%30)
+      # In file D:\shengteng\training\tfnet_model.py:80, 8~60/        batch, temp, channel, height, width = seq_data.shape/
+  Return(%2)
       : (<null>)
       #scope: (Default)
-      # In file D:\shengteng\training\tfnet_model.py:147~148, 8~35/        if not is_train:/
+      # In file D:\shengteng\training\tfnet_model.py:80, 8~60/        batch, temp, channel, height, width = seq_data.shape/
 }
 # Order:
-#   1: @tfnet_model_TFNetModel_construct_294:CNode_295{[0]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_296, [1]: lgt, [2]: CNode_163, [3]: log_probs1, [4]: log_probs2, [5]: log_probs3, [6]: log_probs4, [7]: log_probs1}
-#   2: @tfnet_model_TFNetModel_construct_97:CNode_297{[0]: ValueNode<Primitive> Return, [1]: log_probs1}
-#   3: @tfnet_model_TFNetModel_construct_294:CNode_298{[0]: ValueNode<FuncGraph> tfnet_model_TFNetModel_construct_296, [1]: log_probs1}
-
-
-subgraph attr:
-training: 1
-subgraph instance: modules_NormLinear_construct_98 : 000002E4C9E39C20
-# In file D:\shengteng\training\modules.py:83~86, 4~22/    def construct(self, x):/
-subgraph @modules_NormLinear_construct_98(%para0_x) {
-  %0(CNode_299) = resolve(NameSpace[ClassMember: 'Namespace:modules..<NormLinear::3178571833584>'], matmul)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default/classifier11-NormLinear)
-      # In file D:\shengteng\training\modules.py:85, 18~29/        outputs = self.matmul(x, normalized_weight)/
-  %1(CNode_300) = resolve(NameSpace[ClassMember: 'Namespace:modules..<NormLinear::3178571833584>'], l2_normalize)
-      : (<External, NoShape>, <External, NoShape>) -> (<Func, NoShape>)
-      #scope: (Default/classifier11-NormLinear)
-      # In file D:\shengteng\training\modules.py:84, 28~45/        normalized_weight = self.l2_normalize(self.weight)/
-  %2(CNode_301) = resolve(NameSpace[ClassMember: 'Namespace:modules..<NormLinear::3178571833584>'], weight)
-      : (<External, NoShape>, <External, NoShape>) -> (<Ref[Tensor[Float32]], (1024, 3733)>)
-      #scope: (Default/classifier11-NormLinear)
-      # In file D:\shengteng\training\modules.py:84, 46~57/        normalized_weight = self.l2_normalize(self.weight)/
-  %3(normalized_weight) = %1(%2)
-      : (<Ref[Tensor[Float32]], (1024, 3733)>) -> (<Tensor[Float32], (1024, 3733)>)
-      #scope: (Default/classifier11-NormLinear)
-      # In file D:\shengteng\training\modules.py:84, 28~58/        normalized_weight = self.l2_normalize(self.weight)/
-
-#------------------------> 17
-  %4(outputs) = %0(%para0_x, %3)
-      : (<Tensor[Float32], (183, 2, 1024)>, <Tensor[Float32], (1024, 3733)>) -> (<null>)
-      #scope: (Default/classifier11-NormLinear)
-      # In file D:\shengteng\training\modules.py:85, 18~51/        outputs = self.matmul(x, normalized_weight)/
-  Return(%4)
-      : (<null>)
-      #scope: (Default/classifier11-NormLinear)
-      # In file D:\shengteng\training\modules.py:86, 8~22/        return outputs/
-}
-# Order:
-#   1: @modules_NormLinear_construct_98:CNode_300{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:modules..<NormLinear::3178571833584>', [2]: ValueNode<Symbol> l2_normalize}
-#   2: @modules_NormLinear_construct_98:CNode_301{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:modules..<NormLinear::3178571833584>', [2]: ValueNode<Symbol> weight}
-#   3: @modules_NormLinear_construct_98:CNode_302{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#   5: @modules_NormLinear_construct_98:normalized_weight{[0]: CNode_300, [1]: CNode_301}
-#   6: @modules_NormLinear_construct_98:CNode_299{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> ClassMember: 'Namespace:modules..<NormLinear::3178571833584>', [2]: ValueNode<Symbol> matmul}
-#   7: @modules_NormLinear_construct_98:CNode_303{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
-#   9: @modules_NormLinear_construct_98:outputs{[0]: CNode_299, [1]: param_x, [2]: normalized_weight}
-#  10: @modules_NormLinear_construct_98:CNode_304{[0]: ValueNode<Primitive> Return, [1]: outputs}
+#   1: @_tuple_getitem_by_number_31:height{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> SymbolStr: 'Namespace:mindspore.ops.composite.multitype_ops.getitem_impl', [2]: ValueNode<Symbol> F}
+#   2: @_tuple_getitem_by_number_31:height{[0]: ValueNode<Primitive> getattr, [1]: height, [2]: ValueNode<StringImm> tuple_getitem}
+#   3: @_tuple_getitem_by_number_136:CNode_137{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS: 'Namespace:mindspore._extends.parse.trope', [2]: ValueNode<Symbol> MakeTuple}
+#   4: @_tuple_getitem_by_number_31:height{[0]: height, [1]: param_data, [2]: param_number_index}
+#   5: @_tuple_getitem_by_number_31:height{[0]: ValueNode<Primitive> Return, [1]: height}
 
 
 # ===============================================================================================
-# The total of function graphs in evaluation stack: 12/20 (Ignored 8 internal frames).
+# The total of function graphs in evaluation stack: 7/9 (Ignored 2 internal frames).
 # ===============================================================================================
 
 

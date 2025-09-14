@@ -1033,6 +1033,23 @@ class DatabaseManager:
         
         logger.info("数据库索引创建完成")
 
+    async def add_audit_log(self, audit_entry: dict):
+        """保存审计日志到 system_logs 表"""
+        import aiosqlite, json
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                INSERT INTO system_logs (level, module, message, details, user_id, ip_address)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                audit_entry.get("level", "INFO"),
+                audit_entry.get("module", "audit"),
+                audit_entry.get("message", ""),
+                json.dumps(audit_entry.get("details", {})),
+                audit_entry.get("user_id"),
+                audit_entry.get("ip_address")
+            ))
+            await db.commit()
+            
 
 # 全局数据库管理器实例
 db_manager = DatabaseManager()

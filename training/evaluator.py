@@ -47,39 +47,39 @@ class TFNetEvaluator:
             if output_dir:
                 ensure_directory_exists(output_dir, create=True)
         
-        # 设置MindSpore上下文，具有API兼容性
-        device_target = self.config_manager.get("model.device_target", "CPU")
+            # 设置MindSpore上下文，具有API兼容性
+            device_target = self.config_manager.get("model.device_target", "CPU")
 
-        # 使用新API（如果可用），否则回退到旧API
-        if MINDSPORE_NEW_API:
-            try:
-                context.set_context(mode=context.GRAPH_MODE)
-                set_device(device_target)
-                print(f"✓ MindSpore device set to: {device_target} (new API)")
-            except Exception as e:
-                print(f"Warning: New API failed, using fallback: {e}")
+            # 使用新API（如果可用），否则回退到旧API
+            if MINDSPORE_NEW_API:
+                try:
+                    context.set_context(mode=context.GRAPH_MODE)
+                    set_device(device_target)
+                    print(f"✓ MindSpore device set to: {device_target} (new API)")
+                except Exception as e:
+                    print(f"Warning: New API failed, using fallback: {e}")
+                    context.set_context(
+                        mode=context.GRAPH_MODE,
+                        device_target=device_target
+                    )
+                    print(f"✓ MindSpore device set to: {device_target} (fallback API)")
+            else:
                 context.set_context(
                     mode=context.GRAPH_MODE,
                     device_target=device_target
                 )
-                print(f"✓ MindSpore device set to: {device_target} (fallback API)")
-        else:
-            context.set_context(
-                mode=context.GRAPH_MODE,
-                device_target=device_target
-            )
-            print(f"✓ MindSpore device set to: {device_target} (legacy API)")
-        
-        # 初始化日志
-        self._setup_logging()
-        
-        # 初始化组件
-        self.model = None
-        self.test_dataset = None
-        self.word2idx = None
-        self.idx2word = None
-        self.decoder = None
-        
+                print(f"✓ MindSpore device set to: {device_target} (legacy API)")
+            
+            # 初始化日志
+            self._setup_logging()
+            
+            # 初始化组件
+            self.model = None
+            self.test_dataset = None
+            self.word2idx = None
+            self.idx2word = None
+            self.decoder = None
+            
             self.logger.info("TFNet Evaluator initialized successfully")
 
         except Exception as e:
