@@ -9,49 +9,42 @@ import json
 
 PAD = ' '
 # 通过移除括号和数字来预处理单词列表
+import re
+import string
+
+# 常见中文标点 + 英文标点
+CHS_PUNCTS = "，。？！、；：‘’“”（）【】《》〈〉「」『』—…·﹏·【】［］｛｝～｜·"
+ALL_PUNCTS = string.punctuation + CHS_PUNCTS + "-–—‒―"  # 补充几种连字符
+
+# 清除一段括号（中英文各种括号）的正则；重复应用可清除多段
+BRACKET_RE = re.compile(r'[\(\[\{（【［]\s*[^)\]\}】］）]*[\)\]\}】］）]')
+
 def preprocess_words(words):
-    """通过移除括号和数字来预处理单词列表"""
-    for i in range(len(words)):
-        word = words[i]
-        
-        n = 0
-        sub_flag = False
-        word_list = list(word)
-        for j in range(len(word)):
-            if word[j] in "({[（":
-                sub_flag = True
-            
-            if sub_flag:
-                word_list.pop(j - n)
-                n = n + 1
-            
-            if word[j] in ")}]）":
-                sub_flag = False
-        
-        word = "".join(word_list)
-        
-        if word and word[-1].isdigit():
-            if not word[0].isdigit():
-                word_list = list(word)
-                word_list.pop(len(word) - 1)
-                word = "".join(word_list)
-        
-        if word and word[0] in ",，":
-            word_list = list(word)
-            word_list[0] = '，'
-            word = ''.join(word_list)
-        
-        if word and word[0] in "?？":
-            word_list = list(word)
-            word_list[0] = '？'
-            word = ''.join(word_list)
-        
-        if word.isdigit():
-            word = str(int(word))
-        
-        words[i] = word
-    
-    return words
+    """移除括号内内容、去掉所有标点；保留你原来的数字处理规则"""
+    out = []
+    for w in words:
+        w = str(w).strip()
+
+        # 反复清除括号及其中内容（若有多段/嵌套的简单场景）
+        prev = None
+        while prev != w:
+            prev = w
+            w = BRACKET_RE.sub('', w)
+
+        # 去掉所有标点符号
+        w = w.translate(str.maketrans('', '', ALL_PUNCTS))
+
+        # ——以下沿用你原来的数字处理规则——
+        # 若末尾是数字且首字符不是数字：仅去掉最后一个数字
+        if w and w[-1].isdigit() and not w[0].isdigit():
+            w = w[:-1]
+
+        # 如果全是数字，则转成 int 再转回字符串（去前导零）
+        if w.isdigit():
+            w = str(int(w))
+
+        out.append(w)
+    return out
 
 def build_vocabulary(train_label_path, valid_label_path, test_label_path, dataset_name):
     """从标签文件构建词汇表"""
@@ -146,6 +139,102 @@ class VideoTransform:
         
         return video_tensor
 
+def _normalize_mempool_size(value: str) -> str:
+    """（若被其他模块需要可放这里）将 '256MB' 等转为 MindSpore 支持的 '0.25GB'."""
+    if not isinstance(value, str):
+        return value
+    v = value.strip().upper()
+    if v.endswith("MB"):
+        try:
+            mb = float(v[:-2])
+            gb = mb / 1024.0
+            # MindSpore 需要如 0.25GB / 1GB / 2GB
+            return f"{gb:.3f}GB"
+        except:
+            return value
+    return value
+
+# 将帧列表转换为 (T, C, H, W) float32 ndarray。
+# 处理截断与零填充，确保返回 numpy 基础数组，避免 MindSpore 内部 copy=False 触发异常。
+def safe_stack_frames(frames, max_frames=None, target_size=(160, 160)):
+    """
+    统一将输入转换为 (T, C, H, W) float32
+    支持:
+      - list/tuple: 元素为 (H,W,C)、(C,H,W)、灰度( H,W )
+      - ndarray: (T,H,W,C)、(T,C,H,W)、(H,W,C)、(C,H,W)
+    填充/截断到 max_frames（若给定），返回: video_array, seq_len(int32)
+    """
+    if frames is None:
+        return np.zeros((1, 3, target_size[0], target_size[1]), dtype=np.float32), np.int32(1)
+
+    frame_list = []
+
+    # 若是 ndarray
+    if isinstance(frames, np.ndarray):
+        arr = frames
+        if arr.ndim == 4:
+            # (T,H,W,C) 或 (T,C,H,W)
+            if arr.shape[-1] == 3:          # (T,H,W,C)
+                arr = np.transpose(arr, (0, 3, 1, 2))
+            elif arr.shape[1] == 3:         # (T,C,H,W)
+                pass
+            else:
+                # 形状不符合，返回占位
+                return np.zeros((1, 3, target_size[0], target_size[1]), dtype=np.float32), np.int32(1)
+            for i in range(arr.shape[0]):
+                frame_list.append(arr[i].astype(np.float32, copy=False))
+        elif arr.ndim == 3:
+            # (H,W,C) 或 (C,H,W)
+            if arr.shape[-1] == 3 and arr.shape[0] != 3:  # (H,W,C)
+                arr = np.transpose(arr, (2, 0, 1))
+            elif arr.shape[0] == 3:
+                pass
+            else:
+                return np.zeros((1, 3, target_size[0], target_size[1]), dtype=np.float32), np.int32(1)
+            frame_list.append(arr.astype(np.float32, copy=False))
+        else:
+            return np.zeros((1, 3, target_size[0], target_size[1]), dtype=np.float32), np.int32(1)
+
+    else:
+        # 可迭代对象
+        for f in frames:
+            if f is None:
+                continue
+            af = np.asarray(f)
+            if af.ndim == 2:  # 灰度补3通道
+                af = np.repeat(af[:, :, None], 3, axis=2)
+            if af.ndim != 3:
+                continue
+            if af.shape[-1] == 3 and af.shape[0] != 3:  # (H,W,C)
+                af = np.transpose(af, (2, 0, 1))
+            elif af.shape[0] == 3:
+                pass
+            else:
+                continue
+            frame_list.append(af.astype(np.float32, copy=False))
+
+    if len(frame_list) == 0:
+        return np.zeros((1, 3, target_size[0], target_size[1]), dtype=np.float32), np.int32(1)
+
+    original_len = len(frame_list)
+
+    # 截断 / 填充
+    if max_frames is not None:
+        if original_len > max_frames:
+            frame_list = frame_list[:max_frames]
+        elif original_len < max_frames:
+            c, h, w = frame_list[0].shape
+            pad_n = max_frames - original_len
+            pad_block = np.zeros((pad_n, c, h, w), dtype=np.float32)
+            for i in range(pad_n):
+                frame_list.append(pad_block[i])
+
+    video = np.stack(frame_list, axis=0)  # (T,C,H,W)
+    video /= 255.0
+    seq_len = min(original_len, video.shape[0])
+    return np.ascontiguousarray(video, dtype=np.float32), np.int32(seq_len)
+
+# 假设存在 CECSLDataset（示例修改）
 class CECSLDataset:
     """用于手语识别的CE-CSL数据集"""
     
@@ -217,13 +306,16 @@ class CECSLDataset:
         else:
             padded_label = raw_label + [0] * (max_label_length - len(raw_label))
 
-        return {
-            'video': video_frames,
-            'label': padded_label,            # [S_max]
-            'label_length': true_label_length, # 真实长度，用于CTC
-            'video_length': original_length,   # 使用填充前的原始视频帧数
-            'info': sample['video_name']
-        }
+        # 假设 self.max_frames 已从外部传入
+        if video_frames is None or (isinstance(video_frames, (list, tuple)) and len(video_frames) == 0):
+            # 处理空
+            video_array = np.zeros((1,3,160,160), dtype=np.float32)
+            seq_len = np.int32(1)
+        else:
+            video_array, seq_len = safe_stack_frames(video_frames, max_frames=getattr(self, "max_frames", None))
+        label_ids = np.asarray(padded_label, dtype=np.int32)
+        label_len = np.int32(len(padded_label))
+        return video_array, label_ids, seq_len, label_len
     
     def _load_video(self, video_path):
         """从目录加载视频帧，进行内存优化"""
@@ -356,36 +448,14 @@ def create_dataset(data_path, label_path, word2idx, dataset_name,
     
     # 转换为MindSpore数据集
     def generator():
-        for i in range(dataset_size):
-            sample = dataset[i]
-            # 确保所有数据都使用简单数据类型正确格式化
-            video = sample['video']
-            if isinstance(video, list):
-                video = np.array(video, dtype=np.float32)
-            elif isinstance(video, np.ndarray):
-                video = video.astype(np.float32)
-            
-            # 确保视频有正确的形状 (T, H, W, C) 或 (T, C, H, W)
-            if video.ndim == 4:
-                pass
-            else:
-                raise ValueError(f"视频张量维度不正确: {video.shape}")
-            
-            # 限制每个视频的最大帧数以减少内存
-            if video.shape[0] > max_frames:
-                indices = np.linspace(0, video.shape[0] - 1, max_frames, dtype=int)
-                video = video[indices]
-            
-            label = np.array(sample['label'], dtype=np.int32)
-            # 使用真实标签长度(未填充部分)
-            label_length = int(sample.get('label_length', np.count_nonzero(label)))
-            # 保障最小为1（CTC允许空吗? 为安全若为0则置1并用blank填充）
-            if label_length == 0:
-                label_length = 1
-            
-            video_length = min(int(sample['video_length']), max_frames)  # 限制视频长度
-            
-            yield (video, label, video_length, label_length)
+        for i in range(len(dataset)):
+            video_array, label_ids, seq_len, label_len = dataset[i]
+            # 强制类型转换，确保都是 numpy 基础类型
+            video_array = np.asarray(video_array, dtype=np.float32)
+            label_ids = np.asarray(label_ids, dtype=np.int32)
+            seq_len = np.int32(seq_len)
+            label_len = np.int32(label_len)
+            yield video_array, label_ids, seq_len, label_len
     
     # 创建带有内存优化的数据集
     ms_dataset = ds.GeneratorDataset(

@@ -1,0 +1,57 @@
+[
+  {
+    "video_name": "dev-00005",
+    "predicted": [
+      "起来",
+      "理性"
+    ],
+    "ground_truth": [
+      " 上课",
+      "时间",
+      "还",
+      "长",
+      "。                            "
+    ],
+    "correct_matches": 0,
+    "precision": 0.0,
+    "recall": 0.0
+  },
+  {
+    "video_name": "dev-00001",
+    "predicted": [
+      "起来",
+      "理性"
+    ],
+    "ground_truth": [
+      " 1",
+      "年",
+      "鱼",
+      "禁止",
+      "区",
+      "时间",
+      "长",
+      "不",
+      "。               "
+    ],
+    "correct_matches": 0,
+    "precision": 0.0,
+    "recall": 0.0
+  },
+  {
+    "video_name": "dev-00010",
+    "predicted": [
+      "起来",
+      "理性"
+    ],
+    "ground_truth": [
+      " 下午",
+      "公交车",
+      "人",
+      "少",
+      "。                          "
+    ],
+    "correct_matches": 0,
+    "precision": 0.0,
+    "recall": 0.0
+  }
+]

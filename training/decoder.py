@@ -69,6 +69,25 @@ class CTCDecoder:
         # 在完整实现中，您将使用适当的束搜索算法
         return self.max_decode(nn_output, vid_lgt)
 
+    def decode_labels(self, labels, label_lengths):
+        """将标签索引解码为单词序列"""
+        # 确保输入是 numpy 数组
+        if isinstance(labels, ms.Tensor):
+            labels = labels.asnumpy()
+        if isinstance(label_lengths, ms.Tensor):
+            label_lengths = label_lengths.asnumpy()
+
+        ret_list = []
+        for batch_idx in range(labels.shape[0]):
+            # 获取真实长度的标签
+            true_label = labels[batch_idx][:label_lengths[batch_idx]]
+            
+            # 将索引转换为单词
+            decoded_words = [self.i2g_dict[idx] for idx in true_label if idx in self.i2g_dict]
+            ret_list.append(' '.join(decoded_words))
+            
+        return ret_list
+
 class WERCalculator:
     """词错误率计算器"""
     

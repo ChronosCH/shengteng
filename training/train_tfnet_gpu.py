@@ -124,11 +124,23 @@ class GPUTFNetTrainer:
                     
                     # 额外的内存优化设置
                     mempool_size = gpu_config.get("mempool_block_size", "512MB")
-                    context.set_context(
-                        mempool_block_size=mempool_size,  # 更小的内存池块
-                        enable_reduce_precision=True  # 启用降精度以节省内存
-                    )
-                    print(f"✓ Additional memory optimizations enabled (mempool: {mempool_size})")
+                    # 新增: 兼容 MB -> GB
+                    if isinstance(mempool_size, str) and mempool_size.upper().endswith("MB"):
+                        try:
+                            mb = float(mempool_size[:-2])
+                            mempool_size_converted = f"{mb/1024.0:.3f}GB"
+                        except:
+                            mempool_size_converted = mempool_size
+                    else:
+                        mempool_size_converted = mempool_size
+                    try:
+                        context.set_context(
+                            mempool_block_size=mempool_size_converted,
+                            enable_reduce_precision=True
+                        )
+                        print(f"✓ Additional memory optimizations enabled (mempool: {mempool_size_converted})")
+                    except Exception as e_mpool:
+                        print(f"Warning: mempool_block_size '{mempool_size_converted}' not applied: {e_mpool}")
                     
                     # 如果可用则启用内存卸载或稀疏支持
                     if gpu_config.get("enable_memory_offload", False):
@@ -575,25 +587,34 @@ class GPUTFNetTrainer:
                 # 前向计算
                 def forward_fn(seq_data, seq_label, data_len_tensor, label_len_tensor):
                     model_output = model(seq_data, data_len_tensor, is_train=True)
-                    logits = model_output[0]
                     
-                    # logits 期望 shape (T, N, C)，若模型输出不同需转换
-                    # 若 logits.shape == (N, T, C) 则转置
-                    if logits.ndim == 3 and logits.shape[0] == data_len_tensor.shape[0]:
-                        # 可能是 (N, T, C) -> (T, N, C)
-                        logits = ops.transpose(logits, (1, 0, 2))
+                    # --- 修改代码：计算所有分支的损失 ---
+                    total_loss = 0.0
+                    # 假设模型有多个logits输出
+                    logits_list = model_output[0] if isinstance(model_output[0], list) else [model_output[0]]
+
+                    for logits in logits_list:
+                        # logits 期望 shape (T, N, C)，若模型输出不同需转换
+                        # 若 logits.shape == (N, T, C) 则转置
+                        if logits.ndim == 3 and logits.shape[0] == data_len_tensor.shape[0]:
+                            # 可能是 (N, T, C) -> (T, N, C)
+                            logits = ops.transpose(logits, (1, 0, 2))
+                        
+                        actual_time_steps = logits.shape[0]
+                        ts_tensor = Tensor(actual_time_steps, ms.int32)
+                        one_tensor = Tensor(1, ms.int32)
+                        
+                        current_data_len = ops.minimum(data_len_tensor, ts_tensor)
+                        current_data_len = ops.maximum(current_data_len, one_tensor)
+                        
+                        # 再次保证 input_length >= target_length
+                        current_data_len = ops.maximum(current_data_len, label_len_tensor)
+                        
+                        loss = loss_fn(logits, seq_label, current_data_len, label_len_tensor)
+                        total_loss += loss
                     
-                    actual_time_steps = logits.shape[0]
-                    ts_tensor = Tensor(actual_time_steps, ms.int32)
-                    one_tensor = Tensor(1, ms.int32)
-                    data_len_tensor = ops.minimum(data_len_tensor, ts_tensor)
-                    data_len_tensor = ops.maximum(data_len_tensor, one_tensor)
-                    
-                    # 再次保证 input_length >= target_length
-                    data_len_tensor = ops.maximum(data_len_tensor, label_len_tensor)
-                    
-                    loss = loss_fn(logits, seq_label, data_len_tensor, label_len_tensor)
-                    return loss
+                    return total_loss
+                    # --- 结束修改 ---
                 
                 grad_fn = ops.value_and_grad(forward_fn, None, optimizer.parameters)
                 loss, grads = grad_fn(data, target, data_len, target_len)
