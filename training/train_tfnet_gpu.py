@@ -91,9 +91,29 @@ class GPUTFNetTrainer:
             device_target = self.config_manager.get("model.device_target", "GPU")
             device_id = self.config_manager.get("model.device_id", 0)
             
+            # 如果配置为CPU，直接设置CPU上下文
+            if device_target == "CPU":
+                context.set_context(
+                    mode=context.PYNATIVE_MODE,
+                    device_target="CPU",
+                    device_id=0
+                )
+                print("✓ CPU context configured successfully")
+                return
+            
             # 检查是否有可用的GPU
             if not self._check_gpu_availability():
-                raise RuntimeError("GPU not available or MindSpore GPU version not installed")
+                print("❌ GPU not available, falling back to CPU mode")
+                # 自动切换到CPU模式
+                context.set_context(
+                    mode=context.PYNATIVE_MODE,
+                    device_target="CPU",
+                    device_id=0
+                )
+                # 更新配置以反映实际使用的设备
+                self.config.model.device_target = "CPU"
+                print("✓ CPU context configured successfully (fallback)")
+                return
 
             # 使用配置中的优化设置设置上下文
             gpu_config = self.config_manager.get("gpu_optimization", {})
@@ -134,10 +154,16 @@ class GPUTFNetTrainer:
                     else:
                         mempool_size_converted = mempool_size
                     try:
-                        context.set_context(
-                            mempool_block_size=mempool_size_converted,
-                            enable_reduce_precision=True
-                        )
+                        # 仅在Ascend上开启reduce_precision，GPU会忽略且可能产生警告
+                        if device_target == "Ascend":
+                            context.set_context(
+                                mempool_block_size=mempool_size_converted,
+                                enable_reduce_precision=True
+                            )
+                        else:
+                            context.set_context(
+                                mempool_block_size=mempool_size_converted
+                            )
                         print(f"✓ Additional memory optimizations enabled (mempool: {mempool_size_converted})")
                     except Exception as e_mpool:
                         print(f"Warning: mempool_block_size '{mempool_size_converted}' not applied: {e_mpool}")
@@ -165,17 +191,18 @@ class GPUTFNetTrainer:
                 context.set_context(enable_graph_kernel=False)
                 print("✓ Graph kernel optimization disabled for stability")
 
-            # 启用自动混合精度（如支持）
+            # 启用自动混合精度（如支持）- 仅在Ascend上启用，避免GPU上cublas不兼容
             if self.config_manager.get("model.enable_auto_mixed_precision", True):
                 try:
-                    # 尝试不同的方法以启用自动混合精度
-                    try:
-                        context.set_auto_parallel_context(enable_auto_mixed_precision=True)
-                        print("✓ Auto mixed precision enabled (auto_parallel_context)")
-                    except:
-                        # 备用方法
-                        context.set_context(enable_auto_mixed_precision=True)
-                        print("✓ Auto mixed precision enabled (context)")
+                    if device_target == "Ascend":
+                        try:
+                            context.set_auto_parallel_context(enable_auto_mixed_precision=True)
+                            print("✓ Auto mixed precision enabled (auto_parallel_context)")
+                        except Exception:
+                            context.set_context(enable_auto_mixed_precision=True)
+                            print("✓ Auto mixed precision enabled (context)")
+                    else:
+                        print("✓ Skipping auto mixed precision on non-Ascend device")
                 except Exception as e:
                     print(f"Warning: Auto mixed precision not supported: {e}")
 
@@ -550,6 +577,13 @@ class GPUTFNetTrainer:
         
         for batch_idx, (data, target, data_len, target_len) in enumerate(self.train_dataset):
             try:
+                # 打印输入形状用于调试
+                self.logger.info(f"Batch {batch_idx} - Input shapes:")
+                self.logger.info(f"  data shape: {data.shape}")
+                self.logger.info(f"  target shape: {target.shape}")
+                self.logger.info(f"  data_len: {data_len}")
+                self.logger.info(f"  target_len: {target_len}")
+                
                 # 统一dtype与形状处理 (B, T, C, H, W) -> 模型自己处理
                 if isinstance(target, np.ndarray):
                     target = Tensor(target, ms.int32)
@@ -588,29 +622,70 @@ class GPUTFNetTrainer:
                 def forward_fn(seq_data, seq_label, data_len_tensor, label_len_tensor):
                     model_output = model(seq_data, data_len_tensor, is_train=True)
                     
+                    # 打印模型输出形状用于调试 - 更详细的信息
+                    self.logger.info(f"Batch {batch_idx} - Model output details:")
+                    self.logger.info(f"  Number of outputs: {len(model_output)}")
+                    for i, output in enumerate(model_output):
+                        if hasattr(output, 'shape'):
+                            self.logger.info(f"  Output {i} shape: {output.shape}")
+                            self.logger.info(f"  Output {i} dtype: {output.dtype}")
+                        else:
+                            self.logger.info(f"  Output {i} type: {type(output)}")
+                    
                     # --- 修改代码：计算所有分支的损失 ---
                     total_loss = 0.0
                     # 假设模型有多个logits输出
                     logits_list = model_output[0] if isinstance(model_output[0], list) else [model_output[0]]
 
-                    for logits in logits_list:
+                    for logits_idx, logits in enumerate(logits_list):
+                        # 检查 logits 是否为有效张量
+                        if not hasattr(logits, 'shape') or not hasattr(logits, 'dtype'):
+                            self.logger.warning(f"Batch {batch_idx} - Logits {logits_idx} is not a valid tensor")
+                            continue
+                            
+                        # 打印详细的 logits 信息
+                        self.logger.info(f"Batch {batch_idx} - Logits {logits_idx} shape: {logits.shape}")
+                        self.logger.info(f"Batch {batch_idx} - Logits {logits_idx} dtype: {logits.dtype}")
+                        
                         # logits 期望 shape (T, N, C)，若模型输出不同需转换
                         # 若 logits.shape == (N, T, C) 则转置
                         if logits.ndim == 3 and logits.shape[0] == data_len_tensor.shape[0]:
                             # 可能是 (N, T, C) -> (T, N, C)
                             logits = ops.transpose(logits, (1, 0, 2))
+                            self.logger.info(f"Batch {batch_idx} - Transposed logits shape: {logits.shape}")
                         
-                        actual_time_steps = logits.shape[0]
-                        ts_tensor = Tensor(actual_time_steps, ms.int32)
+                        # 检查 logits 形状，确保有效
+                        if logits.ndim != 3:
+                            self.logger.warning(f"Batch {batch_idx} - Unexpected logits shape: {logits.shape}, expected 3D tensor")
+                            # 创建有效的3D张量
+                            logits = ops.zeros((1, 1, 3512), ms.float32)
+                            self.logger.info(f"Batch {batch_idx} - Replaced with 3D placeholder: {logits.shape}")
+                            
+                        # 计算时间步与长度，遵循 CTC 约束：input_len <= T 且 label_len <= input_len
+                        time_steps = logits.shape[0]
+                        ts_tensor = Tensor(time_steps, ms.int32)
                         one_tensor = Tensor(1, ms.int32)
-                        
+
+                        # input_len 不能超过可用时间步，也至少为1
                         current_data_len = ops.minimum(data_len_tensor, ts_tensor)
                         current_data_len = ops.maximum(current_data_len, one_tensor)
+
+                        # 标签长度不能超过 input_len
+                        current_label_len = ops.minimum(label_len_tensor, current_data_len)
                         
-                        # 再次保证 input_length >= target_length
-                        current_data_len = ops.maximum(current_data_len, label_len_tensor)
+                        # 确保所有张量形状有效
+                        if logits.shape[1] <= 0 or logits.shape[2] <= 0:
+                            self.logger.warning(f"Batch {batch_idx} - Invalid logits shape dimensions: {logits.shape}")
+                            # 创建有效的占位符
+                            logits = ops.zeros((max(1, logits.shape[0]), max(1, logits.shape[1]), 3512), ms.float32)
+                            self.logger.info(f"Batch {batch_idx} - Fixed logits shape: {logits.shape}")
+                            
+                        # 打印详细的形状信息用于调试
+                        self.logger.info(f"Batch {batch_idx} - Final logits shape: {logits.shape}")
+                        self.logger.info(f"Batch {batch_idx} - data_len_tensor (clipped): {current_data_len}")
+                        self.logger.info(f"Batch {batch_idx} - label_len_tensor (clipped): {current_label_len}")
                         
-                        loss = loss_fn(logits, seq_label, current_data_len, label_len_tensor)
+                        loss = loss_fn(logits, seq_label, current_data_len, current_label_len)
                         total_loss += loss
                     
                     return total_loss

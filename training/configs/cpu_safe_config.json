@@ -13,17 +13,16 @@
     "model": {
         "name": "TFNet",
         "hidden_size": 64,
-        "device_target": "GPU",
+        "device_target": "CPU",
         "device_id": 0,
         "enable_graph_kernel": false,
         "enable_reduce_precision": false,
-        "enable_auto_mixed_precision": false,
-        "force_pynative_mode": true
+        "enable_auto_mixed_precision": false
     },
     "training": {
         "batch_size": 1,
         "learning_rate": 0.0001,
-        "num_epochs": 5,
+        "num_epochs": 3,
         "num_workers": 1,
         "weight_decay": 0.0001,
         "gradient_clip_norm": 1.0,
@@ -37,18 +36,18 @@
     "gpu_optimization": {
         "enable_graph_mode": false,
         "enable_mem_reuse": false,
-        "max_device_memory": "4GB",
+        "max_device_memory": "2GB",
         "enable_profiling": false,
         "enable_dump": false,
         "enable_memory_offload": false,
-        "mempool_block_size": "512MB"
+        "mempool_block_size": "256MB"
     },
     "paths": {
-        "checkpoint_dir": "/data/shengteng/training/checkpoints_gpu",
-        "log_dir": "/data/shengteng/training/logs_gpu",
-        "output_dir": "/data/shengteng/training/output_gpu",
-        "best_model_path": "/data/shengteng/training/checkpoints_gpu/best_model.ckpt",
-        "current_model_path": "/data/shengteng/training/checkpoints_gpu/current_model.ckpt"
+        "checkpoint_dir": "/data/shengteng/training/checkpoints_cpu",
+        "log_dir": "/data/shengteng/training/logs_cpu",
+        "output_dir": "/data/shengteng/training/output_cpu",
+        "best_model_path": "/data/shengteng/training/checkpoints_cpu/best_model.ckpt",
+        "current_model_path": "/data/shengteng/training/checkpoints_cpu/current_model.ckpt"
     },
     "logging": {
         "level": "INFO",

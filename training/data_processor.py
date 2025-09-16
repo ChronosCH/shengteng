@@ -182,7 +182,7 @@ def safe_stack_frames(frames, max_frames=None, target_size=(160, 160)):
                 # 形状不符合，返回占位
                 return np.zeros((1, 3, target_size[0], target_size[1]), dtype=np.float32), np.int32(1)
             for i in range(arr.shape[0]):
-                frame_list.append(arr[i].astype(np.float32, copy=False))
+                frame_list.append(np.asarray(arr[i], dtype=np.float32))
         elif arr.ndim == 3:
             # (H,W,C) 或 (C,H,W)
             if arr.shape[-1] == 3 and arr.shape[0] != 3:  # (H,W,C)
@@ -191,7 +191,7 @@ def safe_stack_frames(frames, max_frames=None, target_size=(160, 160)):
                 pass
             else:
                 return np.zeros((1, 3, target_size[0], target_size[1]), dtype=np.float32), np.int32(1)
-            frame_list.append(arr.astype(np.float32, copy=False))
+            frame_list.append(np.asarray(arr, dtype=np.float32))
         else:
             return np.zeros((1, 3, target_size[0], target_size[1]), dtype=np.float32), np.int32(1)
 
@@ -211,7 +211,7 @@ def safe_stack_frames(frames, max_frames=None, target_size=(160, 160)):
                 pass
             else:
                 continue
-            frame_list.append(af.astype(np.float32, copy=False))
+            frame_list.append(np.asarray(af, dtype=np.float32))
 
     if len(frame_list) == 0:
         return np.zeros((1, 3, target_size[0], target_size[1]), dtype=np.float32), np.int32(1)
@@ -306,13 +306,29 @@ class CECSLDataset:
         else:
             padded_label = raw_label + [0] * (max_label_length - len(raw_label))
 
-        # 假设 self.max_frames 已从外部传入
+        # 确保视频数据有正确的形状
         if video_frames is None or (isinstance(video_frames, (list, tuple)) and len(video_frames) == 0):
-            # 处理空
-            video_array = np.zeros((1,3,160,160), dtype=np.float32)
+            # 处理空视频 - 创建标准形状的占位符
+            video_array = np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
             seq_len = np.int32(1)
         else:
-            video_array, seq_len = safe_stack_frames(video_frames, max_frames=getattr(self, "max_frames", None))
+            # 使用 safe_stack_frames 确保正确的形状
+            video_array, seq_len = safe_stack_frames(video_frames, max_frames=self.max_frames, target_size=(self.crop_size, self.crop_size))
+            
+            # 确保视频数组有正确的形状 (T, C, H, W)
+            if len(video_array.shape) != 4:
+                # 如果形状不正确，创建标准形状
+                video_array = np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
+                seq_len = np.int32(1)
+            elif video_array.shape[1] != 3:  # 确保通道数为3
+                # 重新排列通道
+                if video_array.shape[3] == 3:  # (T, H, W, C) -> (T, C, H, W)
+                    video_array = np.transpose(video_array, (0, 3, 1, 2))
+                else:
+                    # 创建标准形状
+                    video_array = np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
+                    seq_len = np.int32(1)
+
         label_ids = np.asarray(padded_label, dtype=np.int32)
         label_len = np.int32(len(padded_label))
         return video_array, label_ids, seq_len, label_len
@@ -490,3 +506,7 @@ def create_dataset(data_path, label_path, word2idx, dataset_name,
         ms_dataset = ms_dataset.repeat()
     
     return ms_dataset
+
+
+
+
