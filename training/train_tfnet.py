@@ -10,6 +10,7 @@ import time
 import json
 import logging
 from datetime import datetime
+import psutil  # 新增: 系统与内存监控
 
 import mindspore as ms
 import mindspore.nn as nn
@@ -96,9 +97,12 @@ class TFNetTrainer:
             self.current_epoch = 0
             self.best_wer = float('inf')
             self.best_epoch = 0
-
-            self.logger.info("TFNet Trainer initialized successfully")
-
+            # 监控与统计
+            self.training_losses = []            # 每epoch平均loss
+            self.validation_losses = []          # 每epoch验证loss
+            self.validation_wers = []            # 每epoch验证WER
+            self.memory_peaks = []               # 每epoch内存峰值(MB)
+            self._epoch_batch_memory = []        # 当前epoch批次内存
         except Exception as e:
             print_error_details(e, "TFNet Trainer initialization")
             raise
@@ -293,6 +297,15 @@ class TFNetTrainer:
         )
         
         self.logger.info("Model built successfully")
+        # 初始化持久化的 loss_fn 与 optimizer，避免每batch重复创建
+        self.loss_fn = self.create_loss_fn()
+        self.optimizer = self.create_optimizer()
+        # 记录模型参数规模
+        try:
+            total_params = sum(p.size for p in self.model.get_parameters())
+        except Exception:
+            total_params = 0
+        self.logger.info(f"Model parameters (approx): {total_params}")
     
     def create_loss_fn(self):
         """Create loss function"""
@@ -356,48 +369,47 @@ class TFNetTrainer:
     def train_epoch(self, epoch):
         """Train for one epoch"""
         self.logger.info(f"Training epoch {epoch}")
-
         self.model.set_train(True)
         total_loss = 0.0
         num_batches = 0
-
+        self._epoch_batch_memory = []
+        vm_total = psutil.virtual_memory().total / 1024 / 1024  # MB
+        # 定义前向 + 计算loss 函数供梯度计算
+        import mindspore as ms
+        import mindspore.ops as ops
+        def forward_fn(videos, video_lengths_list, target_data, target_lengths):
+            log_probs1, log_probs2, log_probs3, log_probs4, log_probs5, lgt, _, _, _ = \
+                self.model(videos, video_lengths_list, is_train=True)
+            loss = self.loss_fn(log_probs1, log_probs2, log_probs3, log_probs4, log_probs5,
+                                lgt, target_data, target_lengths)
+            return loss, (lgt,)
+        grad_fn = ops.value_and_grad(forward_fn, None, self.model.trainable_params(), has_aux=True)
+        memory_warning_flag = False
         for batch_idx, batch_data in enumerate(self.train_dataset.create_dict_iterator()):
-            # Extract batch data
             videos = batch_data['video']
             labels = batch_data['label']
             video_lengths = batch_data['videoLength']
-
-            # Convert lengths to a Python list for MindSpore graph safety
             if hasattr(video_lengths, 'asnumpy'):
                 video_lengths_list = video_lengths.asnumpy().flatten().tolist()
             elif isinstance(video_lengths, (list, tuple)):
                 video_lengths_list = [int(v) for v in video_lengths]
             else:
-                # Fallback: try to wrap single value
                 try:
                     video_lengths_list = [int(video_lengths)]
                 except Exception:
                     video_lengths_list = []
-
-            # Prepare target data for CTC loss (MindSpore CTCLoss expects 2D targets: [B, S])
-            # Convert labels to list of lists
             if hasattr(labels, 'asnumpy'):
                 labels_list = labels.asnumpy().tolist()
             elif isinstance(labels, (list, tuple)):
                 labels_list = [list(x) if isinstance(x, (list, tuple)) else [int(x)] for x in labels]
             else:
-                # Fallback for unexpected types
                 labels_list = [[int(labels)]]
-
-            # Compute target lengths by trimming trailing zeros (padding token is 0)
             target_lengths_list = []
             for seq in labels_list:
-                # Ensure it's a list of ints
                 seq = list(seq)
                 length = len(seq)
                 while length > 0 and int(seq[length - 1]) == 0:
                     length -= 1
-                # Avoid empty target: keep one blank if necessary
                 if length == 0:
                     length = 1
                     if len(seq) == 0:
@@ -405,34 +417,52 @@ class TFNetTrainer:
                     else:
                         seq[0] = 0
                 target_lengths_list.append(length)
-
-            # targets must be 2D: (batch_size, max_target_length)
             target_data = ms.Tensor(labels_list, ms.int32)
             target_lengths = ms.Tensor(target_lengths_list, ms.int32)
-
-            # Forward pass
-            log_probs1, log_probs2, log_probs3, log_probs4, log_probs5, lgt, _, _, _ = \
-                self.model(videos, video_lengths_list, is_train=True)
-
-            # Calculate loss
-            loss_fn = self.create_loss_fn()
-            loss = loss_fn(log_probs1, log_probs2, log_probs3, log_probs4, log_probs5,
-                          lgt, target_data, target_lengths)
-
-            # Backward pass
-            optimizer = self.create_optimizer()
-
-            # Update metrics
-            total_loss += loss.asnumpy().item()
+            # 前向 + 反向
+            try:
+                (loss, _), grads = grad_fn(videos, video_lengths_list, target_data, target_lengths)
+                # 梯度裁剪（防止梯度爆炸）
+                clip_norm = self.config_manager.get("training.gradient_clip_norm", 1.0)
+                if clip_norm and clip_norm > 0:
+                    new_grads = []
+                    for g in grads:
+                        if g is not None:
+                            new_grads.append(ops.clip_by_norm(g, clip_norm))
+                        else:
+                            new_grads.append(g)
+                    grads = new_grads
+                self.optimizer(grads)
+            except Exception as e:
+                self.logger.error(f"Gradient step failed at batch {batch_idx}: {e}")
+                continue
+            loss_value = float(loss.asnumpy().item())
+            total_loss += loss_value
             num_batches += 1
-
-            # Print progress
+            # 内存监控
+            import gc
+            mem_mb = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
+            self._epoch_batch_memory.append(mem_mb)
+            # 增长趋势检测（最近20个batch与前20个batch均值比较）
+            if len(self._epoch_batch_memory) >= 40:
+                recent = self._epoch_batch_memory[-20:]
+                prev = self._epoch_batch_memory[-40:-20]
+                if (sum(recent)/20) - (sum(prev)/20) > 300 and not memory_warning_flag:  # 内存上升超过300MB
+                    self.logger.warning("Potential memory leak detected: last 20 batches average memory increased >300MB over previous 20")
+                    memory_warning_flag = True
+            # 触发高水位警告
+            if not memory_warning_flag and mem_mb > 0.85 * vm_total:
+                self.logger.critical(f"Memory usage {mem_mb:.1f}MB exceeds 85% of total {vm_total:.1f}MB. Consider reducing batch_size or max_frames.")
+                memory_warning_flag = True
             if batch_idx % self.config_manager.get("logging.print_interval", 10) == 0:
-                self.logger.info(f"Epoch {epoch}, Batch {batch_idx}, Loss: {loss.asnumpy().item():.4f}")
-
+                self.logger.info(f"Epoch {epoch}, Batch {batch_idx}, Loss: {loss_value:.4f}")
+                self.logger.info(f"[MEMORY] Epoch {epoch}, Batch {batch_idx}: {mem_mb:.1f} MB (Peak so far: {max(self._epoch_batch_memory):.1f} MB)")
+                gc.collect()
         avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
-        self.logger.info(f"Epoch {epoch} completed. Average loss: {avg_loss:.4f}")
-
+        peak_mem = max(self._epoch_batch_memory) if self._epoch_batch_memory else 0.0
+        self.memory_peaks.append(peak_mem)
+        self.training_losses.append(avg_loss)
+        self.logger.info(f"Epoch {epoch} completed. Average loss: {avg_loss:.4f}; Memory peak: {peak_mem:.1f} MB")
         return avg_loss
 
     def validate_epoch(self, epoch):
@@ -645,6 +675,7 @@ class TFNetTrainer:
 
         patience_counter = 0
 
+        run_start = time.time()
         for epoch in range(self.current_epoch, num_epochs):
             start_time = time.time()
 
@@ -676,9 +707,27 @@ class TFNetTrainer:
 
             epoch_time = time.time() - start_time
             self.logger.info(f"Epoch {epoch} completed in {epoch_time:.2f} seconds")
-
             self.current_epoch = epoch + 1
-
+        total_time = time.time() - run_start
+        # 生成总结
+        try:
+            summary = {
+                "epochs_completed": self.current_epoch,
+                "best_wer": self.best_wer,
+                "best_epoch": self.best_epoch,
+                "training_losses": self.training_losses,
+                "validation_losses": self.validation_losses,
+                "validation_wers": self.validation_wers,
+                "memory_peaks_mb": self.memory_peaks,
+                "total_training_time_sec": round(total_time, 2),
+                "timestamp": datetime.now().isoformat()
+            }
+            summary_path = os.path.join(self.config_manager.get("paths.output_dir"), "training_summary.json")
+            with open(summary_path, 'w', encoding='utf-8') as f:
+                json.dump(summary, f, ensure_ascii=False, indent=2)
+            self.logger.info(f"Training summary saved: {summary_path}")
+        except Exception as e:
+            self.logger.warning(f"Failed to write training summary: {e}")
         self.logger.info(f"Training completed. Best WER: {self.best_wer:.2f}% at epoch {self.best_epoch}")
 
 def main():
