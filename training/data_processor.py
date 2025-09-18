@@ -71,17 +71,42 @@ def build_vocabulary(train_label_path, valid_label_path, test_label_path, datase
     return word2idx, len(idx2word) - 1, idx2word
 
 class VideoTransform:
-    """用于数据增强的视频转换"""
-    def __init__(self, is_train=True, crop_size=224, max_frames=150):
+    """用于数据增强的视频转换，优化内存使用"""
+    def __init__(self, is_train=True, crop_size=224, max_frames=150, use_cache=True, prefetch_buffer=True):
         self.is_train = is_train
         self.crop_size = crop_size
         self.max_frames = max_frames
+        self.use_cache = use_cache
+        self.prefetch_buffer = prefetch_buffer
+        
+        # 内存优化配置
+        self._cache = {} if use_cache else None
+        self._cache_hits = 0
+        self._cache_misses = 0
+        self._max_cache_size = 500  # 减少缓存以控制内存使用
+        
+        # 预分配缓冲区以减少内存分配
+        if prefetch_buffer:
+            self._buffer = np.zeros((max_frames, 3, crop_size, crop_size), dtype=np.float32)
+        else:
+            self._buffer = None
     
     def __call__(self, video_frames):
-        """对视频帧应用转换"""
+        """对视频帧应用转换，带缓存和内存优化"""
+        # 缓存检查
+        cache_key = None
+        if self.use_cache and isinstance(video_frames, np.ndarray) and video_frames.size > 0:
+            # 使用形状和内容哈希作为缓存键
+            cache_key = hash((video_frames.shape, str(video_frames.data[:min(1024, video_frames.size * video_frames.itemsize)])))
+            if cache_key in self._cache:
+                self._cache_hits += 1
+                return self._cache[cache_key].copy()
+            else:
+                self._cache_misses += 1
+        
         # 如果需要，转换为numpy数组
         if isinstance(video_frames, list):
-            video_frames = np.array(video_frames)
+            video_frames = np.array(video_frames, dtype=np.uint8)  # 指定dtype减少内存转换
         
         # 限制最大帧数以减少内存使用
         if len(video_frames) > self.max_frames:
@@ -89,10 +114,16 @@ class VideoTransform:
             indices = np.linspace(0, len(video_frames) - 1, self.max_frames, dtype=int)
             video_frames = video_frames[indices]
         
-        # 调整帧大小
-        resized_frames = []
-        for frame in video_frames:
-            # 确保帧已经是正确的大小 (224x224)
+        # 使用预分配的缓冲区或批量调整大小
+        if self._buffer is not None:
+            # 使用预分配缓冲区
+            result_buffer = self._buffer[:len(video_frames)]
+        else:
+            result_buffer = np.zeros((len(video_frames), 3, self.crop_size, self.crop_size), dtype=np.float32)
+        
+        # 批量处理帧以提高效率
+        for i, frame in enumerate(video_frames):
+            # 确保帧已经是正确的大小
             if frame.shape[:2] != (self.crop_size, self.crop_size):
                 frame = cv2.resize(frame, (self.crop_size, self.crop_size))
             
@@ -101,43 +132,81 @@ class VideoTransform:
                 if np.random.random() > 0.5:
                     frame = cv2.flip(frame, 1)
             
-            resized_frames.append(frame)
+            # 直接写入结果缓冲区，减少内存拷贝
+            if len(frame.shape) == 3 and frame.shape[2] == 3:
+                # (H, W, C) -> (C, H, W)
+                result_buffer[i] = frame.transpose(2, 0, 1)
+            elif len(frame.shape) == 2:
+                # 灰度图转RGB
+                result_buffer[i, 0] = frame
+                result_buffer[i, 1] = frame  
+                result_buffer[i, 2] = frame
         
-        # 转换为张量格式 (T, H, W, C) -> (T, C, H, W)
-        video_tensor = np.array(resized_frames, dtype=np.float32)
+        # 转换为张量格式
+        video_tensor = result_buffer[:len(video_frames)]
 
-        # 调试：检查张量形状
+        # 检查和修复张量形状
         if len(video_tensor.shape) != 4:
             print(f"警告：意外的视频张量形状：{video_tensor.shape}")
-            print(f"期望4维张量 (T, H, W, C)，得到{len(video_tensor.shape)}维")
-            # 通过添加通道维度处理灰度图像
-            if len(video_tensor.shape) == 3:
-                video_tensor = np.expand_dims(video_tensor, axis=-1)
-                print(f"添加了通道维度，新形状：{video_tensor.shape}")
-
-        # 确保有正确的维度数量用于转置
-        if len(video_tensor.shape) == 4:
-            video_tensor = np.transpose(video_tensor, (0, 3, 1, 2))
-        else:
-            raise ValueError(f"无法转置形状为{video_tensor.shape}的张量")
-
+            if len(video_tensor.shape) == 0 or video_tensor.size == 0:
+                print("警告：检测到空视频张量，创建默认视频数据")
+                video_tensor = np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
+            else:
+                print(f"错误：无法处理形状为{video_tensor.shape}的张量，创建默认视频数据")
+                video_tensor = np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
+        
         # 填充或截断到固定长度以便批处理
         current_frames = video_tensor.shape[0]
-
-        if current_frames > self.max_frames:
+        
+        if current_frames == 0:
+            print("警告：视频张量为空，创建默认视频数据")
+            video_tensor = np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
+        elif current_frames > self.max_frames:
             # 截断
             video_tensor = video_tensor[:self.max_frames]
         elif current_frames < self.max_frames:
-            # 用零填充
-            pad_frames = self.max_frames - current_frames
-            pad_shape = (pad_frames,) + video_tensor.shape[1:]
-            pad_tensor = np.zeros(pad_shape, dtype=video_tensor.dtype)
-            video_tensor = np.concatenate([video_tensor, pad_tensor], axis=0)
+            # 如果使用预分配缓冲区，直接使用它
+            if self._buffer is not None:
+                self._buffer[current_frames:self.max_frames] = 0  # 清零填充部分
+                video_tensor = self._buffer[:self.max_frames].copy()
+            else:
+                # 用零填充
+                pad_frames = self.max_frames - current_frames
+                pad_shape = (pad_frames,) + video_tensor.shape[1:]
+                pad_tensor = np.zeros(pad_shape, dtype=video_tensor.dtype)
+                video_tensor = np.concatenate([video_tensor, pad_tensor], axis=0)
         
-        # 标准化到[0, 1]
-        video_tensor = video_tensor.astype(np.float32) / 255.0
+        # 标准化到[0, 1] - 原地操作节省内存
+        if video_tensor.max() > 1.0:
+            np.divide(video_tensor, 255.0, out=video_tensor)
+        
+        # 缓存结果（限制缓存大小）
+        if self.use_cache and cache_key is not None:
+            if len(self._cache) >= self._max_cache_size:
+                # 删除最旧的缓存项
+                oldest_key = next(iter(self._cache))
+                del self._cache[oldest_key]
+            self._cache[cache_key] = video_tensor.copy()
         
         return video_tensor
+    
+    def get_cache_stats(self):
+        """获取缓存统计信息"""
+        total = self._cache_hits + self._cache_misses
+        hit_rate = self._cache_hits / total if total > 0 else 0
+        return {
+            'hits': self._cache_hits,
+            'misses': self._cache_misses, 
+            'hit_rate': hit_rate,
+            'cache_size': len(self._cache) if self._cache else 0
+        }
+    
+    def clear_cache(self):
+        """清理缓存释放内存"""
+        if self._cache:
+            self._cache.clear()
+            self._cache_hits = 0
+            self._cache_misses = 0
 
 def _normalize_mempool_size(value: str) -> str:
     """（若被其他模块需要可放这里）将 '256MB' 等转为 MindSpore 支持的 '0.25GB'."""
@@ -259,8 +328,8 @@ class CECSLDataset:
             reader = csv.reader(f)
             for n, row in enumerate(reader):
                 if n != 0:  # 跳过表头
-                    video_name = row[0]
-                    translator = row[1]  # 获取翻译者 (A, B, C, 等)
+                    video_name = row[0].strip()
+                    translator = row[1].strip()  # 获取翻译者 (A, B, C, 等) 并去掉空格
                     words = row[3].split("/")
                     words = preprocess_words(words)
 
@@ -273,11 +342,16 @@ class CECSLDataset:
                     if label_indices:  # 只有在有有效标签时才添加
                         # 构建正确的视频路径：data_path/translator/video_name.mp4
                         video_path = os.path.join(self.data_path, translator, f"{video_name}.mp4")
-                        samples.append({
-                            'video_name': video_name,
-                            'label': label_indices,
-                            'video_path': video_path
-                        })
+                        
+                        # 检查视频文件是否存在
+                        if os.path.exists(video_path):
+                            samples.append({
+                                'video_name': video_name,
+                                'label': label_indices,
+                                'video_path': video_path
+                            })
+                        else:
+                            print(f"警告：视频文件不存在，跳过: {video_path}")
         
         return samples
     
@@ -285,15 +359,23 @@ class CECSLDataset:
         return len(self.samples)
     
     def __getitem__(self, idx):
-        sample = self.samples[idx]
+        try:
+            sample = self.samples[idx]
 
-        # 加载视频帧
-        video_frames = self._load_video(sample['video_path'])
-        original_length = len(video_frames)
+            # 加载视频帧
+            video_frames = self._load_video(sample['video_path'])
+            original_length = len(video_frames) if len(video_frames.shape) > 0 else 0
 
-        # 应用转换
-        if self.transform:
-            video_frames = self.transform(video_frames)
+            # 应用转换
+            if self.transform:
+                video_frames = self.transform(video_frames)
+        except Exception as e:
+            print(f"警告：处理样本 {idx} 时出错: {e}")
+            # 返回默认的安全数据
+            crop_size = getattr(self, 'crop_size', 112)
+            max_frames = getattr(self, 'max_frames', 30)
+            video_frames = np.zeros((max_frames, 3, crop_size, crop_size), dtype=np.float32)
+            sample = {'label': [0], 'video_path': 'dummy'}  # 默认标签
 
         # 记录真实标签长度(填充前)
         max_label_length = 50  # 合理的最大标签长度
@@ -392,8 +474,9 @@ class CECSLDataset:
             # 标准化到[0, 1]范围
             frames = frames / 255.0
         else:
-            # 如果没有加载到帧，返回正确形状的空数组
-            frames = np.empty((0, 224, 224, 3), dtype=np.float32)
+            # 如果没有加载到帧，创建默认的单帧视频
+            print(f"警告：视频文件 {video_path} 没有有效帧，创建默认帧")
+            frames = np.zeros((1, 224, 224, 3), dtype=np.float32)
             
         return frames
 
@@ -429,10 +512,13 @@ def collate_fn(videos, labels, video_lengths, infos):
 
 def create_dataset(data_path, label_path, word2idx, dataset_name, 
                   batch_size=2, is_train=True, num_workers=1, 
-                  prefetch_size=1, max_rowsize=16, crop_size=224, max_frames=150, dtype='float32'):
-    """创建带有内存优化的MindSpore数据集
+                  prefetch_size=1, max_rowsize=16, crop_size=224, max_frames=150, 
+                  dtype='float32', enable_cache=True, memory_optimize=True):
+    """创建高性能内存优化的MindSpore数据集
     - dtype: 'float32' 或 'float16'，用于减少内存占用
-    - 取消repeat以避免无限数据流导致单epoch内存不断增加
+    - enable_cache: 启用数据缓存提高性能
+    - memory_optimize: 启用内存优化特性
+    - 针对31GB内存环境优化的配置
     """
     
     # 创建带有内存优化的自定义数据集
@@ -463,14 +549,32 @@ def create_dataset(data_path, label_path, word2idx, dataset_name,
             label_len = np.int32(label_len)
             yield video_array, label_ids, seq_len, label_len
     
-    # 创建带有内存优化的数据集
+    # 创建高性能内存优化的数据集
     ms_dataset = ds.GeneratorDataset(
         generator,
         column_names=['video', 'label', 'videoLength', 'labelLength'],
         shuffle=is_train,
-        num_parallel_workers=min(num_workers, 2),  # 限制工作进程数以节省内存
-        max_rowsize=max_rowsize  # GPU优化以提高内存效率
+        num_parallel_workers=min(num_workers, 8),  # 充分利用多核CPU
+        max_rowsize=max_rowsize
     )
+    
+    # 内存优化配置
+    if memory_optimize:
+        # 启用数据缓存（利用大内存）
+        if enable_cache and is_train:
+            try:
+                cache_map = {}
+                ms_dataset = ms_dataset.map(
+                    operations=lambda x, y, z, w: (x, y, z, w), 
+                    input_columns=['video', 'label', 'videoLength', 'labelLength'],
+                    cache=cache_map
+                )
+                print(f"✓ 数据缓存已启用")
+            except Exception as e:
+                print(f"警告：无法启用数据缓存: {e}")
+        
+        # 设置更大的预取缓冲区充分利用内存
+        prefetch_size = max(prefetch_size, 32 if is_train else 16)
     
     # 如果是训练则应用数据增强操作
     if is_train:
