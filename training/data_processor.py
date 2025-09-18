@@ -429,8 +429,11 @@ def collate_fn(videos, labels, video_lengths, infos):
 
 def create_dataset(data_path, label_path, word2idx, dataset_name, 
                   batch_size=2, is_train=True, num_workers=1, 
-                  prefetch_size=1, max_rowsize=16, crop_size=224, max_frames=150):
-    """创建带有内存优化的MindSpore数据集"""
+                  prefetch_size=1, max_rowsize=16, crop_size=224, max_frames=150, dtype='float32'):
+    """创建带有内存优化的MindSpore数据集
+    - dtype: 'float32' 或 'float16'，用于减少内存占用
+    - 取消repeat以避免无限数据流导致单epoch内存不断增加
+    """
     
     # 创建带有内存优化的自定义数据集
     dataset = CECSLDataset(
@@ -450,8 +453,11 @@ def create_dataset(data_path, label_path, word2idx, dataset_name,
     def generator():
         for i in range(len(dataset)):
             video_array, label_ids, seq_len, label_len = dataset[i]
-            # 强制类型转换，确保都是 numpy 基础类型
-            video_array = np.asarray(video_array, dtype=np.float32)
+            # 根据dtype强制类型转换，float16可显著降低内存占用
+            if dtype == 'float16':
+                video_array = np.asarray(video_array, dtype=np.float16)
+            else:
+                video_array = np.asarray(video_array, dtype=np.float32)
             label_ids = np.asarray(label_ids, dtype=np.int32)
             seq_len = np.int32(seq_len)
             label_len = np.int32(label_len)
@@ -484,9 +490,5 @@ def create_dataset(data_path, label_path, word2idx, dataset_name,
         batch_size=batch_size,
         drop_remainder=True  # 丢弃不完整的批次以保持一致的内存使用
     )
-    
-    # 为训练启用重复（有助于GPU利用率）
-    if is_train:
-        ms_dataset = ms_dataset.repeat()
     
     return ms_dataset

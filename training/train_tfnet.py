@@ -249,6 +249,12 @@ class TFNetTrainer:
         # Create datasets
         batch_size = self.config_manager.get("training.batch_size")
         num_workers = self.config_manager.get("training.num_workers")
+        prefetch_size = self.config_manager.get("training.prefetch_size", 1)
+        max_rowsize = self.config_manager.get("training.max_rowsize", 16)
+        crop_size = dataset_config.get("crop_size", 224)
+        max_frames = dataset_config.get("max_frames", 150)
+        
+        dtype = 'float32'  # 改回float32以匹配Conv2D权重，避免类型不一致
         
         self.train_dataset = create_dataset(
             data_path=dataset_config["train_data_path"],
@@ -257,7 +263,12 @@ class TFNetTrainer:
             dataset_name=dataset_config["name"],
             batch_size=batch_size,
             is_train=True,
-            num_workers=num_workers
+            num_workers=num_workers,
+            prefetch_size=prefetch_size,
+            max_rowsize=max_rowsize,
+            crop_size=crop_size,
+            max_frames=max_frames,
+            dtype=dtype
         )
         
         self.valid_dataset = create_dataset(
@@ -267,7 +278,12 @@ class TFNetTrainer:
             dataset_name=dataset_config["name"],
             batch_size=1,  # Use batch size 1 for validation
             is_train=False,
-            num_workers=num_workers
+            num_workers=num_workers,
+            prefetch_size=prefetch_size,
+            max_rowsize=max_rowsize,
+            crop_size=crop_size,
+            max_frames=max_frames,
+            dtype=dtype
         )
         
         self.logger.info("Data preparation completed")
@@ -369,11 +385,14 @@ class TFNetTrainer:
     def train_epoch(self, epoch):
         """Train for one epoch"""
         self.logger.info(f"Training epoch {epoch}")
+        
         self.model.set_train(True)
         total_loss = 0.0
         num_batches = 0
+        
         self._epoch_batch_memory = []
         vm_total = psutil.virtual_memory().total / 1024 / 1024  # MB
+        
         # 定义前向 + 计算loss 函数供梯度计算
         import mindspore as ms
         import mindspore.ops as ops
@@ -385,15 +404,29 @@ class TFNetTrainer:
             return loss, (lgt,)
         grad_fn = ops.value_and_grad(forward_fn, None, self.model.trainable_params(), has_aux=True)
         memory_warning_flag = False
-        for batch_idx, batch_data in enumerate(self.train_dataset.create_dict_iterator()):
+        
+        for batch_idx, batch_data in enumerate(self.train_dataset.create_dict_iterator(num_epochs=1)):
+            # Extract batch data
             videos = batch_data['video']
             labels = batch_data['label']
             video_lengths = batch_data['videoLength']
+            # 将输入统一为Float32，避免Conv2D类型不一致（模型权重为Float32）
+            try:
+                if hasattr(videos, 'dtype'):
+                    import mindspore as ms
+                    import mindspore.ops as ops
+                    if videos.dtype != ms.float32:
+                        videos = ops.cast(videos, ms.float32)
+            except Exception:
+                pass
+            
+            # Convert lengths to a Python list for MindSpore graph safety
             if hasattr(video_lengths, 'asnumpy'):
                 video_lengths_list = video_lengths.asnumpy().flatten().tolist()
             elif isinstance(video_lengths, (list, tuple)):
                 video_lengths_list = [int(v) for v in video_lengths]
             else:
+                # Fallback: try to wrap single value
                 try:
                     video_lengths_list = [int(video_lengths)]
                 except Exception:
@@ -431,7 +464,8 @@ class TFNetTrainer:
                             new_grads.append(ops.clip_by_norm(g, clip_norm))
                         else:
                             new_grads.append(g)
-                    grads = new_grads
+                    grads = tuple(new_grads)  # 关键：转为tuple与params结构一致
+                # 应用优化器
                 self.optimizer(grads)
             except Exception as e:
                 self.logger.error(f"Gradient step failed at batch {batch_idx}: {e}")
@@ -474,12 +508,21 @@ class TFNetTrainer:
         total_wer = 0.0
         num_batches = 0
 
-        for batch_idx, batch_data in enumerate(self.valid_dataset.create_dict_iterator()):
+        for batch_idx, batch_data in enumerate(self.valid_dataset.create_dict_iterator(num_epochs=1)):
             # Extract batch data
             videos = batch_data['video']
             labels = batch_data['label']
             video_lengths = batch_data['videoLength']
-
+            # 将验证输入统一为Float32
+            try:
+                if hasattr(videos, 'dtype'):
+                    import mindspore as ms
+                    import mindspore.ops as ops
+                    if videos.dtype != ms.float32:
+                        videos = ops.cast(videos, ms.float32)
+            except Exception:
+                pass
+            
             # Prepare target data for CTCLoss: targets shape (B, S), with target_lengths per sample
             if hasattr(labels, 'asnumpy'):
                 labels_list = labels.asnumpy().tolist()
@@ -678,8 +721,9 @@ class TFNetTrainer:
         run_start = time.time()
         for epoch in range(self.current_epoch, num_epochs):
             start_time = time.time()
-
-            # Training
+            # 每个epoch重新构建迭代器，避免数据管道状态累积
+            train_iter = self.train_dataset.create_dict_iterator(num_epochs=1)
+            # 将一次epoch的迭代交由train_epoch消费
             train_loss = self.train_epoch(epoch)
 
             # Validation

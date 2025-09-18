@@ -8,23 +8,26 @@
     "valid_label_path": "data/CE-CSL/label/dev.csv",
     "test_label_path": "data/CE-CSL/label/test.csv",
     "crop_size": 224,
-    "max_frames": 150
+    "max_frames": 50
   },
   "model": {
     "name": "TFNet",
-    "hidden_size": 1024,
-    "device_target": "CPU"
+    "hidden_size": 512,
+    "device_target": "CPU",
+    "dataset_name": "CE-CSL"
   },
   "training": {
-    "batch_size": 2,
+    "batch_size": 4,
     "learning_rate": 0.0001,
-    "num_epochs": 55,
+    "num_epochs": 10,
     "num_workers": 1,
     "weight_decay": 0.0001,
     "gradient_clip_norm": 1.0,
     "save_interval": 5,
     "eval_interval": 1,
-    "early_stopping_patience": 10
+    "early_stopping_patience": 10,
+    "prefetch_size": 1,
+    "max_rowsize": 8
   },
   "optimizer": {
     "type": "Adam",
