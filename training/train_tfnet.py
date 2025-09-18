@@ -324,47 +324,26 @@ class TFNetTrainer:
         self.logger.info(f"Model parameters (approx): {total_params}")
     
     def create_loss_fn(self):
-        """Create loss function"""
-        # CTC Loss
+        """创建简化的损失函数 - 移除复杂的知识蒸馏"""
+        # 只使用CTC损失，移除复杂的多分支损失计算
         ctc_loss = nn.CTCLoss(
             blank=self.config_manager.get("loss.ctc_blank_id", 0),
             reduction=self.config_manager.get("loss.ctc_reduction", "mean"),
             zero_infinity=True
         )
         
-        # Knowledge Distillation Loss
-        kd_loss = SeqKD(T=self.config_manager.get("loss.kd_temperature", 8))
-        
-        def loss_fn(log_probs1, log_probs2, log_probs3, log_probs4, log_probs5, 
-                   lgt, target_data, target_lengths):
-            """Combined loss function for TFNet"""
-            
-            # Apply log softmax
+        def simplified_loss_fn(log_probs1, log_probs2, log_probs3, log_probs4, log_probs5,
+                              lgt, target_data, target_lengths):
+            """简化的损失函数 - 只使用主要的logits"""
+            # 应用log softmax
             log_softmax = nn.LogSoftmax(axis=-1)
-            log_probs1 = log_softmax(log_probs1)
-            log_probs2 = log_softmax(log_probs2)
-            log_probs3 = log_softmax(log_probs3)
-            log_probs4 = log_softmax(log_probs4)
-            log_probs5 = log_softmax(log_probs5)
+            log_probs = log_softmax(log_probs1)
             
-            # CTC losses
-            loss1 = ctc_loss(log_probs1, target_data, lgt, target_lengths)
-            loss2 = ctc_loss(log_probs2, target_data, lgt, target_lengths)
-            loss4 = ctc_loss(log_probs3, target_data, lgt, target_lengths)
-            loss5 = ctc_loss(log_probs4, target_data, lgt, target_lengths)
-            loss7 = ctc_loss(log_probs5, target_data, lgt, target_lengths)
-            
-            # Knowledge distillation losses
-            kd_weight = self.config_manager.get("loss.kd_weight", 25.0)
-            loss3 = kd_weight * kd_loss(log_probs2, log_probs1, use_blank=False)
-            loss6 = kd_weight * kd_loss(log_probs4, log_probs3, use_blank=False)
-            
-            # Total loss
-            total_loss = loss1 + loss2 + loss3 + loss4 + loss5 + loss6 + loss7
-            
-            return total_loss
+            # 只计算主要的CTC损失
+            loss = ctc_loss(log_probs, target_data, lgt, target_lengths)
+            return loss
         
-        return loss_fn
+        return simplified_loss_fn
     
     def create_optimizer(self):
         """Create optimizer"""
