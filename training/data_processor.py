@@ -7,17 +7,78 @@ from mindspore import dataset as ds
 from mindspore.dataset import vision, transforms
 import json
 
-PAD = ' '
+PAD = '<PAD>'  # 使用特殊标记而不是空格
 # 通过移除括号和数字来预处理单词列表
 import re
 import string
 
 # 常见中文标点 + 英文标点
-CHS_PUNCTS = "，。？！、；：‘’“”（）【】《》〈〉「」『』—…·﹏·【】［］｛｝～｜·"
+CHS_PUNCTS = "，。？！、；：''""（）【】《》〈〉「」『』—…·﹏·【】［］｛｝～｜·"
 ALL_PUNCTS = string.punctuation + CHS_PUNCTS + "-–—‒―"  # 补充几种连字符
 
 # 清除一段括号（中英文各种括号）的正则；重复应用可清除多段
 BRACKET_RE = re.compile(r'[\(\[\{（【［]\s*[^)\]\}】］）]*[\)\]\}】］）]')
+
+# 定义低质量词汇集合（无意义的单字符标点、空格等）
+LOW_QUALITY_WORDS = {
+    '', ' ', '.', ',', '?', '!', ';', ':', '(', ')', '[', ']', '{', '}', 
+    '"', "'", '-', '_', '=', '+', '*', '/', '', '|', '~', '`', '@', '#', 
+    '$', '%', '^', '&', '<', '>', '，', '。', '？', '！', '、', '；', '：',
+    '（', '）', '【', '】', '《', '》', '〈', '〉', '「', '」', '『', '』', 
+    '—', '…', '·', '﹏', '［', '］', '｛', '｝', '～', '｜'
+}
+
+def preprocess_words(words):
+    """移除括号内内容、去掉所有标点，清除低质量词汇，去除多余空格"""
+    out = []
+    for w in words:
+        # 确保输入是字符串并去除首尾空格
+        w = str(w).strip()
+        
+        # 如果已经是空字符串，直接跳过
+        if not w:
+            continue
+        
+        # 先删除多余空格（连续空格变为单个空格）
+        w = re.sub(r'\s+', ' ', w)
+
+        # 反复清除括号及其中内容（若有多段/嵌套的简单场景）
+        prev = None
+        while prev != w:
+            prev = w
+            w = BRACKET_RE.sub('', w)
+
+        # 去掉所有标点符号
+        w = w.translate(str.maketrans('', '', ALL_PUNCTS))
+        
+        # 再次删除清理后的多余空格
+        w = w.strip()
+
+        # 严格检查：跳过空字符串、纯空格、或低质量词汇
+        if (not w or 
+            w.isspace() or 
+            w in LOW_QUALITY_WORDS or 
+            len(w) == 0):
+            continue
+
+        # ——以下沿用你原来的数字处理规则——
+        # 若末尾是数字且首字符不是数字：仅去掉最后一个数字
+        if w and w[-1].isdigit() and not w[0].isdigit():
+            w = w[:-1]
+
+        # 如果全是数字，则转成 int 再转回字符串（去前导零）
+        if w.isdigit():
+            w = str(int(w))
+
+        # 最终检查：确保处理后的结果有效
+        w_final = w.strip()
+        if (w_final and 
+            not w_final.isspace() and 
+            w_final not in LOW_QUALITY_WORDS and 
+            len(w_final) > 0):
+            out.append(w_final)
+    
+    return out
 
 def preprocess_words(words):
     """移除括号内内容、去掉所有标点；保留你原来的数字处理规则"""
@@ -61,10 +122,41 @@ def build_vocabulary(train_label_path, valid_label_path, test_label_path, datase
                         words = preprocess_words(words)
                         word_list += words
     
-    # 构建词汇表
-    idx2word = [PAD]
-    set2list = sorted(list(set(word_list)))
-    idx2word.extend(set2list)
+    # 对word_list进行最终过滤，确保没有空字符串、空格或其他无效词汇
+    filtered_words = []
+    for word in word_list:
+        word_clean = str(word).strip()
+        # 严格过滤：必须有实际内容，不能是空字符串、纯空格或低质量词汇
+        if (word_clean and 
+            word_clean not in LOW_QUALITY_WORDS and 
+            len(word_clean) > 0 and 
+            not word_clean.isspace() and
+            word_clean != ''):
+            filtered_words.append(word_clean)
+    
+    print(f"词汇过滤: {len(word_list)} -> {len(filtered_words)}")
+    
+    # 构建词汇表 - 注意PAD应该是空格，但我们要确保它不会与实际的空格词汇冲突
+    # 使用一个特殊的PAD标记而不是空格
+    PAD_TOKEN = '<PAD>'
+    idx2word = [PAD_TOKEN]  # 使用特殊PAD标记而不是空格
+    
+    # 去重并排序
+    unique_words = sorted(list(set(filtered_words)))
+    
+    # 再次确保没有无效词汇
+    final_words = []
+    for word in unique_words:
+        if (word and 
+            word.strip() and 
+            word not in LOW_QUALITY_WORDS and
+            word != PAD_TOKEN and  # 避免与PAD标记冲突
+            len(word.strip()) > 0):
+            final_words.append(word)
+    
+    idx2word.extend(final_words)
+    
+    print(f"词汇表构建完成: {len(idx2word)} 个词汇 (含PAD)")
     
     word2idx = {w: i for i, w in enumerate(idx2word)}
     
@@ -106,14 +198,11 @@ class VideoTransform:
         # 转换为张量格式 (T, H, W, C) -> (T, C, H, W)
         video_tensor = np.array(resized_frames, dtype=np.float32)
 
-        # 调试：检查张量形状
+        # 检查张量形状并处理
         if len(video_tensor.shape) != 4:
-            print(f"警告：意外的视频张量形状：{video_tensor.shape}")
-            print(f"期望4维张量 (T, H, W, C)，得到{len(video_tensor.shape)}维")
             # 通过添加通道维度处理灰度图像
             if len(video_tensor.shape) == 3:
                 video_tensor = np.expand_dims(video_tensor, axis=-1)
-                print(f"添加了通道维度，新形状：{video_tensor.shape}")
 
         # 确保有正确的维度数量用于转置
         if len(video_tensor.shape) == 4:

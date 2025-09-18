@@ -210,23 +210,49 @@ class WERCalculator:
         
         return alignlist[::-1], None
 
-def calculate_wer_score(prediction_result, target_data, idx2word, batch_size):
-    """计算批量预测的WER得分"""
-    hypotheses = []
-    references = []
+def calculate_wer_score(predictions, references):
+    """计算预测结果和参考结果之间的WER得分
     
-    for i in range(batch_size):
-        # 将索引转换为词
-        pred_words = [idx2word[j] for j in prediction_result[i] if j < len(idx2word)]
-        target_words = [idx2word[j] for j in target_data[i] if j < len(idx2word)]
+    Args:
+        predictions: 预测结果列表，每个元素为预测的词汇序列
+        references: 参考结果列表，每个元素为参考的词汇序列
         
-        # 用空格连接词
-        hypothesis = ' '.join(pred_words)
-        reference = ' '.join(target_words)
-        
-        hypotheses.append(hypothesis)
-        references.append(reference)
+    Returns:
+        float: 平均WER得分
+    """
+    if not predictions or not references:
+        return 1.0
     
-    # 计算WER
-    wer_result = WERCalculator.calculate_wer(references, hypotheses)
-    return wer_result["wer"]
+    if len(predictions) != len(references):
+        return 1.0
+    
+    total_wer = 0.0
+    valid_samples = 0
+    
+    for pred, ref in zip(predictions, references):
+        try:
+            # 处理预测结果格式
+            if isinstance(pred, list):
+                # 如果是[(word, index), ...]格式
+                if pred and isinstance(pred[0], tuple):
+                    pred_str = ' '.join([word for word, _ in pred])
+                else:
+                    # 如果是[word1, word2, ...]格式
+                    pred_str = ' '.join(str(word) for word in pred)
+            else:
+                pred_str = str(pred)
+            
+            # 处理参考结果格式
+            ref_str = str(ref) if ref else ""
+            
+            # 计算单个样本的WER
+            wer_result = WERCalculator.calculate_wer([ref_str], [pred_str])
+            total_wer += wer_result["wer"]
+            valid_samples += 1
+            
+        except Exception as e:
+            print(f"Error calculating WER for sample: {e}")
+            total_wer += 1.0  # 出错时记为最大错误率
+            valid_samples += 1
+    
+    return total_wer / max(valid_samples, 1)
