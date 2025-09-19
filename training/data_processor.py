@@ -423,7 +423,8 @@ class CECSLDataset:
             padded_label = raw_label + [0] * (max_label_length - len(raw_label))
 
         label_ids = np.asarray(padded_label, dtype=np.int32)
-        label_len = np.int32(len(padded_label))
+        # 注意：label_len 应该是未填充的真实长度
+        label_len = np.int32(true_label_length)
         return video_array, label_ids, seq_len, label_len
     
     def _load_video(self, video_path):

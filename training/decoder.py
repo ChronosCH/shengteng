@@ -7,24 +7,36 @@ class CTCDecoder:
     """用于序列预测的CTC解码器"""
     
     def __init__(self, gloss_dict, num_classes, search_mode='beam', blank_id=0):
+        # gloss_dict: 词->索引，索引范围[0, vocab_size-1]，其中0通常为PAD
+        # num_classes: 模型输出维度 = vocab_size + 1 (包含blank)
+        # blank_id: 建议设为 vocab_size（最后一个类）
         self.g2i_dict = {}
         for k, v in gloss_dict.items():
-            if v == 0:
+            # 过滤特殊PAD(0)以免干扰，保留实际词汇
+            if int(v) <= 0:
                 continue
-            self.g2i_dict[k] = v
+            self.g2i_dict[k] = int(v)
         self.i2g_dict = {v: k for k, v in self.g2i_dict.items()}
-        self.num_classes = num_classes
+        self.num_classes = int(num_classes)
         self.search_mode = search_mode
-        self.blank_id = blank_id
+        self.blank_id = int(blank_id)
         
         # 操作符
         self.softmax = ops.Softmax(axis=-1)
         self.argmax = ops.Argmax(axis=2)
         
     def decode(self, nn_output, vid_lgt, batch_first=True, probs=False):
-        """将神经网络输出解码为序列"""
+        """将神经网络输出解码为序列
+        期待输入为 numpy 数组或 MindSpore Tensor；若为 (B,T,C)，batch_first=True；否则 (T,B,C)
+        """
+        # 转换到Tensor以复用算子，再转 numpy
+        if isinstance(nn_output, np.ndarray):
+            nn_output = ms.Tensor(nn_output, ms.float32)
+        if isinstance(vid_lgt, np.ndarray):
+            vid_lgt = ms.Tensor(vid_lgt, ms.int32)
+        
         if not batch_first:
-            nn_output = ops.transpose(nn_output, (1, 0, 2))
+            nn_output = ops.transpose(nn_output, (1, 0, 2))  # -> (B,T,C)
         
         if self.search_mode == "max":
             return self.max_decode(nn_output, vid_lgt)
@@ -33,59 +45,54 @@ class CTCDecoder:
     
     def max_decode(self, nn_output, vid_lgt):
         """最大值解码（贪心搜索）"""
-        # 转换为numpy以便处理
+        # 统一转 numpy
         if isinstance(nn_output, ms.Tensor):
             nn_output = nn_output.asnumpy()
         if isinstance(vid_lgt, ms.Tensor):
             vid_lgt = vid_lgt.asnumpy()
         
+        # nn_output: (B, T, C)
         index_list = np.argmax(nn_output, axis=2)
-        batch_size, lgt = index_list.shape
+        B, T = index_list.shape
         ret_list = []
-        
-        for batch_idx in range(batch_size):
-            # 获取到实际长度的序列
-            sequence = index_list[batch_idx][:vid_lgt[batch_idx]]
-            
+        for b in range(B):
+            L = int(vid_lgt[b]) if np.ndim(vid_lgt) > 0 else T
+            L = max(1, min(L, T))
+            seq = index_list[b][:L]
             # 移除连续重复
-            group_result = [x[0] for x in groupby(sequence)]
-            
-            # 移除空白标记
-            filtered = [x for x in group_result if x != self.blank_id]
-            
-            # 转换为词汇
-            decoded_sequence = []
+            group_result = [x for x, _ in groupby(seq)]
+            # 跳过CTC blank
+            filtered = [x for x in group_result if int(x) != self.blank_id]
+            # 去掉PAD(0)
+            filtered = [x for x in filtered if int(x) > 0]
+            decoded = []
             for idx, gloss_id in enumerate(filtered):
-                if gloss_id in self.i2g_dict:
-                    decoded_sequence.append((self.i2g_dict[gloss_id], idx))
-                    
-            ret_list.append(decoded_sequence)
-        
+                if int(gloss_id) in self.i2g_dict:
+                    decoded.append((self.i2g_dict[int(gloss_id)], idx))
+            ret_list.append(decoded)
         return ret_list
     
     def beam_search(self, nn_output, vid_lgt, probs=False):
-        """简化的束搜索解码"""
-        # 为简化起见，回退到最大值解码
-        # 在完整实现中，您将使用适当的束搜索算法
+        # 简化：退化为max_decode
         return self.max_decode(nn_output, vid_lgt)
 
     def decode_labels(self, labels, label_lengths):
         """将标签索引解码为单词序列"""
-        # 确保输入是 numpy 数组
+        # 确保 numpy
         if isinstance(labels, ms.Tensor):
             labels = labels.asnumpy()
         if isinstance(label_lengths, ms.Tensor):
             label_lengths = label_lengths.asnumpy()
 
         ret_list = []
-        for batch_idx in range(labels.shape[0]):
-            # 获取真实长度的标签
-            true_label = labels[batch_idx][:label_lengths[batch_idx]]
-            
-            # 将索引转换为单词
-            decoded_words = [self.i2g_dict[idx] for idx in true_label if idx in self.i2g_dict]
+        for b in range(labels.shape[0]):
+            true_len = int(label_lengths[b]) if np.ndim(label_lengths) > 0 else labels.shape[1]
+            true_len = max(1, min(true_len, labels.shape[1]))
+            seq = labels[b][:true_len]
+            # 去掉PAD(0)
+            seq = [int(x) for x in seq if int(x) > 0]
+            decoded_words = [self.i2g_dict[idx] for idx in seq if idx in self.i2g_dict]
             ret_list.append(' '.join(decoded_words))
-            
         return ret_list
 
 class WERCalculator:

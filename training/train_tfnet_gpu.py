@@ -73,6 +73,8 @@ class GPUTFNetTrainer:
             self.word2idx = None
             self.idx2word = None
             self.decoder = None
+            # 训练状态容器
+            self.training_state = {}
 
             # Training state
             self.current_epoch = 0
@@ -380,6 +382,20 @@ class GPUTFNetTrainer:
         
         self.logger.info(f"Vocabulary size: {vocab_size}")
         
+        # 为CTC保留专用blank类（不在词表内）。
+        # 词表vocab_size不含PAD(0)，模型输出维度= vocab_size + 1，blank_id = vocab_size
+        self.blank_id = int(vocab_size)
+        self.vocab_size_model = int(vocab_size + 1)
+
+        # 保存到状态以便其他模块使用
+        self.training_state.update({
+            'word2idx': self.word2idx,
+            'idx2word': self.idx2word,
+            'vocab_size': vocab_size,
+            'blank_id': self.blank_id,
+            'vocab_size_model': self.vocab_size_model,
+        })
+        
         # 保存词表
         vocab_path = os.path.join(self.config_manager.get("paths.output_dir"), "vocabulary.json")
         with open(vocab_path, 'w', encoding='utf-8') as f:
@@ -442,27 +458,13 @@ class GPUTFNetTrainer:
         # 创建模型实例
         self.model = TFNetModel(
             hidden_size=hidden_size,
-            word_set_num=vocab_size,
-            device_target=device_target,
-            dataset_name=dataset_name
+            word_set_num=self.vocab_size_model,
+            device_target=self.config_manager.get("training.device_target", "GPU"),
+            dataset_name=self.config_manager.get("dataset.name", "CE-CSL")
         )
-        
-        # 初始化模型权重
-        self._initialize_model_weights()
-        
-        self.logger.info(f"Model created with hidden_size={hidden_size}, vocab_size={vocab_size}")
-        self.logger.info(f"Model device target: {device_target}")
-        
-        # 初始化解码器
-        self.decoder = CTCDecoder(
-            gloss_dict=self.word2idx,
-            num_classes=vocab_size,
-            search_mode='beam',
-            blank_id=self.config_manager.get("loss.ctc_blank_id", 0)
-        )
-        
+        self.logger.info(f"Model created with hidden_size={hidden_size}, vocab_size={self.vocab_size_model}")
         return self.model
-    
+
     def setup_training(self, vocab_size):
         """使用GPU优化设置训练组件"""
         self.logger.info("Setting up training components...")
@@ -486,9 +488,17 @@ class GPUTFNetTrainer:
         
         self.logger.info(f"Optimizer: Adam(lr={learning_rate}, wd={weight_decay})")
         
+        # 设置解码器（使用正确的blank与类别数）
+        self.decoder = CTCDecoder(
+            gloss_dict=self.word2idx,
+            num_classes=self.vocab_size_model,
+            search_mode=self.config_manager.get("decoding.mode", "max"),
+            blank_id=self.blank_id
+        )
+        
         # 设置损失函数 - 使用 CTCLoss 替代 SeqKD
         from mindspore.nn import CTCLoss
-        blank_id = self.config_manager.get("loss.ctc_blank_id", 0)
+        blank_id = self.blank_id
         reduction = self.config_manager.get("loss.ctc_reduction", "mean")
         loss_fn = CTCLoss(blank=blank_id, reduction=reduction)
         
@@ -623,67 +633,73 @@ class GPUTFNetTrainer:
                         model_output = model(seq_data, data_len_tensor, is_train=True)
                         
                         # 处理模型输出 - TFNet返回多个logits
-                        if isinstance(model_output, (list, tuple)) and len(model_output) >= 5:
-                            # 使用主要的logits (第5个输出是融合后的结果)
-                            logits = model_output[4]  # log_probs5 是融合后的主要输出
+                        if isinstance(model_output, (list, tuple)) and len(model_output) >= 6:
+                            logits = model_output[4]  # 融合后的logits (T, B, C)
+                            lgt_tensor = model_output[5]  # (B,)
+                        elif isinstance(model_output, (list, tuple)) and len(model_output) >= 5:
+                            logits = model_output[4]
+                            lgt_tensor = None
                         elif isinstance(model_output, (list, tuple)):
                             logits = model_output[0]
+                            lgt_tensor = None
                         else:
                             logits = model_output
+                            lgt_tensor = None
                         
                         # 确保logits是有效张量
                         if not isinstance(logits, Tensor):
                             self.logger.warning("Model output is not a tensor, creating placeholder")
-                            logits = ops.zeros((10, 1, len(self.word2idx)), ms.float32)
+                            logits = ops.zeros((10, 1, self.vocab_size_model), ms.float32)
                         
                         # 检查并修正logits形状 - CTC期望 (T, N, C)
-                        if logits.ndim == 3:
-                            T, N, C = logits.shape[0], logits.shape[1], logits.shape[2]
-                            
-                            # 如果是(N, T, C)格式，需要转置为(T, N, C)
-                            if N > T and T == data_len_tensor.shape[0]:
-                                logits = ops.transpose(logits, (1, 0, 2))
-                                T, N = N, T
+                        if logits.ndim != 3:
+                            logits = ops.zeros((10, 1, self.vocab_size_model), ms.float32)
                         else:
-                            # 创建合理的默认形状
-                            T, N, C = 10, 1, len(self.word2idx)
-                            logits = ops.zeros((T, N, C), ms.float32)
-                            self.logger.warning(f"Invalid logits shape, using default ({T}, {N}, {C})")
+                            # 如果是 (B, T, C)，转为 (T, B, C)
+                            if logits.shape[0] != logits.shape[0] and logits.shape[1] != logits.shape[1]:
+                                pass  # 占位（不会触发）
+                            if logits.shape[0] < logits.shape[1]:
+                                # 可能是 (B, T, C)
+                                logits = ops.transpose(logits, (1, 0, 2))
                         
                         # 应用log_softmax以数值稳定性
                         logits = ops.log_softmax(logits, axis=-1)
                         
-                        # 检查并处理NaN/Inf
-                        if ops.isnan(logits).any() or ops.isinf(logits).any():
-                            self.logger.warning("Found NaN/Inf in logits, replacing with safe values")
-                            logits = ops.where(ops.isnan(logits), 
-                                             ops.zeros_like(logits) - 10.0, logits)
-                            logits = ops.where(ops.isinf(logits), 
-                                             ops.zeros_like(logits) - 10.0, logits)
-                        
-                        # 计算有效的序列长度，遵循CTC约束
-                        T = logits.shape[0]
-                        max_input_len = min(T, 50)  # 限制最大长度
-                        max_label_len = min(max_input_len // 2, 25)  # CTC要求标签长度 <= 输入长度/2
-                        
-                        # 处理输入长度
-                        if isinstance(data_len_tensor, Tensor):
-                            input_len = ops.minimum(data_len_tensor, Tensor([max_input_len], ms.int32))
+                        # 使用模型返回的长度作为输入序列长度；若无则回退到数据长度
+                        if lgt_tensor is None or not isinstance(lgt_tensor, Tensor):
+                            if isinstance(data_len_tensor, Tensor):
+                                input_len = ops.cast(data_len_tensor, ms.int32)
+                                if len(input_len.shape) == 0:
+                                    input_len = ops.expand_dims(input_len, 0)
+                            else:
+                                input_len = Tensor([int(data_len_tensor)], ms.int32)
                         else:
-                            input_len = Tensor([min(max_input_len, int(data_len_tensor))], ms.int32)
+                            input_len = ops.cast(lgt_tensor, ms.int32)
+                            if len(input_len.shape) == 0:
+                                input_len = ops.expand_dims(input_len, 0)
                         
-                        # 处理标签长度 
-                        if isinstance(label_len_tensor, Tensor):
-                            label_len = ops.minimum(label_len_tensor, Tensor([max_label_len], ms.int32))
+                        # 目标长度按真实提供的label_len_tensor来（未填充长度），但需不超过输入长度与时间步T
+                        if not isinstance(label_len_tensor, Tensor):
+                            if isinstance(label_len_tensor, (list, tuple)):
+                                label_len = Tensor([int(x) for x in label_len_tensor], ms.int32)
+                            else:
+                                label_len = Tensor([int(label_len_tensor)], ms.int32)
                         else:
-                            label_len = Tensor([min(max_label_len, int(label_len_tensor))], ms.int32)
+                            label_len = ops.cast(label_len_tensor, ms.int32)
+                            if len(label_len.shape) == 0:
+                                label_len = ops.expand_dims(label_len, 0)
                         
-                        # 确保长度至少为1
-                        input_len = ops.maximum(input_len, Tensor([1], ms.int32))
-                        label_len = ops.maximum(label_len, Tensor([1], ms.int32))
+                        # 约束：1 <= label_len <= input_len <= T
+                        T_steps = logits.shape[0]
+                        ones = Tensor(np.array([1] * int(input_len.shape[0])), ms.int32)
+                        maxT = Tensor(np.array([T_steps] * int(input_len.shape[0])), ms.int32)
+                        input_len = ops.minimum(input_len, maxT)
+                        input_len = ops.maximum(input_len, ones)
+                        label_len = ops.minimum(label_len, input_len)
+                        label_len = ops.maximum(label_len, ones)
                         
-                        # 处理标签，确保在有效范围内
-                        seq_label_clean = ops.clip_by_value(seq_label, 0, len(self.word2idx) - 1)
+                        # 处理标签，确保在有效范围内（不包含blank）
+                        seq_label_clean = ops.clip_by_value(seq_label, 0, self.vocab_size_model - 1)
                         
                         # 计算CTC损失
                         loss = loss_fn(logits, seq_label_clean, input_len, label_len)
@@ -691,7 +707,7 @@ class GPUTFNetTrainer:
                         # 检查损失值
                         if ops.isnan(loss) or ops.isinf(loss):
                             self.logger.warning("NaN/Inf loss detected, using fallback value")
-                            loss = Tensor(1.0, ms.float32)  # 使用较小的fallback值
+                            loss = Tensor(1.0, ms.float32)
                         
                         return loss
                         
@@ -747,36 +763,91 @@ class GPUTFNetTrainer:
         for batch_idx, (data, target, data_len, target_len) in enumerate(self.valid_dataset):
             try:
                 # 前向推断 - 获取每个时间步的logits
-                logits = model(data, data_len, is_train=False)
+                model_output = model(data, data_len, is_train=False)
+
+                # 提取主要logits与有效长度（模型返回多个输出，索引4为融合后的logits，5为长度）
+                if isinstance(model_output, (list, tuple)):
+                    logits = model_output[4] if len(model_output) >= 5 else model_output[0]
+                    lgt_tensor = model_output[5] if len(model_output) >= 6 else None
+                else:
+                    logits = model_output
+                    lgt_tensor = None
+
+                # 确保logits为Tensor，形状为 (T, B, C)
+                if not isinstance(logits, Tensor):
+                    logits = Tensor(np.asarray(logits), ms.float32)
+                if logits.ndim != 3:
+                    # 兜底：创建合理形状（含blank）
+                    T, B, C = 10, 1, self.vocab_size_model
+                    logits = ops.zeros((T, B, C), ms.float32)
                 
-                # 验证时需要注意：训练过程中视频被分为多个帧片段(gross段)
-                # 每个帧片段对应不同的标签，因此验证也要按帧片段进行
-                # 而不是盲目使用整个句子进行对比
+                # 数值稳定：log_softmax
+                logits = ops.log_softmax(logits, axis=-1)
+
+                # 统一为 (B, T, C) 以适配解码器
+                if logits.ndim == 3:
+                    logits = ops.transpose(logits, (1, 0, 2))
+
+                # 选择用于解码的长度：优先使用模型返回的lgt_tensor
+                if lgt_tensor is not None and isinstance(lgt_tensor, Tensor):
+                    len_tensor = lgt_tensor
+                else:
+                    # 回退使用数据集提供的长度
+                    if isinstance(data_len, Tensor):
+                        len_tensor = data_len
+                    else:
+                        len_tensor = Tensor(np.asarray(data_len), ms.int32)
+                # 将长度限制到 logits 时间维（CTC约束）
+                T = logits.shape[1] if logits.ndim == 3 else 1
+                if len_tensor.ndim == 0:
+                    len_tensor = ops.expand_dims(len_tensor, 0)
+                maxT = Tensor(np.array([T] * int(len_tensor.shape[0])), ms.int32)
+                len_tensor = ops.minimum(ops.cast(len_tensor, ms.int32), maxT)
+                len_tensor = ops.maximum(len_tensor, Tensor(np.array([1] * int(len_tensor.shape[0])), ms.int32))
+
+                # 转 numpy 以供解码器使用
+                logits_np = logits.asnumpy()
+                lens_np = len_tensor.asnumpy()
+
+                # 基于帧级别的CTC解码
+                predictions = self.decoder.decode(logits_np, lens_np)
+
+                # 解码目标标签
+                target_np = target.asnumpy() if hasattr(target, 'asnumpy') else np.asarray(target)
+                target_len_np = target_len.asnumpy() if hasattr(target_len, 'asnumpy') else np.asarray(target_len)
+                references = self.decoder.decode_labels(target_np, target_len_np)
+
+                # 调试：统计blank占比（前3个batch各打印一次）
+                if batch_idx < 3:
+                    # 计算blank占比
+                    blank_id = getattr(self, 'blank_id', None)
+                    if blank_id is not None:
+                        # logits_np (B,T,C)
+                        pred_ids = np.argmax(logits_np, axis=2)
+                        blank_ratio = (pred_ids == int(blank_id)).mean()
+                        self.logger.info(f"[VAL DEBUG] batch {batch_idx} blank_id={blank_id}, blank_ratio={blank_ratio:.3f}, T={logits_np.shape[1]}")
+                    # 打印前1-2个样本的预测与参考
+                    for i in range(min(2, len(predictions))):
+                        pred_words = [w for w, _ in predictions[i]] if isinstance(predictions[i], list) else []
+                        ref_str = references[i] if i < len(references) else ""
+                        self.logger.info(f"[VAL DEBUG] sample {i} pred='{ ' '.join(pred_words) }' | ref='{ref_str}' | len={int(lens_np[i]) if i < len(lens_np) else -1}")
                 
-                # 获取预测结果 - 基于帧级别的CTC解码
-                predictions = self.decoder.decode(logits.asnumpy(), data_len.asnumpy())
-                
-                # 解码目标标签 - 按照实际的标签长度进行解码
-                references = self.decoder.decode_labels(target.asnumpy(), target_len.asnumpy())
-                
-                # 对每个样本进行帧级别的验证
+                # 对每个样本进行帧级别验证
                 for i in range(len(predictions)):
-                    pred_seq = predictions[i]  # 预测的词汇序列
-                    ref_seq = references[i]    # 参考的词汇序列
+                    pred_seq = predictions[i]
+                    ref_seq = references[i] if i < len(references) else ""
                     
-                    # 计算单个样本的WER - 基于帧片段级别
                     if isinstance(pred_seq, list) and isinstance(ref_seq, str):
-                        # 将预测序列转换为字符串格式以便比较
                         pred_words = [word for word, _ in pred_seq] if pred_seq else []
                         pred_str = ' '.join(pred_words)
                         sample_wer = self._calculate_frame_level_wer(pred_str, ref_seq)
                     else:
-                        sample_wer = 1.0  # 如果格式不匹配，设为最大错误率
+                        sample_wer = 1.0
                     
                     total_wer += sample_wer
                     batch_count += 1
                 
-                if batch_idx % 20 == 0 and batch_idx > 0:  # 每20个batch打印一次进度
+                if batch_idx % 20 == 0 and batch_idx > 0:
                     self.logger.info(f"Validation progress: {batch_idx} batches")
                 
             except Exception as e:
