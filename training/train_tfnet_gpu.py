@@ -580,7 +580,8 @@ class GPUTFNetTrainer:
         
         for batch_idx, (data, target, data_len, target_len) in enumerate(self.train_dataset):
             try:
-
+                # 计算真实的epoch内batch编号
+                epoch_batch_idx = batch_idx % 4973  # 每个epoch的batch数
                 
                 # 统一dtype与形状处理 (B, T, C, H, W) -> 模型自己处理
                 if isinstance(target, np.ndarray):
@@ -727,14 +728,14 @@ class GPUTFNetTrainer:
                 total_loss += loss.asnumpy()
                 batch_count += 1
                 if batch_idx % self.config_manager.get("logging.print_interval") == 0:
-                    self.logger.info(f"Batch {batch_idx}, Loss: {loss.asnumpy():.6f}")
+                    self.logger.info(f"Epoch {self.current_epoch} - Batch {epoch_batch_idx}/{4973}, Loss: {loss.asnumpy():.6f}")
                 
             except Exception as e:
                 self.logger.error(f"Error in batch {batch_idx}: {e}")
                 continue
         
         avg_loss = total_loss / max(batch_count, 1)
-        self.logger.info(f"Training loss: {avg_loss:.6f}")
+        self.logger.info(f"Epoch {self.current_epoch} completed - Training loss: {avg_loss:.6f} (processed {batch_count} batches)")
         return avg_loss
 
     def _validate_epoch(self, model):
