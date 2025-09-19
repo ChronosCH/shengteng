@@ -171,60 +171,73 @@ class VideoTransform:
     
     def __call__(self, video_frames):
         """对视频帧应用转换"""
+        # 统一空输入处理：直接返回零填充张量，避免后续转置报错
+        if video_frames is None:
+            return np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
+        if isinstance(video_frames, (list, tuple)) and len(video_frames) == 0:
+            return np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
+        if isinstance(video_frames, np.ndarray):
+            if video_frames.size == 0 or (video_frames.ndim >= 1 and video_frames.shape[0] == 0):
+                return np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
+        
         # 如果需要，转换为numpy数组
         if isinstance(video_frames, list):
             video_frames = np.array(video_frames)
         
-        # 限制最大帧数以减少内存使用
+        # 限制最大帧数以减少内存使用（均匀采样）
         if len(video_frames) > self.max_frames:
-            # 均匀采样帧
             indices = np.linspace(0, len(video_frames) - 1, self.max_frames, dtype=int)
             video_frames = video_frames[indices]
         
         # 调整帧大小
         resized_frames = []
         for frame in video_frames:
-            # 确保帧已经是正确的大小 (224x224)
+            if frame is None:
+                continue
+            frame = np.asarray(frame)
+            # 灰度转3通道
+            if frame.ndim == 2:
+                frame = np.repeat(frame[:, :, None], 3, axis=2)
+            # 保障有通道维
+            if frame.ndim != 3:
+                continue
+            # 统一为 (H, W, C)
+            if frame.shape[0] == 3 and frame.shape[-1] != 3:  # (C,H,W) -> (H,W,C)
+                frame = np.transpose(frame, (1, 2, 0))
+            # 确保大小
             if frame.shape[:2] != (self.crop_size, self.crop_size):
                 frame = cv2.resize(frame, (self.crop_size, self.crop_size))
-            
-            if self.is_train:
-                # 随机水平翻转 (减少其他增强以节省内存)
-                if np.random.random() > 0.5:
-                    frame = cv2.flip(frame, 1)
-            
+            if self.is_train and np.random.random() > 0.5:
+                frame = cv2.flip(frame, 1)
             resized_frames.append(frame)
         
-        # 转换为张量格式 (T, H, W, C) -> (T, C, H, W)
-        video_tensor = np.array(resized_frames, dtype=np.float32)
-
-        # 检查张量形状并处理
-        if len(video_tensor.shape) != 4:
-            # 通过添加通道维度处理灰度图像
-            if len(video_tensor.shape) == 3:
-                video_tensor = np.expand_dims(video_tensor, axis=-1)
-
-        # 确保有正确的维度数量用于转置
-        if len(video_tensor.shape) == 4:
-            video_tensor = np.transpose(video_tensor, (0, 3, 1, 2))
+        # 若所有帧都无效，回退为零张量
+        if len(resized_frames) == 0:
+            return np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
+        
+        # (T, H, W, C) -> (T, C, H, W)
+        video_tensor = np.array(resized_frames)
+        if video_tensor.ndim == 4:
+            if video_tensor.shape[-1] == 3:
+                video_tensor = np.transpose(video_tensor, (0, 3, 1, 2))
         else:
-            raise ValueError(f"无法转置形状为{video_tensor.shape}的张量")
+            # 无法转置则回退
+            return np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
 
-        # 填充或截断到固定长度以便批处理
+        # 截断/填充到固定长度
         current_frames = video_tensor.shape[0]
-
         if current_frames > self.max_frames:
-            # 截断
             video_tensor = video_tensor[:self.max_frames]
         elif current_frames < self.max_frames:
-            # 用零填充
             pad_frames = self.max_frames - current_frames
             pad_shape = (pad_frames,) + video_tensor.shape[1:]
             pad_tensor = np.zeros(pad_shape, dtype=video_tensor.dtype)
             video_tensor = np.concatenate([video_tensor, pad_tensor], axis=0)
         
-        # 标准化到[0, 1]
-        video_tensor = video_tensor.astype(np.float32) / 255.0
+        # 条件归一化，避免重复/二次归一化
+        video_tensor = video_tensor.astype(np.float32)
+        if np.nanmax(video_tensor) > 1.0:
+            video_tensor = video_tensor / 255.0
         
         return video_tensor
 
@@ -319,7 +332,9 @@ def safe_stack_frames(frames, max_frames=None, target_size=(160, 160)):
                 frame_list.append(pad_block[i])
 
     video = np.stack(frame_list, axis=0)  # (T,C,H,W)
-    video /= 255.0
+    # 条件归一化，避免重复归一化
+    if np.nanmax(video) > 1.0:
+        video = video / 255.0
     seq_len = min(original_len, video.shape[0])
     return np.ascontiguousarray(video, dtype=np.float32), np.int32(seq_len)
 
@@ -348,8 +363,8 @@ class CECSLDataset:
             reader = csv.reader(f)
             for n, row in enumerate(reader):
                 if n != 0:  # 跳过表头
-                    video_name = row[0]
-                    translator = row[1]  # 获取翻译者 (A, B, C, 等)
+                    video_name = str(row[0]).strip()
+                    translator = str(row[1]).strip()  # 去除前后空白，避免路径中出现空格
                     words = row[3].split("/")
                     words = preprocess_words(words)
 
@@ -378,11 +393,23 @@ class CECSLDataset:
 
         # 加载视频帧
         video_frames = self._load_video(sample['video_path'])
-        original_length = len(video_frames)
+        original_length = int(video_frames.shape[0]) if isinstance(video_frames, np.ndarray) else len(video_frames)
 
-        # 应用转换
-        if self.transform:
-            video_frames = self.transform(video_frames)
+        # 若无帧，直接返回占位视频，避免进入 transform
+        if original_length == 0:
+            video_array = np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
+            seq_len = np.int32(1)
+        else:
+            # 应用转换（已包含截断/填充和条件归一化）
+            if self.transform:
+                video_frames = self.transform(video_frames)
+            # 确保返回 (T,C,H,W)
+            if not isinstance(video_frames, np.ndarray) or video_frames.ndim != 4:
+                # 兜底处理
+                video_array, seq_len = safe_stack_frames(video_frames, max_frames=self.max_frames, target_size=(self.crop_size, self.crop_size))
+            else:
+                video_array = np.asarray(video_frames, dtype=np.float32)
+                seq_len = np.int32(min(original_length, self.max_frames))
 
         # 记录真实标签长度(填充前)
         max_label_length = 50  # 合理的最大标签长度
@@ -394,29 +421,6 @@ class CECSLDataset:
             padded_label = raw_label[:max_label_length]
         else:
             padded_label = raw_label + [0] * (max_label_length - len(raw_label))
-
-        # 确保视频数据有正确的形状
-        if video_frames is None or (isinstance(video_frames, (list, tuple)) and len(video_frames) == 0):
-            # 处理空视频 - 创建标准形状的占位符
-            video_array = np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
-            seq_len = np.int32(1)
-        else:
-            # 使用 safe_stack_frames 确保正确的形状
-            video_array, seq_len = safe_stack_frames(video_frames, max_frames=self.max_frames, target_size=(self.crop_size, self.crop_size))
-            
-            # 确保视频数组有正确的形状 (T, C, H, W)
-            if len(video_array.shape) != 4:
-                # 如果形状不正确，创建标准形状
-                video_array = np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
-                seq_len = np.int32(1)
-            elif video_array.shape[1] != 3:  # 确保通道数为3
-                # 重新排列通道
-                if video_array.shape[3] == 3:  # (T, H, W, C) -> (T, C, H, W)
-                    video_array = np.transpose(video_array, (0, 3, 1, 2))
-                else:
-                    # 创建标准形状
-                    video_array = np.zeros((self.max_frames, 3, self.crop_size, self.crop_size), dtype=np.float32)
-                    seq_len = np.int32(1)
 
         label_ids = np.asarray(padded_label, dtype=np.int32)
         label_len = np.int32(len(padded_label))
@@ -491,11 +495,9 @@ class CECSLDataset:
         if debug_print:
             print(f"加载了{len(frames)}帧")
         
-        # 转换为numpy数组并确保正确的数据类型
+        # 转换为numpy数组并确保正确的数据类型（此处不归一化，交由 transform/safe_stack 处理）
         if frames:
             frames = np.asarray(frames, dtype=np.float32)
-            # 标准化到[0, 1]范围
-            frames = frames / 255.0
         else:
             # 如果没有加载到帧，返回正确形状的空数组
             frames = np.empty((0, 224, 224, 3), dtype=np.float32)
@@ -590,9 +592,8 @@ def create_dataset(data_path, label_path, word2idx, dataset_name,
         drop_remainder=True  # 丢弃不完整的批次以保持一致的内存使用
     )
     
-    # 为训练启用重复（有助于GPU利用率）
-    if is_train:
-        ms_dataset = ms_dataset.repeat()
+    # 不使用无限repeat，让每个epoch自然结束
+    # 这样可以正确进行epoch间的验证和检查点保存
     
     return ms_dataset
 
