@@ -7,34 +7,33 @@
     "train_label_path": "data/CE-CSL/label/train.csv",
     "valid_label_path": "data/CE-CSL/label/dev.csv",
     "test_label_path": "data/CE-CSL/label/test.csv",
-    "crop_size": 64,
-    "max_frames": 16
+    "crop_size": 128,
+    "max_frames": 32
   },
   "model": {
     "name": "TFNet",
-    "hidden_size": 64,
+    "hidden_size": 256,
     "device_target": "CPU",
     "dataset_name": "CE-CSL"
   },
   "training": {
-    "batch_size": 1,
-    "learning_rate": 0.0005,
-    "num_epochs": 3,
-    "num_workers": 1,
+    "batch_size": 4,
+    "learning_rate": 0.0001,
+    "num_epochs": 5,
+    "num_workers": 2,
     "weight_decay": 0.0001,
     "gradient_clip_norm": 1.0,
     "save_interval": 1,
     "eval_interval": 1,
-    "early_stopping_patience": 3,
-    "prefetch_size": 1,
-    "max_rowsize": 8
+    "early_stopping_patience": 5,
+    "prefetch_size": 2,
+    "max_rowsize": 32
   },
   "optimizer": {
     "type": "Adam",
     "lr_scheduler": {
-      "type": "MultiStepLR",
-      "milestones": [3, 4],
-      "gamma": 0.2
+      "type": "ExponentialLR",
+      "gamma": 0.95
     }
   },
   "loss": {

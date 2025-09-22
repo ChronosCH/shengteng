@@ -295,7 +295,7 @@ class TFNetTrainer:
             label_path=dataset_config["valid_label_path"],
             word2idx=self.word2idx,
             dataset_name=dataset_config["name"],
-            batch_size=1,  # Use batch size 1 for validation
+            batch_size=batch_size,  # Use the same batch size as training
             is_train=False,
             num_workers=num_workers,
             prefetch_size=prefetch_size,
@@ -358,27 +358,16 @@ class TFNetTrainer:
             log_softmax = nn.LogSoftmax(axis=-1)
             log_probs = log_softmax(log_probs1)
             
-            # 检查输入长度和目标长度，跳过不匹配的样本
-            import mindspore.ops as ops
-            batch_size = target_lengths.shape[0]
-            
-            # 创建有效样本的掩码
-            valid_mask = ops.zeros(batch_size, ms.bool_)
-            for i in range(batch_size):
-                if lgt[i] >= target_lengths[i]:
-                    valid_mask[i] = True
-            
-            # 如果没有有效样本，返回一个很小的损失
-            if not ops.any(valid_mask):
-                return ops.scalar_to_tensor(0.01, ms.float32)
-            
-            # 只对有效样本计算损失
+            # 直接计算CTC损失，让CTC内部处理长度不匹配的情况
             try:
                 loss = ctc_loss(log_probs, target_data, lgt, target_lengths)
+                # 检查损失是否为有效值
+                if ops.isnan(loss) or ops.isinf(loss):
+                    return ops.scalar_to_tensor(1.0, ms.float32)
                 return loss
-            except Exception:
-                # 如果CTC损失失败，返回一个小的损失值
-                return ops.scalar_to_tensor(0.01, ms.float32)
+            except Exception as e:
+                # 如果CTC损失失败，返回一个中等损失值继续训练
+                return ops.scalar_to_tensor(1.0, ms.float32)
         
         return simplified_loss_fn
     
@@ -525,6 +514,9 @@ class TFNetTrainer:
         num_batches = 0
 
         for batch_idx, batch_data in enumerate(self.valid_dataset.create_dict_iterator(num_epochs=1)):
+            if batch_idx % 10 == 0:
+                self.logger.info(f"Validation batch {batch_idx}")
+            
             # Extract batch data
             videos = batch_data['video']
             labels = batch_data['label']
@@ -586,6 +578,17 @@ class TFNetTrainer:
 
             # Decode predictions
             predictions = self.decoder.decode(log_probs1, lgt, batch_first=False, probs=False)
+            
+            # 添加调试信息
+            if batch_idx == 0:  # 只对第一个batch输出调试信息
+                self.logger.info(f"DEBUG - Batch {batch_idx}:")
+                self.logger.info(f"  log_probs1 shape: {log_probs1.shape}")
+                self.logger.info(f"  lgt: {lgt}")
+                self.logger.info(f"  predictions length: {len(predictions)}")
+                if predictions:
+                    self.logger.info(f"  first prediction: {predictions[0][:5] if len(predictions[0]) > 5 else predictions[0]}")
+                self.logger.info(f"  target_data: {target_data}")
+                self.logger.info(f"  target_lengths: {target_lengths}")
 
             # Prepare prediction ids for WER (map decoded words back to ids)
             pred_ids_batch = []
@@ -618,11 +621,12 @@ class TFNetTrainer:
                 ref_ids = [[]]
 
             # Calculate WER
+            current_batch_size = len(pred_ids_batch) if pred_ids_batch else 1
             batch_wer = calculate_wer_score(
                 pred_ids_batch,
                 ref_ids,
                 self.idx2word,
-                1  # batch size is 1 for validation
+                current_batch_size
             )
 
             total_loss += loss.asnumpy().item()

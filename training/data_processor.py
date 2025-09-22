@@ -328,9 +328,11 @@ class CECSLDataset:
             reader = csv.reader(f)
             for n, row in enumerate(reader):
                 if n != 0:  # 跳过表头
+                    # 对所有字段进行strip处理，移除前后空白符
                     video_name = row[0].strip()
                     translator = row[1].strip()  # 获取翻译者 (A, B, C, 等) 并去掉空格
-                    words = row[3].split("/")
+                    gloss_text = row[3].strip()  # Gloss字段也要strip
+                    words = gloss_text.split("/")
                     words = preprocess_words(words)
 
                     # 将单词转换为索引
