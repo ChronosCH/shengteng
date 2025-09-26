@@ -1,0 +1,42 @@
+# ASL手语识别项目依赖包
+
+# 数据处理（选择更保守的版本以兼容旧版 SciPy）
+numpy==1.24.4
+pandas==2.0.3
+opencv-python>=4.5.0
+
+# 高效视频解码（可选，至少安装一个）
+# 建议优先 decord（更轻量），或使用 PyAV
+decord>=0.6.0
+av>=10.0.0
+
+# 可视化
+matplotlib>=3.3.0
+seaborn>=0.11.0
+
+# 图像处理
+Pillow>=8.0.0
+
+# 科学计算
+scipy==1.10.1
+scikit-learn>=0.24.0
+
+# 进度条
+tqdm>=4.60.0
+
+# 配置文件处理
+pyyaml>=5.4.0
+
+# 日志
+tensorboard>=2.5.0
+
+# 系统监控
+psutil>=5.8.0
+
+# 多媒体处理
+imageio>=2.9.0
+imageio-ffmpeg>=0.4.0
+
+# 工具包
+ipython>=7.20.0
+jupyter>=1.0.0

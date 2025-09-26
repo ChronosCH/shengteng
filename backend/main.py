@@ -35,6 +35,7 @@ from backend.utils.file_manager import FileManager
 try:
     from backend.services.learning_training_service import LearningTrainingService
     from backend.api.learning_routes import router as learning_router
+    from backend.services import IsolatedSignService
     LEARNING_AVAILABLE = True
     logger.info("✅ 学习训练功能已导入")
 except ImportError as e:
@@ -115,6 +116,27 @@ async def lifespan(app: FastAPI):
                 health_check=default_health_check
             )
 
+            try:
+                iso_cfg = config.isolated_sign
+                iso_config_dict = {
+                    "sequence_length": iso_cfg.sequence_length,
+                    "use_gpu": iso_cfg.use_gpu,
+                    "device_id": iso_cfg.device_id,
+                    "class_mapping_path": getattr(iso_cfg, "class_mapping_path", None),
+                }
+
+                service_manager.register_service(
+                    "isolated_sign_service",
+                    lambda: IsolatedSignService(
+                        model_checkpoint=iso_cfg.model_path,
+                        train_csv_path=iso_cfg.train_csv,
+                        config=iso_config_dict,
+                    ),
+                    health_check=default_health_check,
+                )
+            except Exception as iso_exc:
+                logger.warning(f"⚠️ 孤立手语服务注册失败: {iso_exc}")
+
         # 启动所有服务
         success = await service_manager.start_all_services()
         if not success:
@@ -139,6 +161,11 @@ async def lifespan(app: FastAPI):
             app.state.learning_service = service_manager.get_service("learning_service")
         except:
             app.state.learning_service = None
+
+        try:
+            app.state.isolated_sign_service = service_manager.get_service("isolated_sign_service")
+        except:
+            app.state.isolated_sign_service = None
 
         logger.info("✅ 系统初始化完成")
         yield

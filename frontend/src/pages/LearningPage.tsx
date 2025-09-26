@@ -95,6 +95,7 @@ import InteractiveTutorial from '../components/learning/InteractiveTutorial'
 import PracticeSession from '../components/learning/PracticeSession'
 import GamificationSystem from '../components/learning/GamificationSystem'
 import ExternalResources from '../components/learning/ExternalResources'
+import isolatedSignLearningService from '../services/isolatedSignLearningService'
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -148,6 +149,9 @@ function LearningPage() {
   const [showPractice, setShowPractice] = useState(false)
   const [selectedTutorial, setSelectedTutorial] = useState<any>(null)
   const [selectedPractice, setSelectedPractice] = useState<any>(null)
+  const [isolatedUploadLoading, setIsolatedUploadLoading] = useState(false)
+  const [isolatedPrediction, setIsolatedPrediction] = useState<{ gloss: string | null; confidence: number } | null>(null)
+  const [isolatedVideoPath, setIsolatedVideoPath] = useState('')
 
   // 认证状态
   const { isAuthenticated, user, loading } = useAuth()
@@ -185,6 +189,37 @@ function LearningPage() {
   const handleSnackbarClose = () => {
     setSnackbar({ ...snackbar, open: false })
   }
+
+  const handleIsolatedSignUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!isAuthenticated) {
+      setAuthModalOpen(true)
+      showSnackbar('请先登录后再进行上传', 'warning')
+      return
+    }
+
+    try {
+      setIsolatedUploadLoading(true)
+      setIsolatedPrediction(null)
+
+      const uploadResp = await isolatedSignLearningService.uploadIsolatedVideo(file)
+      setIsolatedVideoPath(uploadResp.file_path)
+
+      const predictResp = await isolatedSignLearningService.predictIsolatedVideo(uploadResp.file_path)
+      setIsolatedPrediction({
+        gloss: predictResp.prediction.gloss,
+        confidence: predictResp.prediction.confidence,
+      })
+      showSnackbar('识别完成，查看结果', 'success')
+    } catch (error: any) {
+      console.error('isolated sign upload failed', error)
+      showSnackbar(error?.message || '孤立手语识别失败', 'error')
+    } finally {
+      setIsolatedUploadLoading(false)
+    }
+  }, [isAuthenticated])
 
   // 开始课程 - 需要认证
   const startLesson = useCallback((lesson: any) => {

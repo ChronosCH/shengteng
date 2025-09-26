@@ -89,6 +89,17 @@ class PerformanceConfig:
     enable_compression: bool = True
 
 @dataclass
+class IsolatedSignConfig:
+    """孤立手语识别配置"""
+    model_path: str = r"D:\shengteng\training_ASL\checkpoints\asl_model-194_23.ckpt"
+    train_csv: str = r"D:\shengteng\training_ASL\data\splits\train.csv"
+    class_mapping_path: str = r"D:\shengteng\training_ASL\checkpoints\validation_results\class_mapping.json"
+    top_k_glosses: int = 120
+    sequence_length: int = 32
+    use_gpu: bool = False
+    device_id: int = 0
+
+@dataclass
 class AppConfig:
     """应用主配置"""
     # 基本配置
@@ -108,6 +119,7 @@ class AppConfig:
     security: SecurityConfig = field(default_factory=SecurityConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
+    isolated_sign: IsolatedSignConfig = field(default_factory=IsolatedSignConfig)
 
 class ConfigManager:
     """配置管理器"""
@@ -186,6 +198,14 @@ class ConfigManager:
             # 日志配置
             'LOG_LEVEL': ('logging.level', str),
             'LOG_FILE': ('logging.file_path', str),
+
+            # 孤立手语配置
+            'ISOLATED_MODEL_PATH': ('isolated_sign.model_path', str),
+            'ISOLATED_TRAIN_CSV': ('isolated_sign.train_csv', str),
+            'ISOLATED_MAPPING_PATH': ('isolated_sign.class_mapping_path', str),
+            'ISOLATED_SEQUENCE_LENGTH': ('isolated_sign.sequence_length', int),
+            'ISOLATED_USE_GPU': ('isolated_sign.use_gpu', lambda x: x.lower() == 'true'),
+            'ISOLATED_DEVICE_ID': ('isolated_sign.device_id', int),
         }
         
         for env_key, (config_path, converter) in env_mappings.items():
@@ -246,6 +266,17 @@ class ConfigManager:
         # 验证置信度阈值
         if not (0.0 <= self.config.cslr.confidence_threshold <= 1.0):
             raise ValueError(f"无效的置信度阈值: {self.config.cslr.confidence_threshold}")
+        
+        # 验证孤立手语模型
+        iso_model = Path(self.config.isolated_sign.model_path)
+        if not iso_model.exists():
+            logger.warning(f"⚠️ 孤立手语模型不存在: {iso_model}")
+        iso_csv = Path(self.config.isolated_sign.train_csv)
+        if not iso_csv.exists():
+            logger.warning(f"⚠️ 孤立手语训练CSV不存在: {iso_csv}")
+        iso_map = Path(self.config.isolated_sign.class_mapping_path)
+        if not iso_map.exists():
+            logger.warning(f"⚠️ 孤立手语类别映射不存在: {iso_map}")
     
     def get_config(self) -> AppConfig:
         """获取配置对象"""

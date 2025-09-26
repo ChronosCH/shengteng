@@ -3,13 +3,15 @@
 提供完整的学习训练功能API接口
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File, Request
 from typing import List, Dict, Any, Optional
 import logging
 from datetime import datetime
+import os
 
 from ..services.learning_training_service import LearningTrainingService, DifficultyLevel
 from ..utils.security import SecurityManager
+from ..services import IsolatedSignService
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,12 @@ router = APIRouter(tags=["学习训练"])
 learning_service = LearningTrainingService()
 security_manager = SecurityManager()
 get_current_user = security_manager.get_current_user
+
+async def get_isolated_service(request: Request) -> IsolatedSignService:
+    svc = getattr(request.app.state, "isolated_sign_service", None)
+    if svc:
+        return svc
+    raise HTTPException(status_code=503, detail="孤立手语识别服务未初始化")
 
 @router.get("/modules", response_model=List[Dict[str, Any]])
 async def get_learning_modules(
@@ -386,6 +394,52 @@ async def get_learning_categories():
     except Exception as e:
         logger.error(f"获取学习分类失败: {e}")
         raise HTTPException(status_code=500, detail="获取学习分类失败")
+
+@router.post("/isolated-sign/upload")
+async def upload_isolated_sign(
+    request,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        file_manager = getattr(request.app.state, "file_manager", None)
+        if file_manager is None:
+            raise HTTPException(status_code=503, detail="文件服务不可用")
+
+        info = await file_manager.save_file(file, user_id=current_user.get("id"))
+        return {"success": True, "file_path": info["file_path"], "filename": info["filename"]}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"孤立手语视频上传失败: {exc}")
+        raise HTTPException(status_code=500, detail="上传失败")
+
+
+@router.post("/isolated-sign/predict")
+async def predict_isolated_sign(
+    request,
+    file_path: str,
+    current_user: dict = Depends(get_current_user),
+    service: IsolatedSignService = Depends(get_isolated_service),
+):
+    try:
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="视频文件不存在")
+
+        result = await service.predict(file_path)
+        return {
+            "success": True,
+            "prediction": {
+                "gloss": result.predicted_gloss,
+                "confidence": result.confidence,
+                "logits": result.logits,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"孤立手语识别失败: {exc}")
+        raise HTTPException(status_code=500, detail="推理失败")
 
 # 导出路由
 __all__ = ["router"]

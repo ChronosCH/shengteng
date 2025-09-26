@@ -91,6 +91,14 @@ class Settings(BaseSettings):
     CSLR_ENABLE_CACHE: bool = True
     CSLR_CACHE_SIZE: int = Field(default=1000, ge=100, le=10000)
 
+    # 孤立手语识别模型设置
+    ISOLATED_MODEL_PATH: str = r"D:\shengteng\training_ASL\checkpoints\asl_model-194_23.ckpt"
+    ISOLATED_TRAIN_CSV: str = r"D:\shengteng\training_ASL\data\splits\train.csv"
+    ISOLATED_CLASS_MAPPING_PATH: str = r"D:\shengteng\training_ASL\checkpoints\validation_results\class_mapping.json"
+    ISOLATED_SEQUENCE_LENGTH: int = Field(default=32, ge=8, le=128)
+    ISOLATED_USE_GPU: bool = False
+    ISOLATED_DEVICE_ID: int = Field(default=0, ge=0)
+
     # Diffusion SLP模型设置（可选）
     ENABLE_DIFFUSION: bool = False
     DIFFUSION_MODEL_PATH: str = "models/diffusion_slp.mindir"
@@ -354,6 +362,12 @@ class Settings(BaseSettings):
         # 必需模型检查（仅检查 CSLR 模型）
         if not Path(self.CSLR_MODEL_PATH).exists():
             warnings.append(f"模型文件不存在: {self.CSLR_MODEL_PATH}")
+        if not Path(self.ISOLATED_MODEL_PATH).exists():
+            warnings.append(f"孤立手语模型不存在: {self.ISOLATED_MODEL_PATH}")
+        if not Path(self.ISOLATED_TRAIN_CSV).exists():
+            warnings.append(f"孤立手语训练CSV不存在: {self.ISOLATED_TRAIN_CSV}")
+        if not Path(self.ISOLATED_CLASS_MAPPING_PATH).exists():
+            warnings.append(f"孤立手语类别映射不存在: {self.ISOLATED_CLASS_MAPPING_PATH}")
         
         # 可选模型检查，仅在启用时检查
         if self.ENABLE_DIFFUSION and not Path(self.DIFFUSION_MODEL_PATH).exists():
