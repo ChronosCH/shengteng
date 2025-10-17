@@ -2,7 +2,7 @@
  * 优化的响应式主布局组件 - 增强版
  */
 
-import { ReactNode, useState, useEffect, useMemo } from 'react'
+import { ReactNode, useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Box,
@@ -153,12 +153,16 @@ function Layout({ children, darkMode, onToggleDarkMode }: LayoutProps) {
     }
   }, [location.pathname, isMobile])
 
-  const handleNavigation = (path: string) => {
+  const handleNavigation = useCallback((path: string) => {
+    if (location.pathname === path) {
+      setDrawerOpen(false)
+      return
+    }
     navigate(path)
     if (isMobile) {
       setDrawerOpen(false)
     }
-  }
+  }, [navigate, isMobile, location.pathname])
 
   const toggleGroup = (groupTitle: string) => {
     setExpandedGroups(prev => 

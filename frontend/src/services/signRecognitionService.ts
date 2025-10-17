@@ -50,7 +50,7 @@ export interface ResultResponse {
 class SignRecognitionService {
   private baseUrl: string
   private getAuthHeaders(): HeadersInit {
-    const token = localStorage.getItem('auth_token')
+    const token = localStorage.getItem('access_token')
     return token ? { 'Authorization': `Bearer ${token}` } : {}
   }
   constructor() {

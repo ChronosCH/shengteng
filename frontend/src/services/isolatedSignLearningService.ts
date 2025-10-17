@@ -21,7 +21,7 @@ class IsolatedSignLearningService {
   }
 
   private getAuthHeaders(): HeadersInit {
-    const token = localStorage.getItem('auth_token')
+    const token = localStorage.getItem('access_token')
     return token ? { Authorization: `Bearer ${token}` } : {}
   }
 
@@ -35,11 +35,17 @@ class IsolatedSignLearningService {
       body: formData,
     })
 
+    const text = await res.text()
     if (!res.ok) {
-      throw new Error(`上传失败: ${res.status}`)
+      try {
+        const errorData = text ? JSON.parse(text) : null
+        throw new Error(errorData?.detail || `上传失败: ${res.status}`)
+      } catch (parseErr) {
+        throw new Error(`上传失败: ${res.status}`)
+      }
     }
 
-    const data = await res.json()
+    const data = text ? JSON.parse(text) : null
     if (!data?.success) {
       throw new Error(data?.detail || '上传失败')
     }

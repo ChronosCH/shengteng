@@ -62,7 +62,6 @@ import {
   Speed,
   LocalFireDepartment,
   MenuBook,
-  VideoLibrary,
   Games,
   Search,
   ExpandMore,
@@ -77,15 +76,12 @@ import {
   AccessTime,
   Language,
   VolumeUp,
-  Visibility,
   TouchApp,
   AutoAwesome,
 } from '@mui/icons-material'
 
 import ErrorBoundary from '../components/ErrorBoundary'
-import HandSignDemo from '../components/HandSignDemo'
 import HandSignTestPanel from '../components/HandSignTestPanel'
-import SimpleHandSignTest from '../components/SimpleHandSignTest'
 import { useAuth } from '../contexts/AuthContext'
 import AuthModal from '../components/auth/AuthModal'
 import UserDashboard from '../components/learning/UserDashboard'
@@ -121,7 +117,6 @@ function TabPanel(props: TabPanelProps) {
 
 // 学习类型枚举
 enum LearningType {
-  VIDEO_DEMO = 'video_demo',
   INTERACTIVE = 'interactive',
   TEST = 'test',
   GAME = 'game',
@@ -142,7 +137,6 @@ function LearningPage() {
   const [showLearningPath, setShowLearningPath] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterDifficulty, setFilterDifficulty] = useState('all')
-  const [filterType, setFilterType] = useState('all')
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' as any })
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [showTutorial, setShowTutorial] = useState(false)
@@ -626,16 +620,6 @@ function LearningPage() {
       icon: <Quiz />
     },
     { 
-      id: 'video-watch',
-      task: '观看3个演示视频', 
-      completed: false, 
-      xp: 40,
-      type: 'video',
-      progress: 1,
-      target: 3,
-      icon: <VideoLibrary />
-    },
-    { 
       id: 'practice-time',
       task: '练习手语30分钟', 
       completed: false, 
@@ -644,38 +628,6 @@ function LearningPage() {
       progress: 15,
       target: 30,
       icon: <Timer />
-    }
-  ]
-
-  // 学习课程详细数据
-  const lessonTypes = [
-    {
-      type: LearningType.VIDEO_DEMO,
-      title: '视频演示',
-      description: '观看标准手语动作演示',
-      icon: <VideoLibrary />,
-      color: '#B5EAD7'
-    },
-    {
-      type: LearningType.INTERACTIVE,
-      title: '互动练习',
-      description: '实时手语练习和反馈',
-      icon: <TouchApp />,
-      color: '#FFDAB9'
-    },
-    {
-      type: LearningType.TEST,
-      title: '能力测试',
-      description: '评估学习成果和能力',
-      icon: <Quiz />,
-      color: '#FFB3BA'
-    },
-    {
-      type: LearningType.GAME,
-      title: '游戏化学习',
-      description: '通过游戏轻松学习',
-      icon: <Games />,
-      color: '#C7CEDB'
     }
   ]
 
@@ -1284,11 +1236,6 @@ function LearningPage() {
                     iconPosition="start"
                   />
                   <Tab
-                    icon={<VideoLibrary />}
-                    label="视频演示"
-                    iconPosition="start"
-                  />
-                  <Tab
                     icon={<TouchApp />}
                     label="互动练习"
                     iconPosition="start"
@@ -1357,62 +1304,6 @@ function LearningPage() {
                 </TabPanel>
 
                 <TabPanel value={currentTab} index={1}>
-                  <Box sx={{ p: 4 }}>
-                    <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                      📺 手语动作演示
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                      观看标准的手语动作演示，学习正确的表达方式和手型技巧
-                    </Typography>
-                    
-                    {/* 视频演示功能区域 */}
-                    <Grid container spacing={3}>
-                      <Grid item xs={12} md={8}>
-                        <ErrorBoundary>
-                          <HandSignDemo />
-                        </ErrorBoundary>
-                      </Grid>
-                      <Grid item xs={12} md={4}>
-                        <Paper sx={{ p: 3, bgcolor: '#f8f9fa', borderRadius: 3 }}>
-                          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                            🎯 学习要点
-                          </Typography>
-                          <List dense>
-                            <ListItem>
-                              <ListItemIcon>
-                                <Visibility color="primary" />
-                              </ListItemIcon>
-                              <ListItemText 
-                                primary="仔细观察手型"
-                                secondary="注意手指的位置和角度"
-                              />
-                            </ListItem>
-                            <ListItem>
-                              <ListItemIcon>
-                                <Timer color="primary" />
-                              </ListItemIcon>
-                              <ListItemText 
-                                primary="控制动作节奏"
-                                secondary="保持适当的动作速度"
-                              />
-                            </ListItem>
-                            <ListItem>
-                              <ListItemIcon>
-                                <TouchApp color="primary" />
-                              </ListItemIcon>
-                              <ListItemText 
-                                primary="重复练习"
-                                secondary="多次练习直到熟练"
-                              />
-                            </ListItem>
-                          </List>
-                        </Paper>
-                      </Grid>
-                    </Grid>
-                  </Box>
-                </TabPanel>
-
-                <TabPanel value={currentTab} index={2}>
                   <Box sx={{ p: 4 }}>
                     <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                       🤝 互动练习
@@ -1570,16 +1461,66 @@ function LearningPage() {
                         />
                       </Grid>
 
-                      {/* 原有的简单测试组件 */}
+                      {/* 孤立手语练习卡片 */}
                       <Grid item xs={12}>
-                        <Card sx={{ borderRadius: 3 }}>
+                        <Card sx={{ borderRadius: 3, background: '#f0f7ff' }}>
                           <CardContent>
-                            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                              🎯 基础练习
-                            </Typography>
-                            <ErrorBoundary>
-                              <SimpleHandSignTest />
-                            </ErrorBoundary>
+                            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                              <Avatar sx={{ bgcolor: '#1976d2' }}>
+                                <TouchApp />
+                              </Avatar>
+                              <Box>
+                                <Typography variant="h6" fontWeight="bold">
+                                  孤立手语练习
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  上传单个手语动作视频，系统将自动识别并反馈对应词汇。
+                                </Typography>
+                              </Box>
+                            </Stack>
+
+                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                              <Button
+                                component="label"
+                                variant="contained"
+                                color="primary"
+                                disabled={isolatedUploadLoading}
+                                sx={{ borderRadius: 3 }}
+                                startIcon={<TouchApp />}
+                              >
+                                {isolatedUploadLoading ? '识别中...' : '上传手语视频'}
+                                <input
+                                  type="file"
+                                  hidden
+                                  accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska"
+                                  onChange={handleIsolatedSignUpload}
+                                />
+                              </Button>
+
+                              {isolatedVideoPath && (
+                                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-all' }}>
+                                  已上传: {isolatedVideoPath}
+                                </Typography>
+                              )}
+                            </Stack>
+
+                            {isolatedPrediction && (
+                              <Paper elevation={0} sx={{ mt: 3, p: 3, borderRadius: 3, backgroundColor: '#fff' }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                                  识别结果
+                                </Typography>
+                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+                                  <Chip
+                                    color="primary"
+                                    label={isolatedPrediction.gloss || '未识别'}
+                                    sx={{ fontSize: '1.1rem', px: 2, py: 1 }}
+                                  />
+                                  <Typography variant="body2" color="text.secondary">
+                                    置信度：{(isolatedPrediction.confidence * 100).toFixed(2)}%
+                                  </Typography>
+                                </Stack>
+                              </Paper>
+                            )}
                           </CardContent>
                         </Card>
                       </Grid>
@@ -1587,7 +1528,7 @@ function LearningPage() {
                   </Box>
                 </TabPanel>
 
-                <TabPanel value={currentTab} index={3}>
+                <TabPanel value={currentTab} index={2}>
                   <Box sx={{ p: 4 }}>
                     <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                       📝 能力测试
@@ -1664,7 +1605,7 @@ function LearningPage() {
                   </Box>
                 </TabPanel>
 
-                <TabPanel value={currentTab} index={4}>
+                <TabPanel value={currentTab} index={3}>
                   <Box sx={{ p: 4 }}>
                     <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                       🎮 游戏化学习
@@ -1776,7 +1717,7 @@ function LearningPage() {
                   </Box>
                 </TabPanel>
 
-                <TabPanel value={currentTab} index={5}>
+                <TabPanel value={currentTab} index={4}>
                   <Box sx={{ p: 4 }}>
                     <ExternalResources
                       onBookmark={(resourceId) => {

@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   Container,
@@ -87,6 +88,7 @@ interface DashboardProps {
 }
 
 function Dashboard({ onNavigate }: DashboardProps) {
+  const navigate = useNavigate()
   const theme = useTheme()
   const [systemStatus, setSystemStatus] = useState({
     cpu: 45,
@@ -198,9 +200,9 @@ function Dashboard({ onNavigate }: DashboardProps) {
   const handleQuickAction = (path: string) => {
     if (onNavigate) {
       onNavigate(path)
-    } else {
-      window.location.href = path
+      return
     }
+    navigate(path)
   }
 
   const getStatusColor = (value: number) => {

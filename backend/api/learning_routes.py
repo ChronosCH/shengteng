@@ -3,7 +3,8 @@
 提供完整的学习训练功能API接口
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File, Request
+from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File, Request, Body
+from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import logging
 from datetime import datetime
@@ -20,6 +21,9 @@ router = APIRouter(tags=["学习训练"])
 learning_service = LearningTrainingService()
 security_manager = SecurityManager()
 get_current_user = security_manager.get_current_user
+
+class PredictRequest(BaseModel):
+    file_path: str
 
 async def get_isolated_service(request: Request) -> IsolatedSignService:
     svc = getattr(request.app.state, "isolated_sign_service", None)
@@ -397,7 +401,7 @@ async def get_learning_categories():
 
 @router.post("/isolated-sign/upload")
 async def upload_isolated_sign(
-    request,
+    request: Request,
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
 ):
@@ -417,12 +421,25 @@ async def upload_isolated_sign(
 
 @router.post("/isolated-sign/predict")
 async def predict_isolated_sign(
-    request,
-    file_path: str,
+    request: Request,
+    payload: PredictRequest | None = Body(default=None),
     current_user: dict = Depends(get_current_user),
     service: IsolatedSignService = Depends(get_isolated_service),
 ):
     try:
+        file_path = payload.file_path if payload else None
+
+        if not file_path:
+            try:
+                raw_body = await request.json()
+                if isinstance(raw_body, dict):
+                    file_path = raw_body.get("file_path")
+            except Exception:
+                file_path = None
+
+        if not file_path:
+            raise HTTPException(status_code=422, detail="文件路径缺失，请提供 file_path")
+
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="视频文件不存在")
 

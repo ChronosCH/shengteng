@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   Container,
@@ -60,6 +61,7 @@ const slideIn = keyframes`
 
 function HomePage() {
   const theme = useTheme()
+  const navigate = useNavigate()
   const [visibleFeatures, setVisibleFeatures] = useState(0)
   const [statsVisible, setStatsVisible] = useState(false)
 
@@ -154,11 +156,11 @@ function HomePage() {
   ]
 
   const handleGetStarted = () => {
-    window.location.href = '/recognition'
+    navigate('/recognition')
   }
 
   const handleLearnMore = () => {
-    window.location.href = '/learning'
+    navigate('/learning')
   }
 
   return (
