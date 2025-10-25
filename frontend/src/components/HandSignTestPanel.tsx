@@ -23,7 +23,6 @@ import {
   SIGN_NUMBERS,
   SIGN_WORDS 
 } from './SignLanguagePresets'
-import AvatarViewer from './AvatarViewer'
 
 const HandSignTestPanel: React.FC = () => {
   const [selectedSign, setSelectedSign] = useState<string>('')
@@ -199,17 +198,13 @@ const HandSignTestPanel: React.FC = () => {
         <Grid item xs={12} md={8}>
           <Paper sx={{ p: 2, height: '600px' }}>
             <Typography variant="h6" gutterBottom>
-              手语小人显示
+              手语显示（已移除 3D Avatar）
             </Typography>
             
-            <Box sx={{ height: '550px', border: '1px solid #e0e0e0', borderRadius: 1 }}>
-              <AvatarViewer
-                text={currentText}
-                isActive={isActive}
-                onAvatarMeshReady={(mesh) => {
-                  console.log('Avatar mesh ready:', mesh)
-                }}
-              />
+            <Box sx={{ height: '550px', border: '1px solid #e0e0e0', borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Typography variant="h6" color="text.secondary">
+                {currentText || '手语显示区域'}
+              </Typography>
             </Box>
           </Paper>
         </Grid>

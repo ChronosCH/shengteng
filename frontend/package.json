@@ -18,15 +18,11 @@
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.14.19",
     "@mui/material": "^5.14.20",
-    "@react-three/drei": "^9.88.13",
-    "@react-three/fiber": "^8.15.11",
     "@types/react-router-dom": "^5.3.3",
-    "@types/three": "^0.158.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.7.1",
-    "socket.io-client": "^4.7.4",
-    "three": "^0.158.0"
+    "socket.io-client": "^4.7.4"
   },
   "devDependencies": {
     "@types/react": "^18.2.37",

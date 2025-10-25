@@ -1,19 +1,19 @@
-# 🤖 SignAvatar Web - 手语识别与虚拟人播报系统
+# 🤖 手语识别与学习系统
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com)
 [![MindSpore](https://img.shields.io/badge/MindSpore-2.7+-orange.svg)](https://mindspore.cn)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-一个基于深度学习的实时手语识别与虚拟人播报系统，集成了多种先进技术，为听障人士提供全面的无障碍通信解决方案。
+一个基于深度学习的实时手语识别与学习系统，集成了多种先进技术，为听障人士提供全面的无障碍通信解决方案。
 
 ## ✨ 主要特性
 
 ### 🔍 核心功能
-- **实时手语识别**: 基于CSLR（连续手语识别）技术，支持实时视频流手语识别
+- **实时手语识别**: 基于 Mind-VAC CSLR（连续手语识别）管线，支持 MindSpore 推理与实时视频流手语识别
 - **扩散模型手语生成**: 使用Diffusion SLP技术生成自然流畅的手语动作序列
-- **虚拟人播报**: 3D虚拟人实时播报手语内容，支持多种情感和语速
 - **多模态传感器融合**: 集成EMG、IMU和视觉传感器，提高识别精度
+- **智能学习训练**: 个性化学习路径，系统化手语学习
 
 ### 🛡️ 隐私保护
 - **差分隐私**: 保护用户数据隐私的同时保持模型性能
@@ -37,7 +37,11 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                        前端界面                              │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
-│  │   摄像头    │ │  虚拟人显示  │ │  控制面板    │           │
+
+┌─────────────────────────────────────────────────────────────┐
+│                        前端界面                              │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
+│  │   摄像头    │ │  手语显示    │ │  控制面板    │           │
 │  └─────────────┘ └─────────────┘ └─────────────┘           │
 └─────────────────────────────────────────────────────────────┘
                             │ WebSocket
@@ -50,16 +54,7 @@
 │  │  隐私保护    │ │  触觉反馈    │ │  联邦学习    │           │
 │  └─────────────┘ └─────────────┘ └─────────────┘           │
 └─────────────────────────────────────────────────────────────┘
-                            │
-┌─────────────────────────────────────────────────────────────┐
-│                      基础设施                               │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
-│  │   数据库     │ │    缓存      │ │    监控      │           │
-│  │  (SQLite)   │ │  (Redis)    │ │(Prometheus) │           │
-│  └─────────────┘ └─────────────┘ └─────────────┘           │
-└─────────────────────────────────────────────────────────────┘
 ```
-
 ## 🚀 快速开始
 
 ### 📋 系统要求
@@ -74,18 +69,22 @@
 
 #### 1. 克隆项目
 ```bash
-git clone https://github.com/your-username/signavatar-web.git
-cd signavatar-web
+git clone https://github.com/ChronosCH/shengteng.git
+cd shengteng
 ```
 
 #### 2. 环境准备
 ```bash
-# 安装Python依赖
-pip install -r requirements.txt
+# 激活 Mind-VAC 推理所需的 Conda 环境
+conda activate mind
 
-# 初始化项目环境
-python start.py init
+# 安装 Python 依赖
+pip install -r requirements.txt
 ```
+
+> 提示：依赖列表已包含 `requests`，用于 Mind-VAC 通义千问 API 客户端；如遇缺失，请重新执行上述安装命令。
+>
+> 若尚未创建 `mind` 环境，可参考以下示例：`conda create -n mind python=3.11 mindspore -c mindspore`，然后再执行上述步骤。
 
 #### 3. 配置环境
 ```bash
@@ -98,25 +97,29 @@ cp .env.example .env
 
 **开发环境**:
 ```bash
-# 启动开发服务器
-python start.py start --reload
+# 启动后端（FastAPI）
+python backend/main.py
 
-# 或者使用部署脚本
-./deploy.sh -e development deploy
+# 启动前端（Vite）
+cd frontend
+npm install
+npm run dev
 ```
+
+> 首次启动后端时，请关注日志：若看到 “Mind-VAC 模型与资源加载完成”，说明 CSLR 引擎已正常工作；若出现依赖缺失提示，可根据日志补齐可选组件。
 
 **生产环境**:
 ```bash
-# 使用Docker Compose启动
-docker-compose up -d
+# 使用 Uvicorn 启动后端
+uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 2
 
-# 或者使用部署脚本
-./deploy.sh -e production deploy
+# 使用 Docker Compose 一键部署
+docker-compose up -d
 ```
 
 ### 🌐 访问应用
 
-- **主应用**: http://localhost:3000
+- **前端开发环境**: http://localhost:5173
 - **API文档**: http://localhost:8000/api/docs
 - **监控面板**: http://localhost:3001 (admin/admin)
 - **Prometheus**: http://localhost:9090
@@ -194,18 +197,35 @@ print(result["data"]["keypoints"])
 | `SECRET_KEY` | JWT密钥 | `your-secret-key` |
 | `DATABASE_URL` | 数据库地址 | `sqlite:///./data/signavatar.db` |
 | `REDIS_HOST` | Redis主机 | `localhost` |
-| `CSLR_MODEL_PATH` | CSLR模型路径 | `models/cslr_model.mindir` |
+| `CSLR_MODEL_PATH` | Mind-VAC CSLR 模型权重路径 | `mind_vac/slr_mindspore.ckpt` |
+| `CSLR_VOCAB_PATH` | Mind-VAC 词典（支持 .json/.npy） | `mind_vac/gloss_dict.npy` |
+| `MINDVAC_ENABLED` | 是否启用 Mind-VAC 管线 | `true` |
+| `MINDVAC_DEVICE` | Mind-VAC 推理设备 | `CPU` |
 | `DIFFUSION_MODEL_PATH` | Diffusion模型路径 | `models/diffusion_slp.mindir` |
 
 ### 模型文件
 
-系统需要以下预训练模型文件（请联系开发团队获取）：
+系统需要以下关键模型与资源文件（请联系开发团队获取）：
 
-- `models/cslr_model.mindir` - CSLR识别模型
-- `models/diffusion_slp.mindir` - Diffusion生成模型  
-- `models/text_encoder.mindir` - 文本编码器
-- `models/federated_slr.mindir` - 联邦学习模型
-- `models/vocab.json` - 词汇表文件
+- `mind_vac/slr_mindspore.ckpt` - Mind-VAC CSLR MindSpore 权重
+- `mind_vac/gloss_dict.npy` - Mind-VAC 词典（numpy/pickle 序列化，亦支持 JSON 版本）
+- `mind_vac/output_dir/` - Mind-VAC 推理输出目录（运行时自动创建）
+- `models/diffusion_slp.mindir` - Diffusion手语生成模型（可选）
+- `models/text_encoder.mindir` - 文本编码器（可选）
+- `models/federated_slr.mindir` - 联邦学习模型（可选）
+
+#### Mind-VAC 资源准备
+
+1. 确保上述 Mind-VAC 权重与词典文件位于 `mind_vac/` 目录。
+2. 如果使用 `.npy` 词典，保持原始 numpy/pickle 编码即可，系统会自动转换；如需自定义，可提供 UTF-8 JSON 映射。
+3. 若启用通义千问增强功能，请在运行前设置 `DASHSCOPE_API_KEY` 环境变量。
+4. 如果未安装 MediaPipe 或 PyJWT，后端会自动降级并给出提示日志，无需手动禁用。
+
+#### 模块依赖说明
+
+- **MediaPipe（可选）**: 未安装时仍可使用 Mind-VAC CSLR 识别，日志会显示降级提示。
+- **PyJWT/Passlib（可选）**: 认证服务默认关闭，可按需安装并启用。
+- **requests**: Mind-VAC 通义千问客户端必需，已在 `requirements.txt` 中声明。
 
 ## 🏋️ 模型训练
 
@@ -223,7 +243,6 @@ print(result["data"]["keypoints"])
 ```bash
 # 安装训练相关依赖
 pip install -r requirements.txt
-pip install -r requirements-tfnet.txt
 
 # 验证环境配置
 cd training
@@ -632,10 +651,10 @@ A: 使用训练器的 `export_model()` 方法导出模型，然后复制到 `mod
 
 ### 联系我们
 
-- **项目主页**: https://github.com/your-username/signavatar-web
-- **问题反馈**: https://github.com/your-username/signavatar-web/issues
-- **邮箱支持**: support@signavatar.com
-- **技术文档**: https://docs.signavatar.com
+- **项目主页**: https://github.com/ChronosCH/shengteng
+- **问题反馈**: https://github.com/ChronosCH/shengteng/issues
+- **邮箱支持**: 请通过 Issues 联系维护者
+- **技术文档**: 敬请期待
 
 ## 📄 许可证
 

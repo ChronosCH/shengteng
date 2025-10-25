@@ -33,8 +33,6 @@ import ErrorBoundary from '../components/ErrorBoundary'
 import SafeFade from '../components/SafeFade'
 import VideoCapture from '../components/VideoCapture'
 import SubtitleDisplay from '../components/SubtitleDisplay'
-import AvatarViewer from '../components/AvatarViewer'
-import ThreeDErrorBoundary from '../components/ThreeDErrorBoundary'
 import { useSignLanguageRecognition } from '../hooks/useSignLanguageRecognition'
 import VideoFileRecognition from '../components/VideoFileRecognition'
 // 已移除增强版CE-CSL模拟组件
@@ -494,37 +492,47 @@ function RecognitionPage() {
                   position: 'relative',
                 }}
               >
-                <ThreeDErrorBoundary>
-                  <ErrorBoundary>
-                    {isConnected ? (
-                      <AvatarViewer
-                        text={currentText}
-                        isActive={isRecognizing}
-                      />
-                    ) : (
-                      <Box sx={{ textAlign: 'center', color: 'text.secondary', p: 4 }}>
-                        <Avatar
-                          sx={{
-                            width: 80,
-                            height: 80,
-                            mx: 'auto',
-                            mb: 3,
-                            backgroundColor: 'rgba(255, 218, 185, 0.3)',
-                            color: 'text.secondary',
-                        }}
-                      >
-                        <Settings sx={{ fontSize: 40 }} />
-                      </Avatar>
-                      <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                        等待连接服务器
-                      </Typography>
-                      <Typography variant="body2">
-                        连接后即可查看3D Avatar实时演示手语动作
-                      </Typography>
+                <ErrorBoundary>
+                  {isConnected ? (
+                    <Box sx={{ 
+                      height: '100%', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      p: 4 
+                    }}>
+                      <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="h5" gutterBottom sx={{ color: 'primary.main' }}>
+                          手语播报显示区域
+                        </Typography>
+                        <Typography variant="body1" color="text.secondary">
+                          {currentText || '识别的手语文本将在这里显示'}
+                        </Typography>
+                      </Box>
                     </Box>
-                  )}
-                  </ErrorBoundary>
-                </ThreeDErrorBoundary>
+                  ) : (
+                    <Box sx={{ textAlign: 'center', color: 'text.secondary', p: 4 }}>
+                      <Avatar
+                        sx={{
+                          width: 80,
+                          height: 80,
+                          mx: 'auto',
+                          mb: 3,
+                          backgroundColor: 'rgba(255, 218, 185, 0.3)',
+                          color: 'text.secondary',
+                      }}
+                    >
+                      <Settings sx={{ fontSize: 40 }} />
+                    </Avatar>
+                    <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                      等待连接服务器
+                    </Typography>
+                    <Typography variant="body2">
+                      连接后即可进行手语识别
+                    </Typography>
+                  </Box>
+                )}
+                </ErrorBoundary>
               </Box>
             </Paper>
           </SafeFade>

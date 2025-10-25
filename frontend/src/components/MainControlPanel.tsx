@@ -33,7 +33,6 @@ import WebXRPanel from './WebXRPanel';
 import FederatedLearningPanel from './FederatedLearningPanel';
 import AttentionVisualizationPanel from './AttentionVisualizationPanel';
 import GamePlaygroundPanel from './GamePlaygroundPanel';
-import AvatarViewer from './AvatarViewer';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -204,15 +203,12 @@ const MainControlPanel: React.FC<MainControlPanelProps> = ({
           </Paper>
         </Grid>
 
-        {/* 右侧 Avatar 显示区域 */}
+        {/* 右侧显示区域 */}
         <Grid item xs={12} md={8} sx={{ height: '100%' }}>
-          <Paper sx={{ height: '100%', p: 2 }}>
-            <AvatarViewer
-              text={text}
-              isActive={isActive}
-              onAvatarMeshReady={handleAvatarMeshReady}
-              signSequence={currentSignSequence}
-            />
+          <Paper sx={{ height: '100%', p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Typography variant="h6" color="text.secondary">
+              {text || '手语播报显示区域'}
+            </Typography>
           </Paper>
         </Grid>
       </Grid>

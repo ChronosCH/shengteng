@@ -84,14 +84,6 @@ function HomePage() {
       gradient: 'linear-gradient(135deg, #FFDAB9 0%, #FFE7CC 100%)',
     },
     {
-      icon: <Psychology />,
-      title: '3D Avatar演示',
-      description: '逼真的3D虚拟人物实时演示手语动作，提升学习体验',
-      color: '#FFB3BA',
-      path: '/avatar',
-      gradient: 'linear-gradient(135deg, #FFB3BA 0%, #FF9AA2 100%)',
-    },
-    {
       icon: <Analytics />,
       title: '数据分析洞察',
       description: '详细的学习进度分析和个人能力评估报告',
@@ -117,7 +109,7 @@ function HomePage() {
     setTimeout(() => setStatsVisible(true), 1500)
 
     return () => clearInterval(timer)
-  }, [features.length])
+  }, [])
 
   // 技术亮点
   const highlights = [
@@ -412,16 +404,10 @@ function HomePage() {
                     delay: 1,
                   },
                   {
-                    icon: <Psychology />,
-                    bottom: '20%',
-                    left: '15%',
-                    delay: 2,
-                  },
-                  {
                     icon: <Analytics />,
                     bottom: '10%',
                     right: '15%',
-                    delay: 3,
+                    delay: 2,
                   }
                 ].map((item, index) => (
                   <Grow
@@ -497,7 +483,7 @@ function HomePage() {
 
         <Grid container spacing={4}>
           {features.map((feature, index) => (
-            <Grid item xs={12} sm={6} lg={3} key={feature.title}>
+            <Grid item xs={12} sm={6} lg={4} key={feature.title}>
               <Grow
                 in={index < visibleFeatures}
                 timeout={800}

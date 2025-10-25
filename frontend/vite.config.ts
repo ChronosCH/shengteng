@@ -37,8 +37,5 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       sourcemap: true,
     },
-    optimizeDeps: {
-      include: ['three', '@react-three/fiber', '@react-three/drei'],
-    },
   }
 })

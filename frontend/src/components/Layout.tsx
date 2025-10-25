@@ -77,16 +77,6 @@ const navigationGroups = [
     ]
   },
   {
-    title: '3D Avatar系统',
-    items: [
-      { text: '基础Avatar', icon: <Person />, path: '/avatar', color: '#FFDAB9', description: '基础3D手语演示' },
-      { text: '专业Avatar', icon: <AutoAwesome />, path: '/avatar-pro', color: '#FFE4B5', description: '专业手语Avatar' },
-      { text: '高质量Avatar', icon: <Diamond />, path: '/avatar-hq', color: '#F0E68C', description: '高质量3D建模' },
-      { text: '真人级Avatar', icon: <Face />, path: '/avatar-advanced', color: '#98FB98', description: '真人级3D Avatar' },
-      { text: 'Avatar对比', icon: <Compare />, path: '/avatar-compare', color: '#87CEEB', description: 'Avatar版本对比' },
-    ]
-  },
-  {
     title: '高级功能',
     items: [
       { text: '实验室', icon: <Science />, path: '/lab', color: '#E0E4CC', description: '前沿技术体验' },

@@ -12,7 +12,6 @@ import {
   Chip,
   Stack,
 } from '@mui/material'
-import AvatarViewer from './AvatarViewer'
 
 const SimpleHandSignTest: React.FC = () => {
   const [currentText, setCurrentText] = useState<string>('')
@@ -111,17 +110,13 @@ const SimpleHandSignTest: React.FC = () => {
         <Grid item xs={12} md={8}>
           <Paper sx={{ p: 2, height: '600px' }}>
             <Typography variant="h6" gutterBottom>
-              精细手语小人
+              手语显示区域（已移除 3D Avatar）
             </Typography>
             
-            <Box sx={{ height: '550px', border: '1px solid #e0e0e0', borderRadius: 1 }}>
-              <AvatarViewer
-                text={currentText}
-                isActive={isActive}
-                onAvatarMeshReady={(mesh) => {
-                  console.log('Avatar mesh ready:', mesh)
-                }}
-              />
+            <Box sx={{ height: '550px', border: '1px solid #e0e0e0', borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Typography variant="h6" color="text.secondary">
+                {currentText || '手语显示区域'}
+              </Typography>
             </Box>
           </Paper>
         </Grid>
