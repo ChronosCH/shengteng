@@ -1,0 +1,21 @@
+# MindSpore手语识别 + LLM句子生成
+# 依赖包列表
+
+# 深度学习框架
+# 根据您的硬件选择安装其中之一:
+# pip install mindspore          # CPU版本
+# pip install mindspore-gpu       # GPU版本
+# pip install mindspore-ascend    # Ascend版本
+
+# 基础依赖
+numpy>=1.19.0
+opencv-python>=4.5.0
+
+# PyTorch (用于权重转换,如果只使用MindSpore推理可以不安装)
+torch>=1.8.0
+
+# API调用
+requests>=2.25.0
+
+# 可选: 环境变量管理
+python-dotenv>=0.19.0
