@@ -8,6 +8,7 @@ export interface ContinuousRecognitionResult {
   file_path: string
   gloss_sequence: string[]
   text: string
+  raw_gloss_text?: string
   segments: Array<{
     gloss_sequence: string[]
     start_frame: number
@@ -22,6 +23,15 @@ export interface ContinuousRecognitionResult {
   duration: number
   srt_path?: string
   created_at: number
+  llm_result?: {
+    chinese?: string
+    english?: string
+    confidence?: string
+    explanation?: string
+    success?: boolean
+    error?: string
+    raw_response?: string
+  }
 }
 
 export interface ContinuousUploadResponse {

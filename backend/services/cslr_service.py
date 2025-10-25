@@ -11,6 +11,7 @@ from collections import deque
 from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
+from pathlib import Path
 import numpy as np
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -189,8 +190,16 @@ class CSLRService:
     async def _load_vocabulary(self) -> None:
         """加载词汇表"""
         try:
-            with open(self.config.vocab_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            vocab_path = Path(self.config.vocab_path)
+            if not vocab_path.exists():
+                raise FileNotFoundError(str(vocab_path))
+
+            if vocab_path.suffix.lower() == '.npy':
+                raw_data = np.load(str(vocab_path), allow_pickle=True, encoding='latin1')
+                data = raw_data.item() if hasattr(raw_data, 'item') else raw_data
+            else:
+                with open(vocab_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
             # 兼容两种格式：
             # 1) 直接映射 { token: id, ... }
             # 2) 带有 'word2idx' 字段 { "word2idx": { token: id, ... }, ... }

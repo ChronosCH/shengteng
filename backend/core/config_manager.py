@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 class Environment(Enum):
     """环境类型"""
@@ -39,8 +40,8 @@ class RedisConfig:
 @dataclass
 class CSLRConfig:
     """CSLR服务配置"""
-    model_path: str = r"D:\shengteng\models\best_model.ckpt"
-    vocab_path: str = r"D:\shengteng\training\output_gpu\vocabulary.json"
+    model_path: str = "mind_vac/slr_mindspore.ckpt"
+    vocab_path: str = "mind_vac/gloss_dict.npy"
     confidence_threshold: float = 0.5
     max_sequence_length: int = 100
     batch_size: int = 1
@@ -91,13 +92,25 @@ class PerformanceConfig:
 @dataclass
 class IsolatedSignConfig:
     """孤立手语识别配置"""
-    model_path: str = r"D:\shengteng\training_ASL\checkpoints\asl_model-194_23.ckpt"
-    train_csv: str = r"D:\shengteng\training_ASL\data\splits\train.csv"
-    class_mapping_path: str = r"D:\shengteng\training_ASL\checkpoints\validation_results\class_mapping.json"
+    enabled: bool = False
+    model_path: Optional[str] = None
+    train_csv: Optional[str] = None
+    class_mapping_path: Optional[str] = None
     top_k_glosses: int = 120
     sequence_length: int = 32
     use_gpu: bool = False
     device_id: int = 0
+
+@dataclass
+class MindVacConfig:
+    """Mind-VAC 连续手语识别配置"""
+    enabled: bool = True
+    device: str = "CPU"
+    checkpoint_path: str = "mind_vac/slr_mindspore.ckpt"
+    dict_path: str = "mind_vac/gloss_dict.npy"
+    output_dir: str = "mind_vac/output_dir"
+    use_llm: bool = True
+    qwen_model: str = "qwen-plus"
 
 @dataclass
 class AppConfig:
@@ -120,6 +133,7 @@ class AppConfig:
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
     isolated_sign: IsolatedSignConfig = field(default_factory=IsolatedSignConfig)
+    mind_vac: MindVacConfig = field(default_factory=MindVacConfig)
 
 class ConfigManager:
     """配置管理器"""
@@ -206,6 +220,16 @@ class ConfigManager:
             'ISOLATED_SEQUENCE_LENGTH': ('isolated_sign.sequence_length', int),
             'ISOLATED_USE_GPU': ('isolated_sign.use_gpu', lambda x: x.lower() == 'true'),
             'ISOLATED_DEVICE_ID': ('isolated_sign.device_id', int),
+            'ISOLATED_ENABLED': ('isolated_sign.enabled', lambda x: x.lower() == 'true'),
+
+            # Mind-VAC 配置
+            'MINDVAC_ENABLED': ('mind_vac.enabled', lambda x: x.lower() == 'true'),
+            'MINDVAC_DEVICE': ('mind_vac.device', str),
+            'MINDVAC_CHECKPOINT_PATH': ('mind_vac.checkpoint_path', str),
+            'MINDVAC_DICT_PATH': ('mind_vac.dict_path', str),
+            'MINDVAC_OUTPUT_DIR': ('mind_vac.output_dir', str),
+            'MINDVAC_USE_LLM': ('mind_vac.use_llm', lambda x: x.lower() == 'true'),
+            'MINDVAC_QWEN_MODEL': ('mind_vac.qwen_model', str),
         }
         
         for env_key, (config_path, converter) in env_mappings.items():
@@ -245,16 +269,25 @@ class ConfigManager:
         """验证配置"""
         # 验证必要的目录
         upload_dir = Path(self.config.file.upload_dir)
+        if not upload_dir.is_absolute():
+            upload_dir = PROJECT_ROOT / upload_dir
+            self.config.file.upload_dir = str(upload_dir)
         upload_dir.mkdir(parents=True, exist_ok=True)
         
         # 验证模型文件路径
         model_path = Path(self.config.cslr.model_path)
+        if not model_path.is_absolute():
+            model_path = PROJECT_ROOT / model_path
+            self.config.cslr.model_path = str(model_path)
         if not model_path.parent.exists():
             model_path.parent.mkdir(parents=True, exist_ok=True)
             logger.warning(f"⚠️ 模型目录不存在，已创建: {model_path.parent}")
         
         # 验证词汇表路径
         vocab_path = Path(self.config.cslr.vocab_path)
+        if not vocab_path.is_absolute():
+            vocab_path = PROJECT_ROOT / vocab_path
+            self.config.cslr.vocab_path = str(vocab_path)
         if not vocab_path.parent.exists():
             vocab_path.parent.mkdir(parents=True, exist_ok=True)
             logger.warning(f"⚠️ 词汇表目录不存在，已创建: {vocab_path.parent}")
@@ -267,16 +300,30 @@ class ConfigManager:
         if not (0.0 <= self.config.cslr.confidence_threshold <= 1.0):
             raise ValueError(f"无效的置信度阈值: {self.config.cslr.confidence_threshold}")
         
-        # 验证孤立手语模型
-        iso_model = Path(self.config.isolated_sign.model_path)
-        if not iso_model.exists():
-            logger.warning(f"⚠️ 孤立手语模型不存在: {iso_model}")
-        iso_csv = Path(self.config.isolated_sign.train_csv)
-        if not iso_csv.exists():
-            logger.warning(f"⚠️ 孤立手语训练CSV不存在: {iso_csv}")
-        iso_map = Path(self.config.isolated_sign.class_mapping_path)
-        if not iso_map.exists():
-            logger.warning(f"⚠️ 孤立手语类别映射不存在: {iso_map}")
+        # 验证孤立手语模型（仅在启用时）
+        iso_cfg = self.config.isolated_sign
+        if iso_cfg.enabled:
+            if iso_cfg.model_path:
+                iso_model = Path(iso_cfg.model_path)
+                if not iso_model.is_absolute():
+                    iso_model = PROJECT_ROOT / iso_model
+                    iso_cfg.model_path = str(iso_model)
+                if not iso_model.exists():
+                    logger.warning(f"⚠️ 孤立手语模型不存在: {iso_model}")
+            if iso_cfg.train_csv:
+                iso_csv = Path(iso_cfg.train_csv)
+                if not iso_csv.is_absolute():
+                    iso_csv = PROJECT_ROOT / iso_csv
+                    iso_cfg.train_csv = str(iso_csv)
+                if not iso_csv.exists():
+                    logger.warning(f"⚠️ 孤立手语训练CSV不存在: {iso_csv}")
+            if iso_cfg.class_mapping_path:
+                iso_map = Path(iso_cfg.class_mapping_path)
+                if not iso_map.is_absolute():
+                    iso_map = PROJECT_ROOT / iso_map
+                    iso_cfg.class_mapping_path = str(iso_map)
+                if not iso_map.exists():
+                    logger.warning(f"⚠️ 孤立手语类别映射不存在: {iso_map}")
     
     def get_config(self) -> AppConfig:
         """获取配置对象"""

@@ -264,22 +264,95 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
                     <Typography variant="subtitle1" gutterBottom fontWeight={600}>
                       识别文本
                     </Typography>
-                    <Typography 
-                      variant="body1" 
-                      sx={{ 
-                        minHeight: 60,
-                        p: 2,
-                        bgcolor: 'background.default',
-                        borderRadius: 1,
-                        wordBreak: 'break-word',
-                        mb: 1
-                      }}
-                    >
-                      {result.text || '无识别结果'}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      总体置信度: {((result.overall_confidence || 0) * 100).toFixed(1)}%
-                    </Typography>
+                    <Stack spacing={2}>
+                      <Box
+                        sx={{
+                          p: 2,
+                          bgcolor: 'background.default',
+                          borderRadius: 1,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                        }}
+                      >
+                        <Typography variant="overline" color="text.secondary">
+                          中文
+                        </Typography>
+                        <Typography 
+                          variant="body1"
+                          sx={{
+                            fontWeight: 600,
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          {result.text || '无识别结果'}
+                        </Typography>
+                      </Box>
+
+                      {result.llm_result?.english && (
+                        <Box
+                          sx={{
+                            p: 2,
+                            bgcolor: 'background.paper',
+                            borderRadius: 1,
+                            border: '1px dashed',
+                            borderColor: 'divider',
+                          }}
+                        >
+                          <Typography variant="overline" color="text.secondary">
+                            English
+                          </Typography>
+                          <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                            {result.llm_result.english}
+                          </Typography>
+                        </Box>
+                      )}
+
+                      {result.raw_gloss_text && (
+                        <Box
+                          sx={{
+                            p: 1.5,
+                            borderRadius: 1,
+                            bgcolor: 'rgba(0,0,0,0.02)',
+                          }}
+                        >
+                          <Typography variant="overline" color="text.secondary">
+                            Gloss 序列
+                          </Typography>
+                          <Typography variant="body2" sx={{ wordBreak: 'break-word', fontFamily: 'monospace' }}>
+                            {result.raw_gloss_text}
+                          </Typography>
+                        </Box>
+                      )}
+
+                      <Stack direction="row" spacing={1} flexWrap="wrap">
+                        <Chip 
+                          label={`模型置信度 ${((result.overall_confidence ?? 0) * 100).toFixed(1)}%`}
+                          color="primary"
+                          variant="outlined"
+                          size="small"
+                        />
+                        {result.llm_result?.confidence && (
+                          <Chip 
+                            label={`LLM 置信度 ${result.llm_result.confidence}`}
+                            color="secondary"
+                            variant="outlined"
+                            size="small"
+                          />
+                        )}
+                      </Stack>
+
+                      {result.llm_result?.explanation && (
+                        <Typography variant="caption" color="text.secondary">
+                          说明: {result.llm_result.explanation}
+                        </Typography>
+                      )}
+
+                      {result.llm_result?.error && !result.llm_result?.success && (
+                        <Typography variant="caption" color="error">
+                          LLM 生成失败: {result.llm_result.error}
+                        </Typography>
+                      )}
+                    </Stack>
                   </Paper>
                 </Grid>
                 

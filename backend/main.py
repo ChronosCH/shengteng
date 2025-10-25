@@ -39,14 +39,21 @@ try:
     LEARNING_AVAILABLE = True
     logger.info("✅ 学习训练功能已导入")
 except ImportError as e:
-    logger.warning(f"⚠️ 学习训练功能导入失败: {e}")
+    logger.info(f"ℹ️ 学习训练模块未启用: {e}")
     LEARNING_AVAILABLE = False
 
 # 导入连续手语识别服务
+MediaPipeService = None
 try:
     from backend.services.sign_recognition_service import SignRecognitionService
-    from backend.services.mediapipe_service import MediaPipeService
     from backend.services.cslr_service import CSLRService
+
+    try:
+        from backend.services.mediapipe_service import MediaPipeService as _MediaPipeService
+        MediaPipeService = _MediaPipeService
+    except ImportError:
+        logger.info("ℹ️ 未检测到 mediapipe，连续手语识别将使用 Mind-VAC 管线")
+
     SIGN_RECOGNITION_AVAILABLE = True
     logger.info("✅ 连续手语识别功能已导入")
 except ImportError as e:
@@ -81,30 +88,39 @@ async def lifespan(app: FastAPI):
 
         # 注册MediaPipe服务
         if SIGN_RECOGNITION_AVAILABLE:
-            service_manager.register_service(
-                "mediapipe_service",
-                MediaPipeService,
-                health_check=default_health_check
-            )
+            if MediaPipeService is not None:
+                service_manager.register_service(
+                    "mediapipe_service",
+                    MediaPipeService,
+                    health_check=default_health_check
+                )
 
             # 注册CSLR服务
             service_manager.register_service(
                 "cslr_service",
                 CSLRService,
-                dependencies=["mediapipe_service"],
                 health_check=default_health_check
             )
 
             # 注册手语识别服务
             def create_sign_recognition_service():
-                mediapipe_svc = service_manager.get_service("mediapipe_service")
+                mediapipe_svc = None
+                if MediaPipeService is not None:
+                    try:
+                        mediapipe_svc = service_manager.get_service("mediapipe_service")
+                    except Exception:
+                        mediapipe_svc = None
                 cslr_svc = service_manager.get_service("cslr_service")
                 return SignRecognitionService(mediapipe_svc, cslr_svc)
+
+            dependencies = ["cslr_service"]
+            if MediaPipeService is not None:
+                dependencies.append("mediapipe_service")
 
             service_manager.register_service(
                 "sign_recognition_service",
                 lambda: create_sign_recognition_service(),
-                dependencies=["mediapipe_service", "cslr_service"],
+                dependencies=dependencies,
                 health_check=default_health_check
             )
 
@@ -116,26 +132,27 @@ async def lifespan(app: FastAPI):
                 health_check=default_health_check
             )
 
-            try:
-                iso_cfg = config.isolated_sign
-                iso_config_dict = {
-                    "sequence_length": iso_cfg.sequence_length,
-                    "use_gpu": iso_cfg.use_gpu,
-                    "device_id": iso_cfg.device_id,
-                    "class_mapping_path": getattr(iso_cfg, "class_mapping_path", None),
-                }
+            iso_cfg = config.isolated_sign
+            if getattr(iso_cfg, "enabled", False):
+                try:
+                    iso_config_dict = {
+                        "sequence_length": iso_cfg.sequence_length,
+                        "use_gpu": iso_cfg.use_gpu,
+                        "device_id": iso_cfg.device_id,
+                        "class_mapping_path": getattr(iso_cfg, "class_mapping_path", None),
+                    }
 
-                service_manager.register_service(
-                    "isolated_sign_service",
-                    lambda: IsolatedSignService(
-                        model_checkpoint=iso_cfg.model_path,
-                        train_csv_path=iso_cfg.train_csv,
-                        config=iso_config_dict,
-                    ),
-                    health_check=default_health_check,
-                )
-            except Exception as iso_exc:
-                logger.warning(f"⚠️ 孤立手语服务注册失败: {iso_exc}")
+                    service_manager.register_service(
+                        "isolated_sign_service",
+                        lambda: IsolatedSignService(
+                            model_checkpoint=iso_cfg.model_path,
+                            train_csv_path=iso_cfg.train_csv,
+                            config=iso_config_dict,
+                        ),
+                        health_check=default_health_check,
+                    )
+                except Exception as iso_exc:
+                    logger.warning(f"⚠️ 孤立手语服务注册失败: {iso_exc}")
 
         # 启动所有服务
         success = await service_manager.start_all_services()
@@ -231,7 +248,7 @@ try:
     app.include_router(auth_router, tags=["认证"])
     logger.info("✅ 认证路由已注册")
 except ImportError as e:
-    logger.warning(f"⚠️ 认证路由注册失败: {e}")
+    logger.info(f"ℹ️ 认证路由未启用: {e}")
 
 # 注册学习训练路由
 if LEARNING_AVAILABLE:

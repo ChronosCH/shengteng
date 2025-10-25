@@ -84,17 +84,18 @@ class Settings(BaseSettings):
     MEDIAPIPE_MAX_NUM_HANDS: int = Field(default=2, ge=1, le=4)
     
     # CSLR模型设置 - 更新为新训练的模型
-    CSLR_MODEL_PATH: str = r"D:\shengteng\models\best_model.ckpt"
-    CSLR_VOCAB_PATH: str = "backend/models/vocab.json"  # 新词汇表路径
+    CSLR_MODEL_PATH: str = "mind_vac/slr_mindspore.ckpt"
+    CSLR_VOCAB_PATH: str = "mind_vac/gloss_dict.npy"  # Mind-VAC 词汇表
     CSLR_CONFIDENCE_THRESHOLD: float = Field(default=0.6, ge=0.1, le=1.0)
     CSLR_MAX_SEQUENCE_LENGTH: int = Field(default=100, ge=10, le=500)
     CSLR_ENABLE_CACHE: bool = True
     CSLR_CACHE_SIZE: int = Field(default=1000, ge=100, le=10000)
 
     # 孤立手语识别模型设置
-    ISOLATED_MODEL_PATH: str = r"D:\shengteng\training_ASL\checkpoints\asl_model-194_23.ckpt"
-    ISOLATED_TRAIN_CSV: str = r"D:\shengteng\training_ASL\data\splits\train.csv"
-    ISOLATED_CLASS_MAPPING_PATH: str = r"D:\shengteng\training_ASL\checkpoints\validation_results\class_mapping.json"
+    ISOLATED_ENABLED: bool = False
+    ISOLATED_MODEL_PATH: str = ""
+    ISOLATED_TRAIN_CSV: str = ""
+    ISOLATED_CLASS_MAPPING_PATH: str = ""
     ISOLATED_SEQUENCE_LENGTH: int = Field(default=32, ge=8, le=128)
     ISOLATED_USE_GPU: bool = False
     ISOLATED_DEVICE_ID: int = Field(default=0, ge=0)
@@ -188,6 +189,16 @@ class Settings(BaseSettings):
     MODEL_BATCH_SIZE: int = Field(default=1, ge=1, le=32)
     MODEL_CACHE_ENABLED: bool = True
     MODEL_WARMUP_ITERATIONS: int = Field(default=3, ge=1, le=10)
+
+    # Mind-VAC CSLR 集成设置
+    MINDVAC_ENABLED: bool = True
+    MINDVAC_DEVICE: str = Field(default="CPU", pattern="^(CPU|GPU|Ascend|cpu|gpu|ascend)$")
+    MINDVAC_CHECKPOINT_PATH: str = "mind_vac/slr_mindspore.ckpt"
+    MINDVAC_DICT_PATH: str = "mind_vac/gloss_dict.npy"
+    MINDVAC_OUTPUT_DIR: str = "mind_vac/output_dir"
+    MINDVAC_USE_LLM: bool = True
+    MINDVAC_QWEN_MODEL: str = Field(default="qwen-plus")
+
     
     @validator('SECRET_KEY')
     def validate_secret_key(cls, v):
@@ -207,18 +218,31 @@ class Settings(BaseSettings):
             logger.warning("CORS配置包含通配符，可能存在安全风险")
         return v
     
-    @validator('CSLR_MODEL_PATH', 'DIFFUSION_MODEL_PATH', 'FEDERATED_MODEL_PATH', 'CSLR_VOCAB_PATH', pre=True)
+    @validator('CSLR_MODEL_PATH', 'DIFFUSION_MODEL_PATH', 'FEDERATED_MODEL_PATH', 'CSLR_VOCAB_PATH',
+              'MINDVAC_CHECKPOINT_PATH', 'MINDVAC_DICT_PATH', 'MINDVAC_OUTPUT_DIR',
+              'ISOLATED_MODEL_PATH', 'ISOLATED_TRAIN_CSV', 'ISOLATED_CLASS_MAPPING_PATH', pre=True)
     def normalize_paths(cls, v):
         # 统一解析为仓库根目录下的绝对路径
+        if not v:
+            return v
         return resolve_to_root(v)
     
-    @validator('CSLR_MODEL_PATH', 'DIFFUSION_MODEL_PATH', 'FEDERATED_MODEL_PATH', 'CSLR_VOCAB_PATH')
+    @validator('CSLR_MODEL_PATH', 'DIFFUSION_MODEL_PATH', 'FEDERATED_MODEL_PATH', 'CSLR_VOCAB_PATH',
+               'MINDVAC_CHECKPOINT_PATH', 'MINDVAC_DICT_PATH', 'MINDVAC_OUTPUT_DIR',
+               'ISOLATED_MODEL_PATH', 'ISOLATED_TRAIN_CSV', 'ISOLATED_CLASS_MAPPING_PATH')
     def ensure_parent_dir(cls, v):
+        if not v:
+            return v
         p = Path(v)
         if not p.parent.exists():
             logger.warning(f"模型/资源目录不存在: {p.parent}，已自动创建")
             p.parent.mkdir(parents=True, exist_ok=True)
         return str(p)
+
+    @validator('MINDVAC_OUTPUT_DIR')
+    def ensure_output_dir(cls, v):
+        Path(v).mkdir(parents=True, exist_ok=True)
+        return v
     
     @validator('UPLOAD_DIR', 'TEMP_DIR', pre=True)
     def normalize_dirs(cls, v):
@@ -360,20 +384,27 @@ class Settings(BaseSettings):
                 warnings.append("生产环境应启用安全Cookie")
         
         # 必需模型检查（仅检查 CSLR 模型）
-        if not Path(self.CSLR_MODEL_PATH).exists():
+        if self.CSLR_MODEL_PATH and not Path(self.CSLR_MODEL_PATH).exists():
             warnings.append(f"模型文件不存在: {self.CSLR_MODEL_PATH}")
-        if not Path(self.ISOLATED_MODEL_PATH).exists():
-            warnings.append(f"孤立手语模型不存在: {self.ISOLATED_MODEL_PATH}")
-        if not Path(self.ISOLATED_TRAIN_CSV).exists():
-            warnings.append(f"孤立手语训练CSV不存在: {self.ISOLATED_TRAIN_CSV}")
-        if not Path(self.ISOLATED_CLASS_MAPPING_PATH).exists():
-            warnings.append(f"孤立手语类别映射不存在: {self.ISOLATED_CLASS_MAPPING_PATH}")
+        if self.ISOLATED_ENABLED:
+            if self.ISOLATED_MODEL_PATH and not Path(self.ISOLATED_MODEL_PATH).exists():
+                warnings.append(f"孤立手语模型不存在: {self.ISOLATED_MODEL_PATH}")
+            if self.ISOLATED_TRAIN_CSV and not Path(self.ISOLATED_TRAIN_CSV).exists():
+                warnings.append(f"孤立手语训练CSV不存在: {self.ISOLATED_TRAIN_CSV}")
+            if self.ISOLATED_CLASS_MAPPING_PATH and not Path(self.ISOLATED_CLASS_MAPPING_PATH).exists():
+                warnings.append(f"孤立手语类别映射不存在: {self.ISOLATED_CLASS_MAPPING_PATH}")
         
         # 可选模型检查，仅在启用时检查
         if self.ENABLE_DIFFUSION and not Path(self.DIFFUSION_MODEL_PATH).exists():
             warnings.append(f"Diffusion 模型文件不存在: {self.DIFFUSION_MODEL_PATH}")
         if self.ENABLE_FEDERATED and not Path(self.FEDERATED_MODEL_PATH).exists():
             warnings.append(f"联邦学习模型文件不存在: {self.FEDERATED_MODEL_PATH}")
+
+        if self.MINDVAC_ENABLED:
+            if not Path(self.MINDVAC_CHECKPOINT_PATH).exists():
+                warnings.append(f"Mind-VAC 模型权重不存在: {self.MINDVAC_CHECKPOINT_PATH}")
+            if not Path(self.MINDVAC_DICT_PATH).exists():
+                warnings.append(f"Mind-VAC 词典文件不存在: {self.MINDVAC_DICT_PATH}")
         
         # 设备端口检查 (Linux环境)
         if os.name == 'posix':
