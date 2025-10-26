@@ -71,6 +71,8 @@ class IsolatedSignService:
         self.target_size = target_size
         self.top_k = top_k
         self.device_target = device_target
+        self.max_frames = 64
+        self.min_frames = 16
         
         self._model = None
         self._class_names: Dict[int, str] = {}
@@ -135,14 +137,14 @@ class IsolatedSignService:
         
         self.logger.info(f"✓ 加载了 {len(self._class_names)} 个类别")
 
-    def _load_video_frames(self, video_path: str) -> Optional[Tensor]:
+    def _load_video_frames(self, video_path: str):
         """从视频文件加载RGB帧"""
         self.logger.info(f"正在加载视频: {video_path}")
         vidcap = cv2.VideoCapture(video_path)
         
         if not vidcap.isOpened():
-            self.logger.error(f"无法打开视频文件: {video_path}")
-            return None
+            self.logger.warning(f"OpenCV 无法打开视频文件，尝试使用 imageio 解码: {video_path}")
+            return self._load_video_frames_with_imageio(video_path)
         
         frames = []
         total_frames = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -151,8 +153,8 @@ class IsolatedSignService:
         self.logger.info(f"  - 总帧数: {total_frames}")
         self.logger.info(f"  - FPS: {fps:.2f}")
         
-        # 采样策略：最多64帧
-        sample_interval = max(1, total_frames // 64)
+        # 采样策略：最多 self.max_frames 帧
+        sample_interval = max(1, total_frames // self.max_frames)
         frame_count = 0
         
         while True:
@@ -182,8 +184,9 @@ class IsolatedSignService:
         sampled_frames = len(frames)
         self.logger.info(f"  - 成功采样 {sampled_frames} 帧 (间隔: {sample_interval})")
         
-        if sampled_frames == 0:
-            return None
+        if sampled_frames == 0 or sampled_frames < self.min_frames:
+            self.logger.warning("OpenCV 未能提取到有效帧，尝试使用 imageio 解码")
+            return self._load_video_frames_with_imageio(video_path)
         
         # 转换为 MindSpore tensor: (T, H, W, C) -> (1, C, T, H, W)
         frames_array = np.array(frames, dtype=np.float32)
@@ -191,6 +194,70 @@ class IsolatedSignService:
         frames_tensor = np.expand_dims(frames_tensor, axis=0)  # (1, C, T, H, W)
         
         return Tensor(frames_tensor, mindspore.float32)
+
+    def _load_video_frames_with_imageio(self, video_path: str):
+        """使用 imageio 作为后备方案加载视频帧"""
+        try:
+            import imageio.v2 as imageio
+        except Exception as exc:  # pragma: no cover - optional dependency
+            self.logger.error(f"imageio 未安装或导入失败，无法读取视频: {exc}")
+            return None
+
+        try:
+            frames_raw = []
+            with imageio.get_reader(video_path) as reader:
+                for frame in reader:
+                    frames_raw.append(frame)
+
+            total_frames = len(frames_raw)
+            if total_frames == 0:
+                self.logger.error("imageio 也未能读取到任何帧")
+                return None
+
+            # 选择均匀采样的帧索引
+            max_frames = min(self.max_frames, total_frames)
+            indices = np.linspace(0, total_frames - 1, max_frames, dtype=np.int64)
+
+            frames = []
+            for idx in indices:
+                img = frames_raw[int(idx)]
+                h, w, c = img.shape
+                if h != w:
+                    size = min(h, w)
+                    start_h = (h - size) // 2
+                    start_w = (w - size) // 2
+                    img = img[start_h:start_h+size, start_w:start_w+size]
+
+                img = cv2.resize(img, (self.target_size, self.target_size))
+                img = (img / 255.0) * 2 - 1
+                frames.append(img.astype(np.float32))
+
+            self.logger.info(
+                "使用 imageio 解码，共读取 %s 帧，采样至 %s 帧",
+                total_frames,
+                len(frames),
+            )
+
+            if not frames:
+                self.logger.error("imageio 解码后仍未获得有效帧")
+                return None
+
+            frames_array = np.stack(frames, axis=0)
+
+            # 如果帧数不足最小需求，进行重复填充
+            if frames_array.shape[0] < self.min_frames:
+                repeat_times = int(np.ceil(self.min_frames / frames_array.shape[0]))
+                frames_array = np.tile(frames_array, (repeat_times, 1, 1, 1))
+                frames_array = frames_array[:self.min_frames]
+
+            frames_tensor = frames_array.transpose(3, 0, 1, 2)  # (C, T, H, W)
+            frames_tensor = np.expand_dims(frames_tensor, axis=0)
+
+            return Tensor(frames_tensor, mindspore.float32)
+
+        except Exception as exc:
+            self.logger.error(f"使用 imageio 读取视频失败: {exc}")
+            return None
 
     async def predict(self, video_path: str) -> InferenceResult:
         """

@@ -34,7 +34,7 @@ class FileManager:
         self.temp_dir = Path("temp")
         self.allowed_extensions = {
             'image': {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'},
-            'video': {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv'},
+            'video': {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm'},
             'audio': {'.mp3', '.wav', '.aac', '.ogg', '.m4a'},
             'document': {'.pdf', '.doc', '.docx', '.txt', '.rtf'},
             'data': {'.json', '.csv', '.xlsx', '.xml'}

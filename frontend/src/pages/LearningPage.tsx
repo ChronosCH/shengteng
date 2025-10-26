@@ -36,6 +36,7 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import AuthModal from '../components/auth/AuthModal'
 import AITutorChat from '../components/learning/AITutorChat'
+import CameraRecorder from '../components/CameraRecorder'
 import isolatedSignLearningService from '../services/isolatedSignLearningService'
 
 function LearningPage() {
@@ -79,6 +80,48 @@ function LearningPage() {
       setIsolatedPrediction(null)
 
       const uploadResp = await isolatedSignLearningService.uploadIsolatedVideo(file)
+      setIsolatedVideoPath(uploadResp.file_path)
+
+      const predictResp = await isolatedSignLearningService.predictIsolatedVideo(uploadResp.file_path)
+      
+      const predictionData = {
+        gloss: predictResp.prediction.gloss,
+        confidence: predictResp.prediction.confidence,
+        feedback: predictResp.feedback || null,
+      }
+      
+      setIsolatedPrediction(predictionData)
+      
+      setRecognitionContext({
+        recognized_sign: predictResp.prediction.gloss,
+        confidence: predictResp.prediction.confidence,
+      })
+      
+      showSnackbar('识别完成，查看结果', 'success')
+    } catch (error: any) {
+      console.error('手语识别失败:', error)
+      showSnackbar(error?.message || '孤立手语识别失败', 'error')
+    } finally {
+      setIsolatedUploadLoading(false)
+    }
+  }, [isAuthenticated])
+
+  // 摄像头录制完成后的处理
+  const handleCameraRecordComplete = useCallback(async (videoBlob: Blob) => {
+    if (!isAuthenticated) {
+      setAuthModalOpen(true)
+      showSnackbar('请先登录后再进行识别', 'warning')
+      return
+    }
+
+    try {
+      setIsolatedUploadLoading(true)
+      setIsolatedPrediction(null)
+
+      // 将 Blob 转换为 File 对象
+      const videoFile = new File([videoBlob], `recorded-${Date.now()}.webm`, { type: 'video/webm' })
+
+      const uploadResp = await isolatedSignLearningService.uploadIsolatedVideo(videoFile)
       setIsolatedVideoPath(uploadResp.file_path)
 
       const predictResp = await isolatedSignLearningService.predictIsolatedVideo(uploadResp.file_path)
@@ -212,16 +255,30 @@ function LearningPage() {
             🎯 孤立手语识别练习
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            上传单个手语动作视频，系统将自动识别并提供详细反馈和改进建议。
+            可以通过摄像头实时录制手语动作，或上传视频文件，系统将自动识别并提供详细反馈。
           </Typography>
 
             <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <Card sx={{ borderRadius: 3, background: '#f0f7ff' }}>
+              {/* 摄像头录制区域 */}
+              <Grid item xs={12} md={6}>
+                <CameraRecorder
+                  onRecordComplete={handleCameraRecordComplete}
+                  maxDuration={10}
+                  countdown={3}
+                />
+              </Grid>
+
+              {/* 文件上传区域 */}
+              <Grid item xs={12} md={6}>
+                <Card sx={{ borderRadius: 3, background: '#f0f7ff', height: '100%' }}>
                   <CardContent sx={{ p: 4 }}>
-                    <Stack spacing={3}>
+                    <Stack spacing={3} sx={{ height: '100%' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                        📤 上传视频文件
+                      </Typography>
+                      
                       {/* 上传按钮 */}
-                      <Box>
+                      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                         <Button
                           component="label"
                           variant="contained"
@@ -235,23 +292,36 @@ function LearningPage() {
                           }}
                           startIcon={isolatedUploadLoading ? <CircularProgress size={20} /> : <TouchApp />}
                         >
-                          {isolatedUploadLoading ? '识别中...' : '上传手语视频'}
+                          {isolatedUploadLoading ? '识别中...' : '选择手语视频'}
                           <input
                             type="file"
                             hidden
-                            accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska"
+                            accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm"
                             onChange={handleIsolatedSignUpload}
                           />
                         </Button>
                         {isolatedVideoPath && (
-                          <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
-                            {isolatedVideoPath}
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
+                            已上传: {isolatedVideoPath.split('/').pop()}
                           </Typography>
                         )}
                       </Box>
 
-                      {/* 识别结果和反馈 */}
-                      {isolatedPrediction && (
+                      <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
+                        支持格式: MP4, MOV, AVI, MKV, WebM
+                      </Typography>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              {/* 识别结果区域 */}
+              <Grid item xs={12}>
+                {isolatedPrediction && (
+                  <Card sx={{ borderRadius: 3, background: '#f0f7ff' }}>
+                    <CardContent sx={{ p: 4 }}>
+                      <Stack spacing={3}>
+                        {/* 识别结果和反馈 */}
                         <Paper elevation={2} sx={{ p: 3, borderRadius: 3, backgroundColor: '#fff' }}>
                           <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                             识别结果
@@ -348,10 +418,10 @@ function LearningPage() {
                             )}
                           </Stack>
                         </Paper>
-                      )}
-                    </Stack>
-                  </CardContent>
-                </Card>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
               </Grid>
             </Grid>
         </Box>
