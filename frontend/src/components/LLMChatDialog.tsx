@@ -22,6 +22,8 @@ import {
   Clear,
   ContentCopy,
 } from '@mui/icons-material'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import llmChatService, { ChatMessage, ChatContext } from '../services/llmChatService'
 
 interface Props {
@@ -122,7 +124,9 @@ const LLMChatDialog: React.FC<Props> = ({ open, onClose, context }) => {
           bottom: 24,
           right: 24,
           width: { xs: 'calc(100% - 48px)', sm: 400, md: 500 },
-          maxHeight: '70vh',
+          maxHeight: '80vh',
+          display: 'flex',
+          flexDirection: 'column',
           zIndex: 1300,
         }}
       >
@@ -134,6 +138,7 @@ const LLMChatDialog: React.FC<Props> = ({ open, onClose, context }) => {
             boxShadow: '0 12px 40px rgba(0,0,0,0.3)',
             borderRadius: 3,
             overflow: 'hidden',
+            maxHeight: '80vh',
           }}
         >
           {/* 头部 */}
@@ -209,8 +214,24 @@ const LLMChatDialog: React.FC<Props> = ({ open, onClose, context }) => {
             sx={{
               flex: 1,
               overflowY: 'auto',
+              overflowX: 'hidden',
               p: 2,
               bgcolor: 'background.default',
+              minHeight: 0,
+              '&::-webkit-scrollbar': {
+                width: '8px',
+              },
+              '&::-webkit-scrollbar-track': {
+                background: '#f1f1f1',
+                borderRadius: '4px',
+              },
+              '&::-webkit-scrollbar-thumb': {
+                background: '#888',
+                borderRadius: '4px',
+                '&:hover': {
+                  background: '#555',
+                },
+              },
             }}
           >
             <Stack spacing={2}>
@@ -225,7 +246,7 @@ const LLMChatDialog: React.FC<Props> = ({ open, onClose, context }) => {
                   <Paper
                     elevation={1}
                     sx={{
-                      maxWidth: '80%',
+                      maxWidth: '85%',
                       p: 1.5,
                       bgcolor: msg.role === 'user' ? 'primary.main' : 'background.paper',
                       color: msg.role === 'user' ? 'white' : 'text.primary',
@@ -255,17 +276,99 @@ const LLMChatDialog: React.FC<Props> = ({ open, onClose, context }) => {
                           <SmartToy sx={{ fontSize: 16, color: 'white' }} />
                         )}
                       </Box>
-                      <Box flex={1}>
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                            lineHeight: 1.6,
-                          }}
-                        >
-                          {msg.content}
-                        </Typography>
+                      <Box flex={1} sx={{ minWidth: 0 }}>
+                        {msg.role === 'user' ? (
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            {msg.content}
+                          </Typography>
+                        ) : (
+                          <Box
+                            sx={{
+                              '& p': {
+                                margin: '0.5em 0',
+                                lineHeight: 1.6,
+                              },
+                              '& p:first-of-type': {
+                                marginTop: 0,
+                              },
+                              '& p:last-of-type': {
+                                marginBottom: 0,
+                              },
+                              '& ul, & ol': {
+                                margin: '0.5em 0',
+                                paddingLeft: '1.5em',
+                              },
+                              '& li': {
+                                margin: '0.25em 0',
+                              },
+                              '& code': {
+                                bgcolor: 'rgba(0,0,0,0.08)',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontSize: '0.9em',
+                                fontFamily: 'monospace',
+                              },
+                              '& pre': {
+                                bgcolor: 'rgba(0,0,0,0.08)',
+                                padding: '12px',
+                                borderRadius: '8px',
+                                overflow: 'auto',
+                                margin: '0.5em 0',
+                              },
+                              '& pre code': {
+                                bgcolor: 'transparent',
+                                padding: 0,
+                              },
+                              '& blockquote': {
+                                borderLeft: '4px solid',
+                                borderColor: 'primary.main',
+                                paddingLeft: '12px',
+                                margin: '0.5em 0',
+                                color: 'text.secondary',
+                              },
+                              '& h1, & h2, & h3, & h4, & h5, & h6': {
+                                margin: '0.8em 0 0.4em',
+                                fontWeight: 600,
+                              },
+                              '& h1:first-of-type, & h2:first-of-type, & h3:first-of-type': {
+                                marginTop: 0,
+                              },
+                              '& a': {
+                                color: 'primary.main',
+                                textDecoration: 'none',
+                                '&:hover': {
+                                  textDecoration: 'underline',
+                                },
+                              },
+                              '& table': {
+                                borderCollapse: 'collapse',
+                                width: '100%',
+                                margin: '0.5em 0',
+                              },
+                              '& th, & td': {
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                padding: '8px',
+                                textAlign: 'left',
+                              },
+                              '& th': {
+                                bgcolor: 'background.default',
+                                fontWeight: 600,
+                              },
+                            }}
+                          >
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {msg.content}
+                            </ReactMarkdown>
+                          </Box>
+                        )}
                         <Typography
                           variant="caption"
                           sx={{
@@ -288,6 +391,7 @@ const LLMChatDialog: React.FC<Props> = ({ open, onClose, context }) => {
                           opacity: 0,
                           transition: 'opacity 0.2s',
                           color: msg.role === 'user' ? 'white' : 'text.secondary',
+                          flexShrink: 0,
                         }}
                       >
                         <ContentCopy fontSize="small" />
@@ -322,8 +426,14 @@ const LLMChatDialog: React.FC<Props> = ({ open, onClose, context }) => {
           </CardContent>
 
           {/* 快捷问题 */}
-          {messages.length <= 1 && (
-            <Box sx={{ px: 2, pb: 1 }}>
+          {messages.length <= 1 && !isLoading && (
+            <Box 
+              sx={{ 
+                px: 2, 
+                pb: 1,
+                flexShrink: 0,
+              }}
+            >
               <Typography variant="caption" color="text.secondary" gutterBottom display="block">
                 💡 快捷问题:
               </Typography>
@@ -350,12 +460,18 @@ const LLMChatDialog: React.FC<Props> = ({ open, onClose, context }) => {
           <Divider />
 
           {/* 输入区域 */}
-          <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
-            <Stack direction="row" spacing={1}>
+          <Box 
+            sx={{ 
+              p: 2, 
+              bgcolor: 'background.paper',
+              flexShrink: 0,
+            }}
+          >
+            <Stack direction="row" spacing={1} alignItems="flex-end">
               <TextField
                 fullWidth
                 multiline
-                maxRows={3}
+                maxRows={4}
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyDown={(e) => {
@@ -381,7 +497,11 @@ const LLMChatDialog: React.FC<Props> = ({ open, onClose, context }) => {
                   minWidth: 48,
                   height: 48,
                   borderRadius: 2,
+                  flexShrink: 0,
                   background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)',
+                  },
                 }}
               >
                 <Send />
