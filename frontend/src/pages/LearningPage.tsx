@@ -157,7 +157,7 @@ function LearningPage() {
             sx={{
               width: 64,
               height: 64,
-              background: 'linear-gradient(135deg, #B5EAD7 0%, #C7F0DB 100%)',
+              background: 'linear-gradient(135deg, #a8e6cf 0%, #7fcdbb 100%)',
             }}
           >
             <School sx={{ fontSize: 32, color: 'white' }} />
@@ -167,7 +167,7 @@ function LearningPage() {
               variant="h3" 
               sx={{ 
                 fontWeight: 700,
-                background: 'linear-gradient(135deg, #B5EAD7 0%, #9BC1BC 100%)',
+                background: 'linear-gradient(135deg, #7fcdbb 0%, #6bb6a7 100%)',
                 backgroundClip: 'text',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
@@ -189,8 +189,11 @@ function LearningPage() {
           sx={{
             mb: 3,
             borderRadius: 3,
-            background: 'linear-gradient(135deg, #B5EAD7 0%, #C7F0DB 100%)',
+            background: 'linear-gradient(135deg, #a8e6cf 0%, #c7f0db 100%)',
             border: 'none',
+            '& .MuiAlert-icon': {
+              color: '#5fb89c',
+            },
           }}
         >
           <Typography variant="body1" sx={{ fontWeight: 600 }}>
@@ -218,6 +221,10 @@ function LearningPage() {
           sx={{
             mb: 3,
             borderRadius: 3,
+            background: 'linear-gradient(135deg, #a8d8ea 0%, #c7e5f0 100%)',
+            '& .MuiAlert-icon': {
+              color: '#5fa8c9',
+            },
           }}
         >
           <Typography variant="body1" sx={{ fontWeight: 600 }}>
@@ -244,7 +251,14 @@ function LearningPage() {
                 立即咨询
               </Button>
             }
-            sx={{ mb: 3, borderRadius: 3 }}
+            sx={{ 
+              mb: 3, 
+              borderRadius: 3,
+              background: 'linear-gradient(135deg, #ffd4e5 0%, #ffe8f0 100%)',
+              '& .MuiAlert-icon': {
+                color: '#ff99c8',
+              },
+            }}
           >
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
               🤖 AI助手随时待命！点击右下角按钮或这里，向我提问任何手语学习问题。
@@ -270,10 +284,10 @@ function LearningPage() {
 
               {/* 文件上传区域 */}
               <Grid item xs={12} md={6}>
-                <Card sx={{ borderRadius: 3, background: '#f0f7ff', height: '100%' }}>
+                <Card sx={{ borderRadius: 3, background: 'linear-gradient(135deg, #e8f5ff 0%, #d4ebff 100%)', height: '100%' }}>
                   <CardContent sx={{ p: 4 }}>
                     <Stack spacing={3} sx={{ height: '100%' }}>
-                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: '#5fa8c9' }}>
                         📤 上传视频文件
                       </Typography>
                       
@@ -288,7 +302,10 @@ function LearningPage() {
                             borderRadius: 3,
                             px: 4,
                             py: 2,
-                            background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+                            background: 'linear-gradient(135deg, #a8d8ea 0%, #7fc8e0 100%)',
+                            '&:hover': {
+                              background: 'linear-gradient(135deg, #8dc5dd 0%, #6bb5d0 100%)',
+                            },
                           }}
                           startIcon={isolatedUploadLoading ? <CircularProgress size={20} /> : <TouchApp />}
                         >
@@ -318,12 +335,12 @@ function LearningPage() {
               {/* 识别结果区域 */}
               <Grid item xs={12}>
                 {isolatedPrediction && (
-                  <Card sx={{ borderRadius: 3, background: '#f0f7ff' }}>
+                  <Card sx={{ borderRadius: 3, background: 'linear-gradient(135deg, #fff9e6 0%, #fff4d4 100%)' }}>
                     <CardContent sx={{ p: 4 }}>
                       <Stack spacing={3}>
                         {/* 识别结果和反馈 */}
                         <Paper elevation={2} sx={{ p: 3, borderRadius: 3, backgroundColor: '#fff' }}>
-                          <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                          <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#ffb347' }}>
                             识别结果
                           </Typography>
                           
@@ -331,9 +348,16 @@ function LearningPage() {
                             {/* 识别信息 */}
                             <Stack direction="row" spacing={2} alignItems="center">
                               <Chip
-                                color="primary"
                                 label={isolatedPrediction.gloss || '未识别'}
-                                sx={{ fontSize: '1.2rem', px: 3, py: 2, height: 'auto' }}
+                                sx={{ 
+                                  fontSize: '1.2rem', 
+                                  px: 3, 
+                                  py: 2, 
+                                  height: 'auto',
+                                  background: 'linear-gradient(135deg, #a8e6cf 0%, #7fcdbb 100%)',
+                                  color: 'white',
+                                  fontWeight: 600,
+                                }}
                               />
                               <Typography variant="body1" color="text.secondary">
                                 准确率：{(isolatedPrediction.confidence * 100).toFixed(1)}%
@@ -389,7 +413,13 @@ function LearningPage() {
                                           label={step}
                                           size="small"
                                           variant="outlined"
-                                          color="primary"
+                                          sx={{
+                                            borderColor: '#a8d8ea',
+                                            color: '#5fa8c9',
+                                            '&:hover': {
+                                              background: 'rgba(168, 216, 234, 0.1)',
+                                            },
+                                          }}
                                         />
                                       ))}
                                     </Stack>
@@ -403,9 +433,12 @@ function LearningPage() {
                                     startIcon={<Psychology />}
                                     onClick={() => setAiTutorOpen(true)}
                                     sx={{
-                                      background: 'linear-gradient(135deg, #B5EAD7 0%, #9BC1BC 100%)',
+                                      background: 'linear-gradient(135deg, #ffb6d9 0%, #ffa7cc 100%)',
                                       color: 'white',
                                       borderRadius: 3,
+                                      '&:hover': {
+                                        background: 'linear-gradient(135deg, #ff9fc7 0%, #ff8fb8 100%)',
+                                      },
                                     }}
                                   >
                                     向AI助手请教
@@ -452,20 +485,21 @@ function LearningPage() {
               height: 72,
               borderRadius: '50%',
               minWidth: 'unset',
-              background: 'linear-gradient(135deg, #B5EAD7 0%, #9BC1BC 100%)',
-              boxShadow: '0 8px 24px rgba(181, 234, 215, 0.5)',
+              background: 'linear-gradient(135deg, #ffb6d9 0%, #ffa7cc 100%)',
+              boxShadow: '0 8px 24px rgba(255, 182, 217, 0.5)',
               animation: 'pulse 2s infinite',
               '@keyframes pulse': {
                 '0%, 100%': {
-                  boxShadow: '0 8px 24px rgba(181, 234, 215, 0.5)',
+                  boxShadow: '0 8px 24px rgba(255, 182, 217, 0.5)',
                 },
                 '50%': {
-                  boxShadow: '0 12px 32px rgba(181, 234, 215, 0.8)',
+                  boxShadow: '0 12px 32px rgba(255, 182, 217, 0.8)',
                 },
               },
               '&:hover': {
                 transform: 'scale(1.15)',
-                boxShadow: '0 12px 32px rgba(181, 234, 215, 0.6)',
+                background: 'linear-gradient(135deg, #ff9fc7 0%, #ff8fb8 100%)',
+                boxShadow: '0 12px 32px rgba(255, 182, 217, 0.6)',
               },
               transition: 'all 0.3s ease',
             }}

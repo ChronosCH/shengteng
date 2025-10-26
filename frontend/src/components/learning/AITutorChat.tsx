@@ -290,10 +290,10 @@ const AITutorChat: React.FC<AITutorChatProps> = ({ open, onClose, recognitionCon
                     bgcolor: 'white',
                     '&:hover': {
                       bgcolor: '#F5F5F5',
-                      borderColor: '#667eea',
-                      color: '#667eea',
+                      borderColor: '#7fcdbb',
+                      color: '#5fb89c',
                       transform: 'translateY(-2px)',
-                      boxShadow: '0 4px 8px rgba(102, 126, 234, 0.15)',
+                      boxShadow: '0 4px 8px rgba(127, 205, 187, 0.15)',
                     },
                     transition: 'all 0.2s ease',
                   }}
@@ -353,13 +353,13 @@ const AITutorChat: React.FC<AITutorChatProps> = ({ open, onClose, recognitionCon
                 <Paper
                   sx={{
                     p: 2.5,
-                    bgcolor: message.role === 'user' 
-                      ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+                    background: message.role === 'user' 
+                      ? 'linear-gradient(135deg, #a8e6cf 0%, #7fcdbb 100%)' 
                       : 'white',
                     color: message.role === 'user' ? 'white' : 'text.primary',
                     borderRadius: message.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
                     boxShadow: message.role === 'user'
-                      ? '0 4px 12px rgba(102, 126, 234, 0.3)'
+                      ? '0 4px 12px rgba(127, 205, 187, 0.3)'
                       : '0 2px 8px rgba(0, 0, 0, 0.08)',
                     position: 'relative',
                     '&:hover .message-actions': {
@@ -504,10 +504,10 @@ const AITutorChat: React.FC<AITutorChatProps> = ({ open, onClose, recognitionCon
               {message.role === 'user' && (
                 <Avatar 
                   sx={{ 
-                    bgcolor: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                    background: 'linear-gradient(135deg, #a8e6cf 0%, #7fcdbb 100%)',
                     width: 36, 
                     height: 36,
-                    boxShadow: '0 2px 8px rgba(245, 87, 108, 0.3)',
+                    boxShadow: '0 2px 8px rgba(127, 205, 187, 0.3)',
                   }}
                 >
                   <Person sx={{ fontSize: 20 }} />
@@ -596,11 +596,11 @@ const AITutorChat: React.FC<AITutorChatProps> = ({ open, onClose, recognitionCon
                 borderRadius: 3,
                 background: loading 
                   ? 'linear-gradient(135deg, #ccc 0%, #aaa 100%)'
-                  : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+                  : 'linear-gradient(135deg, #a8e6cf 0%, #7fcdbb 100%)',
+                boxShadow: '0 4px 12px rgba(127, 205, 187, 0.3)',
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #5568d3 0%, #654a8f 100%)',
-                  boxShadow: '0 6px 16px rgba(102, 126, 234, 0.4)',
+                  background: 'linear-gradient(135deg, #8dd9bb 0%, #6bbaa5 100%)',
+                  boxShadow: '0 6px 16px rgba(127, 205, 187, 0.4)',
                   transform: 'translateY(-2px)',
                 },
                 '&:disabled': {
@@ -628,7 +628,7 @@ const AITutorChat: React.FC<AITutorChatProps> = ({ open, onClose, recognitionCon
                   textTransform: 'none',
                   color: 'text.secondary',
                   '&:hover': {
-                    bgcolor: 'rgba(102, 126, 234, 0.08)',
+                    bgcolor: 'rgba(127, 205, 187, 0.08)',
                   },
                 }}
               >
