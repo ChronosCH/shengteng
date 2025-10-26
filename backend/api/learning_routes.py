@@ -454,7 +454,7 @@ async def predict_isolated_sign(
             "prediction": {
                 "gloss": result.predicted_gloss,
                 "confidence": result.confidence,
-                "logits": result.logits,
+                "top_k_predictions": result.top_k_predictions,  # 新增：返回 Top-K 预测结果
             },
             "feedback": feedback,
         }
@@ -462,7 +462,7 @@ async def predict_isolated_sign(
         raise
     except Exception as exc:
         logger.error(f"孤立手语识别失败: {exc}")
-        raise HTTPException(status_code=500, detail="推理失败")
+        raise HTTPException(status_code=500, detail=f"推理失败: {str(exc)}")
 
 def _generate_learning_feedback(gloss: str, confidence: float) -> Dict[str, Any]:
     """生成学习反馈"""

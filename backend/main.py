@@ -132,27 +132,21 @@ async def lifespan(app: FastAPI):
                 health_check=default_health_check
             )
 
-            iso_cfg = config.isolated_sign
-            if getattr(iso_cfg, "enabled", False):
-                try:
-                    iso_config_dict = {
-                        "sequence_length": iso_cfg.sequence_length,
-                        "use_gpu": iso_cfg.use_gpu,
-                        "device_id": iso_cfg.device_id,
-                        "class_mapping_path": getattr(iso_cfg, "class_mapping_path", None),
-                    }
-
-                    service_manager.register_service(
-                        "isolated_sign_service",
-                        lambda: IsolatedSignService(
-                            model_checkpoint=iso_cfg.model_path,
-                            train_csv_path=iso_cfg.train_csv,
-                            config=iso_config_dict,
-                        ),
-                        health_check=default_health_check,
-                    )
-                except Exception as iso_exc:
-                    logger.warning(f"⚠️ 孤立手语服务注册失败: {iso_exc}")
+            # 注册新的孤立手语识别服务(基于 mind_wl)
+            try:
+                service_manager.register_service(
+                    "isolated_sign_service",
+                    lambda: IsolatedSignService(
+                        device_target="CPU",  # 使用CPU进行推理
+                        top_k=10,  # 返回Top-10结果
+                    ),
+                    health_check=default_health_check,
+                )
+                logger.info("✅ 孤立手语识别服务已注册 (基于 mind_wl I3D 模型)")
+            except Exception as iso_exc:
+                logger.warning(f"⚠️ 孤立手语服务注册失败: {iso_exc}")
+                import traceback
+                logger.warning(traceback.format_exc())
 
         # 启动所有服务
         success = await service_manager.start_all_services()
@@ -181,8 +175,10 @@ async def lifespan(app: FastAPI):
 
         try:
             app.state.isolated_sign_service = service_manager.get_service("isolated_sign_service")
+            logger.info("✅ 孤立手语识别服务已加载到 app.state")
         except:
             app.state.isolated_sign_service = None
+            logger.warning("⚠️ 孤立手语识别服务未加载")
 
         logger.info("✅ 系统初始化完成")
         yield
@@ -245,7 +241,7 @@ app.add_middleware(
 # 注册认证路由
 try:
     from backend.api.auth_routes import router as auth_router
-    app.include_router(auth_router, tags=["认证"])
+    app.include_router(auth_router)  # auth_router 已经包含 prefix="/api/auth"
     logger.info("✅ 认证路由已注册")
 except ImportError as e:
     logger.info(f"ℹ️ 认证路由未启用: {e}")
