@@ -262,6 +262,14 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️ 系统管理路由注册失败: {e}")
 
+# 注册LLM对话路由
+try:
+    from backend.api.llm_routes import router as llm_router
+    app.include_router(llm_router)
+    logger.info("✅ LLM对话路由已注册")
+except ImportError as e:
+    logger.warning(f"⚠️ LLM对话路由注册失败: {e}")
+
 # 数据模型
 class HealthResponse(BaseModel):
     status: str

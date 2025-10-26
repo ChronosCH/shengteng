@@ -27,11 +27,13 @@ import {
   Refresh,
   VideoFile,
   ExpandMore,
+  Chat,
 } from '@mui/icons-material'
 
 import continuousSignRecognitionService, {
   ContinuousRecognitionResult
 } from '../services/continuousSignRecognitionService'
+import LLMChatDialog from './LLMChatDialog'
 
 interface Props {
   onResult?: (result: ContinuousRecognitionResult) => void
@@ -45,6 +47,7 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
   const [statusMessage, setStatusMessage] = useState('')
   const [result, setResult] = useState<ContinuousRecognitionResult | null>(null)
   const [error, setError] = useState('')
+  const [chatOpen, setChatOpen] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
 
@@ -122,6 +125,12 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
     setStatusMessage('')
     setResult(null)
     setError('')
+    setChatOpen(false)
+  }, [])
+
+  // 打开聊天窗口
+  const handleOpenChat = useCallback(() => {
+    setChatOpen(true)
   }, [])
 
   // 格式化文件大小
@@ -413,17 +422,34 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
                       }}
                     >
                       <Stack spacing={2}>
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <Typography variant="h6" fontWeight={700}>
-                            ✨ 通义千问大语言模型增强翻译
-                          </Typography>
-                          {result.llm_result?.confidence && (
-                            <Chip 
-                              label={`置信度: ${result.llm_result.confidence}`}
-                              size="small"
-                              sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }}
-                            />
-                          )}
+                        <Box display="flex" alignItems="center" justifyContent="space-between">
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <Typography variant="h6" fontWeight={700}>
+                              ✨ 通义千问大语言模型增强翻译
+                            </Typography>
+                            {result.llm_result?.confidence && (
+                              <Chip 
+                                label={`置信度: ${result.llm_result.confidence}`}
+                                size="small"
+                                sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }}
+                              />
+                            )}
+                          </Box>
+                          <Button
+                            variant="contained"
+                            startIcon={<Chat />}
+                            onClick={handleOpenChat}
+                            sx={{
+                              bgcolor: 'rgba(255,255,255,0.2)',
+                              color: 'white',
+                              fontWeight: 600,
+                              '&:hover': {
+                                bgcolor: 'rgba(255,255,255,0.3)',
+                              },
+                            }}
+                          >
+                            💬 与AI对话
+                          </Button>
                         </Box>
                         
                         {result.llm_result?.chinese && (
@@ -860,6 +886,17 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
           )}
         </Stack>
       </CardContent>
+
+      {/* LLM 对话窗口 */}
+      <LLMChatDialog
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        context={{
+          recognitionResult: result?.text,
+          glossSequence: result?.gloss_sequence,
+          baselineText: result?.baseline_text,
+        }}
+      />
     </Card>
   )
 }
