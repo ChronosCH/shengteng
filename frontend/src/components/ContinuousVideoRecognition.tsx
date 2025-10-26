@@ -275,7 +275,7 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
                         }}
                       >
                         <Typography variant="overline" color="text.secondary">
-                          中文
+                          最终输出
                         </Typography>
                         <Typography 
                           variant="body1"
@@ -286,7 +286,55 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
                         >
                           {result.text || '无识别结果'}
                         </Typography>
+                        {result.llm_result?.success && (
+                          <Typography variant="caption" color="text.secondary">
+                            由通义千问 LLM 增强
+                          </Typography>
+                        )}
                       </Box>
+
+                      {result.baseline_text && (
+                        <Box
+                          sx={{
+                            p: 2,
+                            bgcolor: 'background.paper',
+                            borderRadius: 1,
+                            border: '1px dashed',
+                            borderColor: 'divider',
+                          }}
+                        >
+                          <Typography variant="overline" color="text.secondary">
+                            基础翻译（Mind-VAC）
+                          </Typography>
+                          <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                            {result.baseline_text}
+                          </Typography>
+                        </Box>
+                      )}
+
+                      {result.llm_result?.chinese && (
+                        <Box
+                          sx={{
+                            p: 2,
+                            bgcolor: 'background.paper',
+                            borderRadius: 1,
+                            border: '1px dashed',
+                            borderColor: 'divider',
+                          }}
+                        >
+                          <Typography variant="overline" color="text.secondary">
+                            LLM 中文增强
+                          </Typography>
+                          <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                            {result.llm_result.chinese}
+                          </Typography>
+                          {result.llm_result.success === false && result.llm_result.error && (
+                            <Typography variant="caption" color="error" display="block" sx={{ mt: 0.5 }}>
+                              {result.llm_result.error}
+                            </Typography>
+                          )}
+                        </Box>
+                      )}
 
                       {result.llm_result?.english && (
                         <Box
@@ -299,12 +347,18 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
                           }}
                         >
                           <Typography variant="overline" color="text.secondary">
-                            English
+                            LLM English Translation
                           </Typography>
                           <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
                             {result.llm_result.english}
                           </Typography>
                         </Box>
+                      )}
+
+                      {result.llm_result?.explanation && result.llm_result.explanation.trim() && (
+                        <Typography variant="caption" color="text.secondary">
+                          说明: {result.llm_result.explanation}
+                        </Typography>
                       )}
 
                       {result.raw_gloss_text && (
@@ -324,6 +378,21 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
                         </Box>
                       )}
 
+                      {result.llm_result?.raw_response && (
+                        <Accordion disableGutters elevation={0} sx={{ border: '1px dashed', borderColor: 'divider', borderRadius: 1 }}>
+                          <AccordionSummary expandIcon={<ExpandMore />}>
+                            <Typography variant="overline" color="text.secondary">
+                              LLM 原始响应
+                            </Typography>
+                          </AccordionSummary>
+                          <AccordionDetails>
+                            <Typography variant="caption" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'monospace' }}>
+                              {result.llm_result.raw_response}
+                            </Typography>
+                          </AccordionDetails>
+                        </Accordion>
+                      )}
+
                       <Stack direction="row" spacing={1} flexWrap="wrap">
                         <Chip 
                           label={`模型置信度 ${((result.overall_confidence ?? 0) * 100).toFixed(1)}%`}
@@ -341,12 +410,6 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
                         )}
                       </Stack>
 
-                      {result.llm_result?.explanation && (
-                        <Typography variant="caption" color="text.secondary">
-                          说明: {result.llm_result.explanation}
-                        </Typography>
-                      )}
-
                       {result.llm_result?.error && !result.llm_result?.success && (
                         <Typography variant="caption" color="error">
                           LLM 生成失败: {result.llm_result.error}
@@ -363,6 +426,12 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
                     </Typography>
                     <Stack spacing={1}>
                       <Box display="flex" justifyContent="space-between">
+                        <Typography variant="body2">识别管线:</Typography>
+                        <Typography variant="body2" fontWeight={600} textTransform="uppercase">
+                          {result.pipeline || '未知'}
+                        </Typography>
+                      </Box>
+                      <Box display="flex" justifyContent="space-between">
                         <Typography variant="body2">视频时长:</Typography>
                         <Typography variant="body2">{formatDuration(result.duration)}</Typography>
                       </Box>
@@ -374,6 +443,14 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
                         <Typography variant="body2">帧率:</Typography>
                         <Typography variant="body2">{(result.fps ?? 0).toFixed(1)} fps</Typography>
                       </Box>
+                      {result.frames_dir && (
+                        <Box display="flex" justifyContent="space-between">
+                          <Typography variant="body2">帧目录:</Typography>
+                          <Typography variant="body2" sx={{ maxWidth: 180, textAlign: 'right', wordBreak: 'break-all' }}>
+                            {result.frames_dir}
+                          </Typography>
+                        </Box>
+                      )}
                     </Stack>
                   </Paper>
                 </Grid>

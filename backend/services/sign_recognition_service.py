@@ -1,9 +1,9 @@
 """
 离线/批处理 手语视频识别服务
 实现流程:
-1. 读取视频 -> 抽帧(可下采样) -> MediaPipe 提取 543 关键点 (x,y,z)
-2. 关键点序列 -> 分窗口 -> 调用 CSLRService.predict 获取 gloss 片段
-3. 合并 gloss 序列 -> 简单规则翻译成自然中文
+1. 读取视频 -> 解码为 RGB 帧序列（必要时导出到 mind_vac 输出目录）
+2. Mind-VAC CSLR 模型推理 -> 解码出 gloss 序列
+3. 可选：通义千问 LLM 增强翻译 -> 生成自然语言文本
 4. 保存结果 JSON + 任务状态管理
 """
 from __future__ import annotations
@@ -15,6 +15,7 @@ import time
 import math
 import asyncio
 import threading
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Tuple
@@ -59,10 +60,14 @@ class RecognitionResult:
     frame_count: int
     fps: float
     duration: float
+    baseline_text: Optional[str] = None
+    pipeline: str = "unknown"
     srt_path: Optional[str] = None
     created_at: float = field(default_factory=lambda: time.time())
     raw_gloss_text: Optional[str] = None
     llm_result: Optional[Dict[str, Any]] = None
+    frames_dir: Optional[str] = None
+    extra: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -70,6 +75,8 @@ class RecognitionResult:
             "file_path": self.file_path,
             "gloss_sequence": self.gloss_sequence,
             "text": self.text,
+            "baseline_text": self.baseline_text,
+            "pipeline": self.pipeline,
             "segments": [
                 {
                     "gloss_sequence": seg.gloss_sequence,
@@ -88,6 +95,8 @@ class RecognitionResult:
             "created_at": self.created_at,
             "raw_gloss_text": self.raw_gloss_text,
             "llm_result": self.llm_result,
+            "frames_dir": self.frames_dir,
+            "extra": self.extra,
         }
 
 
@@ -413,6 +422,14 @@ class MindVacEngine:
         decoded = self.decoder.decode(sequence_logits, feat_len, batch_first=False, probs=False) if self.decoder else []
         recognized = decoded[0] if decoded else []
         gloss_sequence = [item[0] for item in recognized]
+        gloss_sequence = [token for token in gloss_sequence if str(token).strip()]
+        decoder_raw = [
+            {
+                "token": str(item[0]),
+                "position": int(item[1]) if len(item) > 1 else idx,
+            }
+            for idx, item in enumerate(recognized)
+        ] if recognized else []
         raw_gloss_text = " ".join(gloss_sequence)
 
         confidence = self._compute_confidence(sequence_logits, feat_len)
@@ -433,6 +450,7 @@ class MindVacEngine:
             "raw_gloss_text": raw_gloss_text,
             "confidence": confidence,
             "llm_result": llm_result,
+            "decoder_raw": decoder_raw,
         }
 
     async def run_on_frames(self, frames: List[np.ndarray], use_llm: Optional[bool] = None) -> Dict[str, Any]:
@@ -459,7 +477,7 @@ class SignRecognitionService:
 
         # 新增：帧模型推理相关
         # 只有在MindSpore可用时才启用帧模型
-        # 由配置控制是否启用帧模型（默认False，回退到 MediaPipe+CSLR）
+    # 由配置控制是否启用帧模型（默认 False，仅作为 Mind-VAC 备用方案）
         settings = None
         try:
             settings = get_settings()
@@ -471,30 +489,70 @@ class SignRecognitionService:
         self.frame_seq_len = 64
         if self.use_frame_model:
             self.window_length = self.frame_seq_len  # 统一窗口长度
-            logger.info("✅ MindSpore 可用，将使用帧模型推理")
+            logger.info("✅ MindSpore 帧模型作为备用管线已启用")
         else:
-            logger.warning("⚠️ MindSpore 不可用，将使用 MediaPipe + CSLR 备用方案")
+            logger.info("ℹ️ MindSpore 帧模型未启用，Mind-VAC 将作为主要识别管线")
         self.frame_model = None
         self.frame_model_ready = False
 
         # Mind-VAC 引擎
         self.mind_vac_engine = MindVacEngine(settings)
-        self.use_mind_vac = bool(getattr(self.mind_vac_engine, "available", False))
+        self.use_mind_vac = bool(getattr(self.mind_vac_engine, "enabled", False))
         if self.use_mind_vac:
-            logger.info("✅ Mind-VAC 连续手语识别已启用")
-        elif getattr(self.mind_vac_engine, "enabled", False):
-            logger.warning(f"⚠️ Mind-VAC 引擎不可用: {self.mind_vac_engine.last_error}")
+            if getattr(self.mind_vac_engine, "available", False):
+                logger.info("✅ Mind-VAC 连续手语识别已启用")
+            else:
+                logger.warning(f"⚠️ Mind-VAC 引擎尚未就绪: {self.mind_vac_engine.last_error}")
         else:
-            logger.info("Mind-VAC 集成未启用，使用默认识别流程")
+            logger.info("Mind-VAC 集成未启用")
 
         logger.info("SignRecognitionService 初始化完成")
 
     async def start_video_recognition(self, file_path: str) -> str:
         task_id = str(uuid.uuid4())
         async with self._lock:
-            self.tasks[task_id] = {"status": "queued", "progress": 0.0, "file_path": file_path}
+            self.tasks[task_id] = {
+                "status": "queued",
+                "progress": 0.0,
+                "file_path": file_path,
+                "source": "video",
+            }
         asyncio.create_task(self._process_task(task_id, file_path))
         return task_id
+
+    async def create_frames_task(self, fps: float = 25.0) -> tuple[str, Path]:
+        if not self.use_mind_vac:
+            raise RuntimeError("Mind-VAC 管线未启用，无法处理帧序列")
+
+        task_id = str(uuid.uuid4())
+        frames_dir = self.mind_vac_engine.output_dir / task_id
+        if frames_dir.exists():
+            shutil.rmtree(frames_dir, ignore_errors=True)
+        frames_dir.mkdir(parents=True, exist_ok=True)
+
+        async with self._lock:
+            self.tasks[task_id] = {
+                "status": "queued",
+                "progress": 0.0,
+                "frames_dir": str(frames_dir),
+                "fps": float(fps) if fps and fps > 0 else 25.0,
+                "source": "frames",
+            }
+
+        return task_id, frames_dir
+
+    async def start_frames_task(self, task_id: str) -> None:
+        async with self._lock:
+            task = self.tasks.get(task_id)
+        if not task:
+            raise RuntimeError(f"未找到任务 {task_id}")
+
+        frames_dir = Path(task.get("frames_dir", ""))
+        if not frames_dir.exists():
+            raise RuntimeError("帧目录不存在或已被移除")
+
+        fps = float(task.get("fps", 25.0) or 25.0)
+        asyncio.create_task(self._process_frames_task(task_id, frames_dir, fps))
 
     async def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
         async with self._lock:
@@ -518,29 +576,52 @@ class SignRecognitionService:
             logger.error(f"任务 {task_id} 处理失败: {e}")
             await self._update_task(task_id, status="error", progress=1.0, error=str(e))
 
+    async def _process_frames_task(self, task_id: str, frames_dir: Path, fps: float):
+        try:
+            await self._update_task(task_id, status="processing", progress=0.02)
+            result = await self._run_mind_vac_frameset_pipeline(task_id, frames_dir, fps)
+            result_path = os.path.join(self.result_dir, f"{task_id}.json")
+            with open(result_path, "w", encoding="utf-8") as f:
+                json.dump(result.to_dict(), f, ensure_ascii=False, indent=2)
+            await self._update_task(
+                task_id,
+                status="finished",
+                progress=1.0,
+                result=result.to_dict(),
+                result_path=result_path,
+            )
+        except Exception as e:
+            logger.error(f"帧任务 {task_id} 处理失败: {e}")
+            await self._update_task(task_id, status="error", progress=1.0, error=str(e))
+
     async def _run_pipeline(self, task_id: str, file_path: str) -> RecognitionResult:
-        # 优先尝试 Mind-VAC 管线
+        # Mind-VAC 是默认管线
         if self.use_mind_vac:
             try:
                 logger.info("使用 Mind-VAC 管线进行连续手语识别")
                 return await self._run_mind_vac_pipeline(task_id, file_path)
             except Exception as exc:
-                logger.error(f"Mind-VAC 管线处理失败，回退到其他流程: {exc}")
+                detail = self.mind_vac_engine.last_error or str(exc)
+                logger.error(f"Mind-VAC 管线处理失败: {detail}")
+                if self.use_frame_model and MS_AVAILABLE:
+                    logger.warning("Mind-VAC 失败，尝试 MindSpore 帧模型备用方案")
+                    await self._ensure_frame_model_loaded()
+                    return await self._run_frame_model_pipeline(task_id, file_path)
+                raise RuntimeError(f"Mind-VAC 管线处理失败: {detail}") from exc
 
-        # 离线识别：如启用帧模型，直接用训练网络对原始帧滑窗分类
+        # 若 Mind-VAC 未启用，仅当帧模型显式开启时才继续
         if self.use_frame_model and MS_AVAILABLE:
-            logger.info("使用 MindSpore 帧模型进行推理")
+            logger.info("Mind-VAC 未启用，使用 MindSpore 帧模型进行推理")
             await self._ensure_frame_model_loaded()
             return await self._run_frame_model_pipeline(task_id, file_path)
-        else:
-            if self.mediapipe_service is None:
-                raise RuntimeError("MediaPipe 服务不可用，且未启用其他连续手语识别管线")
-            logger.info("使用 MediaPipe + CSLR 备用方案进行推理")
-            return await self._run_mediapipe_pipeline(task_id, file_path)
+
+        raise RuntimeError("Mind-VAC 管线未启用或初始化失败，请检查配置和依赖")
 
     async def _run_mind_vac_pipeline(self, task_id: str, file_path: str) -> RecognitionResult:
         if not self.mind_vac_engine or not self.use_mind_vac:
             raise RuntimeError("Mind-VAC 引擎未启用")
+        if not getattr(self.mind_vac_engine, "available", False):
+            raise RuntimeError(self.mind_vac_engine.last_error or "Mind-VAC 引擎未正确初始化")
 
         cap = cv2.VideoCapture(file_path)
         if not cap.isOpened():
@@ -573,7 +654,21 @@ class SignRecognitionService:
 
         duration = frame_index / fps if fps > 0 else 0.0
 
-        await self._update_task(task_id, progress=0.5)
+        # 将视频帧导出到 Mind-VAC 输出目录，确保与离线脚本兼容
+        frame_output_dir = self.mind_vac_engine.output_dir / task_id
+        if frame_output_dir.exists():
+            shutil.rmtree(frame_output_dir, ignore_errors=True)
+        frame_output_dir.mkdir(parents=True, exist_ok=True)
+
+        for idx, frame in enumerate(frames_rgb):
+            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            frame_path = frame_output_dir / f"{idx:05d}.png"
+            cv2.imwrite(str(frame_path), frame_bgr)
+            if (idx + 1) % 50 == 0:
+                progress = 0.45 + 0.05 * ((idx + 1) / max(1, frame_index))
+                await self._update_task(task_id, progress=min(progress, 0.5))
+
+        await self._update_task(task_id, progress=0.5, frame_dir=str(frame_output_dir))
 
         inference_result = await self.mind_vac_engine.run_on_frames(frames_rgb)
 
@@ -581,16 +676,30 @@ class SignRecognitionService:
         raw_gloss_text = inference_result.get("raw_gloss_text", "") or ""
         llm_result = inference_result.get("llm_result")
         confidence = float(inference_result.get("confidence", 0.0) or 0.0)
+        decoder_raw = inference_result.get("decoder_raw") or []
+
+        logger.info("Mind-VAC 原始 gloss: %s", gloss_sequence if gloss_sequence else "<empty>")
+        if llm_result and llm_result.get("success"):
+            logger.info(
+                "Mind-VAC LLM 输出: zh=%s en=%s",
+                llm_result.get("chinese"),
+                llm_result.get("english"),
+            )
+        elif llm_result and llm_result.get("error"):
+            logger.warning("Mind-VAC LLM 失败: %s", llm_result.get("error"))
 
         await self._update_task(task_id, progress=0.8)
 
         # 文本后处理
-        translated_text = self._translate_gloss_to_text(gloss_sequence)
+        baseline_text = self._translate_gloss_to_text(gloss_sequence)
+        translated_text = baseline_text
         if llm_result and llm_result.get("success"):
             translated_text = llm_result.get("chinese") or translated_text
 
         if not translated_text:
             translated_text = raw_gloss_text.replace(" ", "")
+        if not baseline_text:
+            baseline_text = raw_gloss_text.replace(" ", "")
 
         segments: List[RecognitionSegment] = []
         if gloss_sequence:
@@ -612,6 +721,8 @@ class SignRecognitionService:
             file_path=file_path,
             gloss_sequence=gloss_sequence,
             text=translated_text,
+            baseline_text=baseline_text,
+            pipeline="mind_vac",
             segments=segments,
             overall_confidence=confidence,
             frame_count=frame_index,
@@ -620,6 +731,121 @@ class SignRecognitionService:
             srt_path=srt_path,
             raw_gloss_text=raw_gloss_text,
             llm_result=llm_result,
+            frames_dir=str(frame_output_dir),
+            extra={
+                "mind_vac": {
+                    "decoder_raw": decoder_raw,
+                    "frame_count": frame_index,
+                    "fps": fps,
+                }
+            },
+        )
+
+    async def _run_mind_vac_frameset_pipeline(self, task_id: str, frames_dir: Path, fps: float) -> RecognitionResult:
+        if not self.mind_vac_engine or not self.use_mind_vac:
+            raise RuntimeError("Mind-VAC 引擎未启用")
+        if not getattr(self.mind_vac_engine, "available", False):
+            raise RuntimeError(self.mind_vac_engine.last_error or "Mind-VAC 引擎未正确初始化")
+
+        await self._update_task(task_id, progress=0.1, frame_dir=str(frames_dir))
+
+        frame_paths = []
+        for pattern in ("*.png", "*.jpg", "*.jpeg", "*.bmp"):
+            frame_paths.extend(frames_dir.glob(pattern))
+        unique_paths = {path: None for path in frame_paths}
+        frame_paths = sorted(unique_paths.keys())
+        if not frame_paths:
+            raise RuntimeError("帧目录中未找到任何图像文件")
+
+        frames_rgb: List[np.ndarray] = []
+        for idx, frame_path in enumerate(frame_paths):
+            frame_bgr = cv2.imread(str(frame_path))
+            if frame_bgr is None:
+                logger.warning("跳过无法读取的帧: %s", frame_path)
+                continue
+            frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            frames_rgb.append(frame_rgb)
+            if (idx + 1) % 50 == 0:
+                progress = 0.1 + 0.3 * ((idx + 1) / max(1, len(frame_paths)))
+                await self._update_task(task_id, progress=min(progress, 0.45))
+
+        frame_count = len(frames_rgb)
+        if frame_count == 0:
+            raise RuntimeError("未成功读取任何有效帧")
+
+        fps_value = fps if fps and fps > 0 else 25.0
+        duration = frame_count / fps_value if fps_value > 0 else 0.0
+
+        await self._update_task(task_id, progress=0.5)
+
+        inference_result = await self.mind_vac_engine.run_on_frames(frames_rgb)
+
+        gloss_sequence = inference_result.get("gloss_sequence", []) or []
+        raw_gloss_text = inference_result.get("raw_gloss_text", "") or ""
+        llm_result = inference_result.get("llm_result")
+        confidence = float(inference_result.get("confidence", 0.0) or 0.0)
+        decoder_raw = inference_result.get("decoder_raw") or []
+
+        logger.info("Mind-VAC (frameset) 原始 gloss: %s", gloss_sequence if gloss_sequence else "<empty>")
+        if llm_result and llm_result.get("success"):
+            logger.info(
+                "Mind-VAC LLM 输出: zh=%s en=%s",
+                llm_result.get("chinese"),
+                llm_result.get("english"),
+            )
+        elif llm_result and llm_result.get("error"):
+            logger.warning("Mind-VAC LLM 失败: %s", llm_result.get("error"))
+
+        await self._update_task(task_id, progress=0.8)
+
+        baseline_text = self._translate_gloss_to_text(gloss_sequence)
+        translated_text = baseline_text
+        if llm_result and llm_result.get("success"):
+            translated_text = llm_result.get("chinese") or translated_text
+
+        if not translated_text:
+            translated_text = raw_gloss_text.replace(" ", "")
+        if not baseline_text:
+            baseline_text = raw_gloss_text.replace(" ", "")
+
+        segments: List[RecognitionSegment] = []
+        if gloss_sequence:
+            segments.append(RecognitionSegment(
+                gloss_sequence=gloss_sequence,
+                start_frame=0,
+                end_frame=max(frame_count - 1, 0),
+                confidence=confidence,
+                start_time=0.0,
+                end_time=duration,
+            ))
+
+        srt_path = self._generate_srt(task_id, segments, translated_text)
+
+        await self._update_task(task_id, progress=0.92)
+
+        return RecognitionResult(
+            task_id=task_id,
+            file_path=str(frames_dir),
+            gloss_sequence=gloss_sequence,
+            text=translated_text,
+            baseline_text=baseline_text,
+            pipeline="mind_vac_frameset",
+            segments=segments,
+            overall_confidence=confidence,
+            frame_count=frame_count,
+            fps=fps_value,
+            duration=duration,
+            srt_path=srt_path,
+            raw_gloss_text=raw_gloss_text,
+            llm_result=llm_result,
+            frames_dir=str(frames_dir),
+            extra={
+                "mind_vac": {
+                    "decoder_raw": decoder_raw,
+                    "frame_count": frame_count,
+                    "fps": fps_value,
+                }
+            },
         )
 
     async def _run_frame_model_pipeline(self, task_id: str, file_path: str) -> RecognitionResult:
@@ -709,6 +935,8 @@ class SignRecognitionService:
             file_path=file_path,
             gloss_sequence=merged_gloss,
             text=text,
+            baseline_text=text,
+            pipeline="frame_model",
             segments=segments,
             overall_confidence=overall_conf,
             frame_count=fid,
@@ -833,6 +1061,8 @@ class SignRecognitionService:
             file_path=file_path,
             gloss_sequence=merged_gloss,
             text=text,
+            baseline_text=text,
+            pipeline="mediapipe",
             segments=segments,
             overall_confidence=overall_conf,
             frame_count=frame_id,
