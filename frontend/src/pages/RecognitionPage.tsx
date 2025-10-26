@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Box,
   Container,
@@ -19,12 +19,10 @@ import {
 import {
   PlayArrow,
   Stop,
-  Favorite,
   Warning,
   CheckCircle,
-  VideoCall,
+  Speed,
   Visibility,
-  Settings,
   TipsAndUpdates,
   Security,
 } from '@mui/icons-material'
@@ -32,93 +30,177 @@ import {
 import ErrorBoundary from '../components/ErrorBoundary'
 import SafeFade from '../components/SafeFade'
 import VideoCapture from '../components/VideoCapture'
-import SubtitleDisplay from '../components/SubtitleDisplay'
-import { useSignLanguageRecognition } from '../hooks/useSignLanguageRecognition'
-import VideoFileRecognition from '../components/VideoFileRecognition'
-// 已移除增强版CE-CSL模拟组件
-// import EnhancedVideoRecognition from '../components/EnhancedVideoRecognition'
 import ContinuousVideoRecognition from '../components/ContinuousVideoRecognition'
+import mindVacRealtimeService, { MindVacRealtimeResult } from '../services/mindVacRealtimeService'
+
+const CAPTURE_DURATION_MS = 3000
+const TARGET_FPS = 12
+const MIN_FRAME_COUNT = 10
+const CAPTURE_WIDTH = 256
+const CAPTURE_HEIGHT = 256
 
 function RecognitionPage() {
-  const [isConnected, setIsConnected] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [isConnecting, setIsConnecting] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
+  const [engineAvailable, setEngineAvailable] = useState(true)
+  const [isCollecting, setIsCollecting] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [collectionProgress, setCollectionProgress] = useState(0)
+  const [fpsEstimate, setFpsEstimate] = useState(0)
 
-  const {
-    isRecognizing,
-    currentText,
-    confidence,
-    startRecognition,
-    stopRecognition,
-    websocketService,
-  } = useSignLanguageRecognition()
+  const [currentText, setCurrentText] = useState('')
+  const [confidence, setConfidence] = useState<number | null>(null)
+  const [glossSequence, setGlossSequence] = useState<string[]>([])
+  const [statusMessage, setStatusMessage] = useState('等待识别')
+  const [error, setError] = useState<string | null>(null)
+  const [realtimeResult, setRealtimeResult] = useState<MindVacRealtimeResult | null>(null)
 
-  // 确保组件完全挂载后再显示动画
+  const framesRef = useRef<string[]>([])
+  const captureCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const captureStartRef = useRef(0)
+  const lastFrameTsRef = useRef(0)
+
   useEffect(() => {
     const timer = setTimeout(() => setIsMounted(true), 100)
     return () => clearTimeout(timer)
   }, [])
 
-  // WebSocket连接状态监听
-  useEffect(() => {
-    if (websocketService) {
-      const handleConnect = () => {
-        setIsConnected(true)
-        setIsConnecting(false)
-      }
-      const handleDisconnect = () => {
-        setIsConnected(false)
-        setIsConnecting(false)
-      }
-      const handleError = (error: string) => {
-        setError(error)
-        setIsConnecting(false)
-      }
-
-      websocketService.on('connect', handleConnect)
-      websocketService.on('disconnect', handleDisconnect)
-      websocketService.on('error', handleError)
-
-      return () => {
-        websocketService.off('connect', handleConnect)
-        websocketService.off('disconnect', handleDisconnect)
-        websocketService.off('error', handleError)
-      }
-    }
-  }, [websocketService])
-
-  const handleConnect = async () => {
-    try {
-      setIsConnecting(true)
-      setError(null)
-      await websocketService.connect()
-    } catch (err) {
-      setError('连接服务器失败，请检查网络连接或服务器状态')
-      setIsConnecting(false)
-    }
-  }
-
-  const handleStartStop = async () => {
-    if (isRecognizing) {
-      stopRecognition()
-    } else {
-      try {
-        setError(null)
-        await startRecognition()
-      } catch (err) {
-        setError('启动识别失败，请确保摄像头权限已授予')
-      }
-    }
-  }
-
-  const handleCloseError = () => {
+  const resetStatesForNewCapture = useCallback(() => {
+    framesRef.current = []
+    captureStartRef.current = performance.now()
+    lastFrameTsRef.current = captureStartRef.current
+    setCollectionProgress(0)
+    setFpsEstimate(0)
+    setStatusMessage('正在采集手势，请持续保持动作 3 秒')
     setError(null)
+    setRealtimeResult(null)
+    setCurrentText('')
+    setConfidence(null)
+    setGlossSequence([])
+  }, [])
+
+  const finalizeCapture = useCallback(
+    (endTime?: number) => {
+      const stopTime = endTime ?? performance.now()
+      setIsCollecting(false)
+
+      const frames = [...framesRef.current]
+      const elapsedMs = Math.max(1, stopTime - captureStartRef.current)
+
+      if (frames.length < MIN_FRAME_COUNT) {
+        framesRef.current = []
+        setCollectionProgress(0)
+        setStatusMessage('采集数据不足')
+        setError('采集帧数不足，请保持手势稳定约 3 秒后再试')
+        return
+      }
+
+      setIsProcessing(true)
+      setStatusMessage('正在调用 Mind-VAC 模型进行识别...')
+
+      const fps = Math.max(1, frames.length / (elapsedMs / 1000))
+
+      mindVacRealtimeService
+        .recognizeFrames(frames, fps, true)
+        .then((result) => {
+          setRealtimeResult(result)
+          setCurrentText(result.text || '')
+          setConfidence(typeof result.confidence === 'number' ? result.confidence : null)
+          setGlossSequence(result.gloss_sequence || [])
+          setStatusMessage('识别完成')
+          setEngineAvailable(true)
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err)
+          setError(message)
+          setStatusMessage('识别失败')
+          if (message.toLowerCase().includes('mind-vac')) {
+            setEngineAvailable(false)
+          }
+        })
+        .finally(() => {
+          framesRef.current = []
+          setCollectionProgress(0)
+          setIsProcessing(false)
+        })
+    },
+    [],
+  )
+
+  const handleStartCapture = useCallback(() => {
+    if (isCollecting || isProcessing) {
+      return
+    }
+    resetStatesForNewCapture()
+    setIsCollecting(true)
+  }, [isCollecting, isProcessing, resetStatesForNewCapture])
+
+  const handleStopCapture = useCallback(() => {
+    if (!isCollecting) {
+      return
+    }
+    finalizeCapture(performance.now())
+  }, [finalizeCapture, isCollecting])
+
+  const handleVideoFrame = useCallback(
+    (video: HTMLVideoElement) => {
+      if (!isCollecting) {
+        return
+      }
+
+      const now = performance.now()
+      const minInterval = 1000 / TARGET_FPS
+      if (now - lastFrameTsRef.current < minInterval) {
+        return
+      }
+
+      let canvas = captureCanvasRef.current
+      if (!canvas) {
+        canvas = document.createElement('canvas')
+        canvas.width = CAPTURE_WIDTH
+        canvas.height = CAPTURE_HEIGHT
+        captureCanvasRef.current = canvas
+      }
+
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
+      if (!ctx) {
+        return
+      }
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+      framesRef.current.push(dataUrl)
+      lastFrameTsRef.current = now
+
+      const elapsedMs = now - captureStartRef.current
+      setCollectionProgress(Math.min(1, elapsedMs / CAPTURE_DURATION_MS))
+      const fps = framesRef.current.length / Math.max(0.001, elapsedMs / 1000)
+      setFpsEstimate(fps)
+
+      const maxFrameCount = TARGET_FPS * Math.ceil(CAPTURE_DURATION_MS / 1000)
+      if (elapsedMs >= CAPTURE_DURATION_MS || framesRef.current.length >= maxFrameCount) {
+        finalizeCapture(now)
+      }
+    },
+    [finalizeCapture, isCollecting],
+  )
+
+  const handleCloseError = () => setError(null)
+
+  const renderGlossSequence = () => {
+    if (!glossSequence.length) {
+      return null
+    }
+    return (
+      <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ gap: 1, mt: 2 }}>
+        {glossSequence.map((gloss, index) => (
+          <Chip key={`${gloss}-${index}`} label={`${index + 1}. ${gloss}`} size="small" color="secondary" variant="outlined" />
+        ))}
+      </Stack>
+    )
   }
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
-      {/* 页面标题和状态 */}
       <SafeFade in={isMounted} timeout={600}>
         <Box sx={{ mb: 6, textAlign: 'center' }}>
           <Avatar
@@ -133,11 +215,11 @@ function RecognitionPage() {
           >
             <Visibility sx={{ fontSize: 40, color: 'white' }} />
           </Avatar>
-          
-          <Typography 
-            variant="h2" 
-            gutterBottom 
-            sx={{ 
+
+          <Typography
+            variant="h2"
+            gutterBottom
+            sx={{
               fontWeight: 700,
               background: 'linear-gradient(135deg, #B5EAD7 0%, #9BC1BC 100%)',
               backgroundClip: 'text',
@@ -146,242 +228,207 @@ function RecognitionPage() {
               mb: 2,
             }}
           >
-            实时手语识别
+            Mind-VAC 实时手语识别
           </Typography>
-          
-          <Typography variant="h6" color="text.secondary" sx={{ mb: 4, maxWidth: 600, mx: 'auto' }}>
-            使用深度学习技术实时识别手语动作并转换为文字，支持多种手语类型
+
+          <Typography variant="h6" color="text.secondary" sx={{ mb: 4, maxWidth: 620, mx: 'auto' }}>
+            直接调用本地 Mind-VAC 模型，采集摄像头画面后在后端完成推理，并返回连续手语识别结果
           </Typography>
-          
-          <Stack 
-            direction="row" 
-            spacing={2} 
-            justifyContent="center" 
-            flexWrap="wrap"
-            sx={{ gap: 2 }}
-          >
+
+          <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap" sx={{ gap: 2 }}>
             <Chip
-              icon={isConnected ? <CheckCircle /> : <Warning />}
-              label={isConnected ? '服务器已连接' : '服务器未连接'}
-              color={isConnected ? 'success' : 'warning'}
-              sx={{ 
-                px: 2,
-                py: 1,
-                height: 'auto',
-                '& .MuiChip-label': { fontSize: '0.95rem', py: 0.5 }
-              }}
+              icon={engineAvailable ? <CheckCircle /> : <Warning />}
+              label={engineAvailable ? 'Mind-VAC 引擎可用' : 'Mind-VAC 引擎不可用'}
+              color={engineAvailable ? 'success' : 'warning'}
+              sx={{ px: 2, py: 1, height: 'auto', '& .MuiChip-label': { fontSize: '0.95rem', py: 0.5 } }}
             />
-            {isRecognizing && (
+            {isCollecting && (
               <Chip
-                icon={<VideoCall />}
-                label="识别进行中"
+                icon={<Speed />}
+                label={`采集中 · ${(collectionProgress * 100).toFixed(0)}% · ${fpsEstimate.toFixed(1)} FPS`}
                 color="info"
-                sx={{ 
-                  px: 2,
-                  py: 1,
-                  height: 'auto',
-                  animation: 'pulse 2s infinite',
-                  '& .MuiChip-label': { fontSize: '0.95rem', py: 0.5 }
-                }}
+                sx={{ px: 2, py: 1, height: 'auto', animation: 'pulse 2s infinite', '& .MuiChip-label': { fontSize: '0.95rem', py: 0.5 } }}
               />
             )}
-            {confidence !== null && (
+            {isProcessing && (
               <Chip
-                label={`置信度: ${(confidence * 100).toFixed(1)}%`}
-                color={confidence > 0.8 ? "success" : confidence > 0.6 ? "warning" : "error"}
-                sx={{ 
-                  px: 2,
-                  py: 1,
-                  height: 'auto',
-                  fontWeight: 600,
-                  '& .MuiChip-label': { fontSize: '0.95rem', py: 0.5 }
-                }}
+                icon={<CircularProgress size={16} color="inherit" />}
+                label="Mind-VAC 推理中"
+                color="primary"
+                sx={{ px: 2, py: 1, height: 'auto', '& .MuiChip-label': { fontSize: '0.95rem', py: 0.5 } }}
+              />
+            )}
+            {confidence !== null && !isProcessing && (
+              <Chip
+                label={`置信度 ${(confidence * 100).toFixed(1)}%`}
+                color={confidence > 0.8 ? 'success' : confidence > 0.6 ? 'warning' : 'error'}
+                sx={{ px: 2, py: 1, height: 'auto', fontWeight: 600, '& .MuiChip-label': { fontSize: '0.95rem', py: 0.5 } }}
               />
             )}
           </Stack>
         </Box>
       </SafeFade>
 
-      {/* 优化的响应式布局 */}
       <Box sx={{ mb: 4 }}>
         <Grid container spacing={3}>
-          {/* 顶部控制面板 - 水平排列减少拥挤感 */}
-          <Grid item xs={12}>
-            <Grid container spacing={3}>
-              {/* 连接状态 */}
-              <Grid item xs={12} md={4}>
-                <SafeFade in={isMounted} timeout={600} key="connection-status">
-                  <Card
-                    elevation={0}
+          <Grid item xs={12} md={4}>
+            <SafeFade in={isMounted} timeout={600} key="engine-status">
+              <Card
+                elevation={0}
+                sx={{
+                  background: 'linear-gradient(135deg, #FFB3BA15 0%, #FFD6CC08 100%)',
+                  border: '1px solid #FFB3BA20',
+                  borderRadius: 3,
+                  height: '100%',
+                }}
+              >
+                <CardContent sx={{ p: 3, textAlign: 'center' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
+                    <Avatar
+                      sx={{
+                        width: 40,
+                        height: 40,
+                        mr: 2,
+                        backgroundColor: engineAvailable ? '#B5EAD7' : '#FFB3BA',
+                        boxShadow: engineAvailable
+                          ? '0 4px 12px rgba(181, 234, 215, 0.3)'
+                          : '0 4px 12px rgba(255, 179, 186, 0.3)',
+                      }}
+                    >
+                      {engineAvailable ? <CheckCircle sx={{ fontSize: 20 }} /> : <Warning sx={{ fontSize: 20 }} />}
+                    </Avatar>
+                    <Box sx={{ textAlign: 'left' }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5 }}>
+                        Mind-VAC 状态
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {engineAvailable ? '模型已准备就绪，可直接识别。' : '模型不可用，请检查后端服务或权重文件。'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    点击“开始识别”后，将采集约 3 秒的视频帧并在服务端运行 Mind-VAC 模型。
+                  </Typography>
+                </CardContent>
+              </Card>
+            </SafeFade>
+          </Grid>
+
+          <Grid item xs={12} md={4}>
+            <SafeFade in={isMounted} timeout={800} key="control-panel">
+              <Card
+                elevation={0}
+                sx={{
+                  background: 'linear-gradient(135deg, #B5EAD715 0%, #C7F0DB08 100%)',
+                  border: '1px solid #B5EAD720',
+                  borderRadius: 3,
+                  height: '100%',
+                }}
+              >
+                <CardContent sx={{ p: 3, textAlign: 'center' }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
+                    识别控制
+                  </Typography>
+
+                  <Button
+                    variant="contained"
+                    color={isCollecting ? 'error' : 'primary'}
+                    startIcon={isCollecting ? <Stop /> : <PlayArrow />}
+                    onClick={isCollecting ? handleStopCapture : handleStartCapture}
+                    size="large"
+                    disabled={isProcessing}
                     sx={{
-                      background: 'linear-gradient(135deg, #FFB3BA15 0%, #FFD6CC08 100%)',
-                      border: '1px solid #FFB3BA20',
                       borderRadius: 3,
-                      height: '100%',
+                      fontWeight: 600,
+                      px: 4,
+                      background: isCollecting
+                        ? 'linear-gradient(135deg, #FFB3BA 0%, #FF9AA2 100%)'
+                        : 'linear-gradient(135deg, #B5EAD7 0%, #9BC1BC 100%)',
                     }}
                   >
-                    <CardContent sx={{ p: 3, textAlign: 'center' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
-                        <Avatar
-                          sx={{
-                            width: 40,
-                            height: 40,
-                            mr: 2,
-                            backgroundColor: isConnected ? '#B5EAD7' : '#FFB3BA',
-                            boxShadow: isConnected 
-                              ? '0 4px 12px rgba(181, 234, 215, 0.3)'
-                              : '0 4px 12px rgba(255, 179, 186, 0.3)',
-                          }}
-                        >
-                          {isConnected ? <CheckCircle sx={{ fontSize: 20 }} /> : <Settings sx={{ fontSize: 20 }} />}
-                        </Avatar>
-                        <Box sx={{ textAlign: 'left' }}>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5 }}>
-                            服务器连接
-                          </Typography>
-                          <Chip
-                            label={isConnected ? '已连接' : '未连接'}
-                            color={isConnected ? 'success' : 'warning'}
-                            size="small"
-                            sx={{ fontSize: '0.75rem' }}
-                          />
-                        </Box>
-                      </Box>
-                      
-                      {!isConnected && (
-                        <Button
-                          variant="contained"
-                          onClick={handleConnect}
-                          disabled={isConnecting}
-                          size="small"
-                          startIcon={isConnecting ? <CircularProgress size={16} /> : null}
-                          sx={{
+                    {isCollecting ? '停止采集' : '开始识别'}
+                  </Button>
+
+                  {isCollecting && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        正在采集手势... 请保持稳定
+                      </Typography>
+                      <LinearProgress
+                        variant="determinate"
+                        value={collectionProgress * 100}
+                        sx={{
+                          mt: 1,
+                          height: 4,
+                          borderRadius: 2,
+                          backgroundColor: 'rgba(181, 234, 215, 0.2)',
+                          '& .MuiLinearProgress-bar': {
                             borderRadius: 2,
-                            background: 'linear-gradient(135deg, #FFB3BA 0%, #FFD6CC 100%)',
-                            fontSize: '0.8rem',
-                          }}
-                        >
-                          {isConnecting ? '连接中...' : '连接'}
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-                </SafeFade>
-              </Grid>
-
-              {/* 识别控制 */}
-              <Grid item xs={12} md={4}>
-                <SafeFade in={isMounted} timeout={800} key="recognition-control">
-                  <Card
-                    elevation={0}
-                    sx={{
-                      background: 'linear-gradient(135deg, #B5EAD715 0%, #C7F0DB08 100%)',
-                      border: '1px solid #B5EAD720',
-                      borderRadius: 3,
-                      height: '100%',
-                    }}
-                  >
-                    <CardContent sx={{ p: 3, textAlign: 'center' }}>
-                      <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
-                        识别控制
-                      </Typography>
-                      
-                      <Button
-                        variant="contained"
-                        color={isRecognizing ? "error" : "primary"}
-                        startIcon={isRecognizing ? <Stop /> : <PlayArrow />}
-                        onClick={handleStartStop}
-                        disabled={!isConnected}
-                        size="large"
-                        sx={{ 
-                          borderRadius: 3,
-                          fontWeight: 600,
-                          px: 4,
-                          background: isRecognizing 
-                            ? 'linear-gradient(135deg, #FFB3BA 0%, #FF9AA2 100%)'
-                            : 'linear-gradient(135deg, #B5EAD7 0%, #9BC1BC 100%)',
+                            background: 'linear-gradient(90deg, #B5EAD7 0%, #9BC1BC 100%)',
+                          },
                         }}
-                      >
-                        {isRecognizing ? '停止' : '开始'}
-                      </Button>
+                      />
+                    </Box>
+                  )}
 
-                      {confidence !== null && (
-                        <Box sx={{ mt: 2 }}>
-                          <Typography variant="caption" color="text.secondary">
-                            置信度: {(confidence * 100).toFixed(1)}%
-                          </Typography>
-                          <LinearProgress
-                            variant="determinate"
-                            value={confidence * 100}
-                            sx={{
-                              mt: 1,
-                              height: 4,
-                              borderRadius: 2,
-                              backgroundColor: 'rgba(181, 234, 215, 0.2)',
-                              '& .MuiLinearProgress-bar': {
-                                borderRadius: 2,
-                                background: confidence > 0.8 
-                                  ? 'linear-gradient(90deg, #B5EAD7 0%, #9BC1BC 100%)'
-                                  : confidence > 0.6
-                                  ? 'linear-gradient(90deg, #FFDAB9 0%, #FFCC99 100%)'
-                                  : 'linear-gradient(90deg, #FFB3BA 0%, #FF9AA2 100%)',
-                              },
-                            }}
-                          />
-                        </Box>
-                      )}
-                    </CardContent>
-                  </Card>
-                </SafeFade>
-              </Grid>
+                  {isProcessing && (
+                    <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                      <CircularProgress size={32} color="primary" />
+                      <Typography variant="caption" color="text.secondary">
+                        Mind-VAC 推理中...
+                      </Typography>
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
+            </SafeFade>
+          </Grid>
 
-              {/* 识别结果预览 */}
-              <Grid item xs={12} md={4}>
-                <SafeFade in={isMounted} timeout={1000} key="recognition-result">
-                  <Card
-                    elevation={0}
+          <Grid item xs={12} md={4}>
+            <SafeFade in={isMounted} timeout={1000} key="result-preview">
+              <Card
+                elevation={0}
+                sx={{
+                  background: 'linear-gradient(135deg, #C7CEDB15 0%, #D6DCE508 100%)',
+                  border: '1px solid #C7CEDB20',
+                  borderRadius: 3,
+                  height: '100%',
+                }}
+              >
+                <CardContent sx={{ p: 3 }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, textAlign: 'center', mb: 2 }}>
+                    识别结果
+                  </Typography>
+                  <Box
                     sx={{
-                      background: 'linear-gradient(135deg, #C7CEDB15 0%, #D6DCE508 100%)',
-                      border: '1px solid #C7CEDB20',
-                      borderRadius: 3,
-                      height: '100%',
+                      minHeight: 70,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'rgba(255, 255, 255, 0.5)',
+                      borderRadius: 2,
+                      p: 2,
                     }}
                   >
-                    <CardContent sx={{ p: 3 }}>
-                      <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, textAlign: 'center', mb: 2 }}>
-                        识别结果
+                    {currentText ? (
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main', textAlign: 'center' }}>
+                        {currentText}
                       </Typography>
-                      <Box sx={{ 
-                        minHeight: 60, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        background: 'rgba(255, 255, 255, 0.5)',
-                        borderRadius: 2,
-                        p: 2,
-                      }}>
-                        {currentText ? (
-                          <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main', textAlign: 'center' }}>
-                            {currentText}
-                          </Typography>
-                        ) : (
-                          <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', fontStyle: 'italic' }}>
-                            {isRecognizing ? '正在识别...' : '等待手语输入'}
-                          </Typography>
-                        )}
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </SafeFade>
-              </Grid>
-            </Grid>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', fontStyle: 'italic' }}>
+                        {isProcessing ? 'Mind-VAC 推理中...' : statusMessage}
+                      </Typography>
+                    )}
+                  </Box>
+                  {renderGlossSequence()}
+                </CardContent>
+              </Card>
+            </SafeFade>
           </Grid>
         </Grid>
       </Box>
 
-      {/* 主要内容区域 */}
       <Grid container spacing={4}>
-        {/* 左侧：摄像头预览 */}
         <Grid item xs={12} lg={4}>
           <SafeFade in={isMounted} timeout={1200} key="video-capture">
             <Card
@@ -399,13 +446,15 @@ function RecognitionPage() {
                 </Typography>
                 <Box sx={{ flex: 1, display: 'flex', alignItems: 'center' }}>
                   <ErrorBoundary>
-                    <Box sx={{ 
-                      width: '100%',
-                      borderRadius: 3, 
-                      overflow: 'hidden',
-                      background: 'linear-gradient(135deg, #F0F8FF 0%, #E6F7FF 100%)',
-                    }}>
-                      <VideoCapture isActive={isRecognizing} />
+                    <Box
+                      sx={{
+                        width: '100%',
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                        background: 'linear-gradient(135deg, #F0F8FF 0%, #E6F7FF 100%)',
+                      }}
+                    >
+                      <VideoCapture isActive={isCollecting} onFrame={handleVideoFrame} />
                     </Box>
                   </ErrorBoundary>
                 </Box>
@@ -414,15 +463,14 @@ function RecognitionPage() {
           </SafeFade>
         </Grid>
 
-        {/* 中间：3D Avatar - 更大更突出 */}
         <Grid item xs={12} lg={8}>
-          <SafeFade in={isMounted} timeout={600} key="avatar-viewer">
-            <Paper 
+          <SafeFade in={isMounted} timeout={600} key="result-details">
+            <Paper
               elevation={0}
-              sx={{ 
-                p: 4, 
-                height: { xs: '500px', lg: '600px' },
-                display: 'flex', 
+              sx={{
+                p: 4,
+                height: { xs: 'auto', lg: '600px' },
+                display: 'flex',
                 flexDirection: 'column',
                 background: 'linear-gradient(135deg, #FFDAB920 0%, #FFE7CC10 100%)',
                 border: '2px solid #FFDAB930',
@@ -441,113 +489,78 @@ function RecognitionPage() {
                 },
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <Avatar
-                    sx={{
-                      width: 48,
-                      height: 48,
-                      mr: 2,
-                      background: 'linear-gradient(135deg, #FFDAB9 0%, #FFE7CC 100%)',
-                    }}
-                  >
-                    <Visibility />
-                  </Avatar>
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary' }}>
-                    3D手语Avatar
-                  </Typography>
-                </Box>
-                
-                <Stack direction="row" spacing={1}>
-                  {currentText && (
-                    <Chip 
-                      label="实时演示"
-                      color="success"
-                      size="small"
-                      sx={{ fontWeight: 600 }}
-                    />
-                  )}
-                  {isRecognizing && (
-                    <Chip 
-                      label="识别中"
-                      color="info"
-                      size="small"
-                      sx={{ fontWeight: 600, animation: 'pulse 2s infinite' }}
-                    />
-                  )}
-                </Stack>
-              </Box>
-              
-              <Box 
-                sx={{ 
-                  flex: 1, 
-                  minHeight: 0,
-                  borderRadius: 4,
-                  overflow: 'hidden',
-                  background: 'linear-gradient(135deg, #F8FDFF 0%, #E8F5FF 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: '1px solid rgba(255, 218, 185, 0.3)',
-                  position: 'relative',
-                }}
-              >
-                <ErrorBoundary>
-                  {isConnected ? (
-                    <Box sx={{ 
-                      height: '100%', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      p: 4 
-                    }}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h5" gutterBottom sx={{ color: 'primary.main' }}>
-                          手语播报显示区域
-                        </Typography>
-                        <Typography variant="body1" color="text.secondary">
-                          {currentText || '识别的手语文本将在这里显示'}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  ) : (
-                    <Box sx={{ textAlign: 'center', color: 'text.secondary', p: 4 }}>
-                      <Avatar
-                        sx={{
-                          width: 80,
-                          height: 80,
-                          mx: 'auto',
-                          mb: 3,
-                          backgroundColor: 'rgba(255, 218, 185, 0.3)',
-                          color: 'text.secondary',
-                      }}
-                    >
-                      <Settings sx={{ fontSize: 40 }} />
-                    </Avatar>
-                    <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                      等待连接服务器
+              <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary', mb: 3 }}>
+                Mind-VAC 推理详情
+              </Typography>
+
+              {realtimeResult ? (
+                <Stack spacing={2} sx={{ color: 'text.primary' }}>
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                      模型输出
                     </Typography>
-                    <Typography variant="body2">
-                      连接后即可进行手语识别
+                    <Typography variant="body1" sx={{ lineHeight: 1.7 }}>
+                      {realtimeResult.text || '—'}
                     </Typography>
                   </Box>
-                )}
-                </ErrorBoundary>
-              </Box>
+
+                  {realtimeResult.baseline_text && realtimeResult.baseline_text !== realtimeResult.text && (
+                    <Box>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        基础翻译
+                      </Typography>
+                      <Typography variant="body2">{realtimeResult.baseline_text}</Typography>
+                    </Box>
+                  )}
+
+                  {realtimeResult.raw_gloss_text && (
+                    <Box>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Gloss 序列
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-word' }}>
+                        {realtimeResult.raw_gloss_text}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ gap: 1 }}>
+                    <Chip label={`帧数 ${realtimeResult.frame_count}`} size="small" />
+                    <Chip label={`时长 ${(realtimeResult.duration || 0).toFixed(2)}s`} size="small" />
+                    <Chip label={`置信度 ${(realtimeResult.confidence * 100).toFixed(1)}%`} size="small" />
+                  </Stack>
+                </Stack>
+              ) : (
+                <Box
+                  sx={{
+                    flex: 1,
+                    borderRadius: 4,
+                    border: '1px dashed rgba(255, 218, 185, 0.6)',
+                    background: 'linear-gradient(135deg, rgba(248, 253, 255, 0.6) 0%, rgba(232, 245, 255, 0.8) 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    p: 4,
+                    textAlign: 'center',
+                    color: 'text.secondary',
+                  }}
+                >
+                  <Typography variant="body2">等待采集并完成 Mind-VAC 推理后将在此显示详细结果</Typography>
+                </Box>
+              )}
             </Paper>
           </SafeFade>
         </Grid>
       </Grid>
 
-      {/* 底部辅助信息 */}
       <Box sx={{ mt: 4 }}>
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <SafeFade in={isMounted} timeout={1600} key="usage-tips">
-              <Paper 
+              <Paper
                 elevation={0}
-                sx={{ 
-                  p: 3, 
+                sx={{
+                  p: 3,
                   background: 'linear-gradient(135deg, #B5EAD7 0%, #C7F0DB 100%)',
                   color: 'white',
                   borderRadius: 4,
@@ -560,10 +573,7 @@ function RecognitionPage() {
                   </Typography>
                 </Box>
                 <Typography variant="body2" sx={{ fontSize: '0.9rem', lineHeight: 1.7, opacity: 0.95 }}>
-                  • 确保手部完全在摄像头范围内<br/>
-                  • 保持充足稳定的光线条件<br/>
-                  • 手语动作要清晰标准规范<br/>
-                  • 适当调整与摄像头的距离
+                  • 确保手部完整进入画面，避免遮挡<br />• 保持稳定光线与背景对比<br />• 采集中保持动作连续，直到进度条完成<br />• 如果结果为空，尝试延长动作时间或增大动作幅度
                 </Typography>
               </Paper>
             </SafeFade>
@@ -571,10 +581,10 @@ function RecognitionPage() {
 
           <Grid item xs={12} md={6}>
             <SafeFade in={isMounted} timeout={1800} key="privacy-info">
-              <Paper 
+              <Paper
                 elevation={0}
-                sx={{ 
-                  p: 3, 
+                sx={{
+                  p: 3,
                   background: 'linear-gradient(135deg, #FFB3BA20 0%, #FFD6CC10 100%)',
                   border: '2px solid #FFB3BA30',
                   borderRadius: 4,
@@ -587,46 +597,35 @@ function RecognitionPage() {
                   </Typography>
                 </Box>
                 <Typography variant="caption" sx={{ fontSize: '0.85rem', lineHeight: 1.6, color: 'text.secondary' }}>
-                  我们仅上传手部关键点数据用于识别，原始视频完全在本地处理，
-                  确保您的隐私和数据安全。所有传输均采用加密协议保护。
+                  视频帧仅用于即时推理，并不会在服务器上长期保存；如果 Mind-VAC LLM 增强不可用，系统会自动返回基础识别结果。
                 </Typography>
               </Paper>
             </SafeFade>
           </Grid>
 
-          {/* 已移除模拟识别卡片，仅保留真实连续识别 */}
-          
           <Grid item xs={12} md={12}>
             <SafeFade in={isMounted} timeout={2400} key="continuous-video-recognition">
-              <ContinuousVideoRecognition onResult={(r)=>console.log('continuous recognition result', r)} />
+              <ContinuousVideoRecognition onResult={(r) => console.log('continuous recognition result', r)} />
             </SafeFade>
           </Grid>
         </Grid>
       </Box>
 
-      {/* 错误提示 */}
       <Snackbar
         open={!!error}
         autoHideDuration={6000}
         onClose={handleCloseError}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert 
-          onClose={handleCloseError} 
-          severity="error" 
-          sx={{ 
-            width: '100%',
-            borderRadius: 3,
-            '& .MuiAlert-icon': {
-              fontSize: 24,
-            }
-          }}
+        <Alert
+          onClose={handleCloseError}
+          severity="error"
+          sx={{ width: '100%', borderRadius: 3, '& .MuiAlert-icon': { fontSize: 24 } }}
         >
           {error}
         </Alert>
       </Snackbar>
 
-      {/* CSS动画 */}
       <style>
         {`
           @keyframes pulse {

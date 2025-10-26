@@ -250,6 +250,14 @@ try:
 except ImportError as e:
     logger.info(f"ℹ️ 认证路由未启用: {e}")
 
+# 注册 Mind-VAC 实时识别路由
+try:
+    from backend.api.mindvac_routes import router as mindvac_router
+    app.include_router(mindvac_router)
+    logger.info("✅ Mind-VAC 路由已注册")
+except ImportError as e:
+    logger.warning(f"⚠️ Mind-VAC 路由注册失败: {e}")
+
 # 注册学习训练路由
 if LEARNING_AVAILABLE:
     app.include_router(learning_router, prefix="/api/learning", tags=["学习训练"])
