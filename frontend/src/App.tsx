@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import { CssBaseline } from '@mui/material'
 import { useState } from 'react'
@@ -159,15 +159,16 @@ function App() {
         <ThemeProvider theme={theme}>
           <CssBaseline />
           <Router>
-            <Layout darkMode={darkMode} onToggleDarkMode={() => setDarkMode(!darkMode)}>
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/recognition" element={<RecognitionPage />} />
-                <Route path="/learning" element={<LearningPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/lab" element={<LabPage />} />
-              </Routes>
-            </Layout>
+            <Routes>
+              <Route path="/" element={<Layout darkMode={darkMode} onToggleDarkMode={() => setDarkMode(!darkMode)} />}>
+                <Route index element={<HomePage />} />
+                <Route path="recognition" element={<RecognitionPage />} />
+                <Route path="learning" element={<LearningPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+                <Route path="lab" element={<LabPage />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
           </Router>
         </ThemeProvider>
       </AuthProvider>

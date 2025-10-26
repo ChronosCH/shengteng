@@ -10,6 +10,8 @@ import logging
 from datetime import datetime
 import os
 
+import requests
+
 from ..services.learning_training_service import LearningTrainingService, DifficultyLevel
 from ..utils.security import SecurityManager
 from ..services import IsolatedSignService
@@ -552,8 +554,6 @@ async def chat_with_ai_tutor(
                 detail="未配置 DASHSCOPE_API_KEY，无法使用AI助手功能"
             )
 
-        import requests
-        
         # 构建系统提示词 - 让AI扮演手语教学老师
         system_prompt = """你是一位专业、耐心的手语教学老师。你的任务是帮助用户学习手语。
 
@@ -669,8 +669,6 @@ async def suggest_learning_videos(
                 detail="未配置 DASHSCOPE_API_KEY"
             )
 
-        import requests
-        
         prompt = f"""请帮我搜索关于"{sign_name}"手语的学习视频，要求：
 1. 优先推荐B站（bilibili.com）的中文手语教程
 2. 也可以推荐YouTube上的优质教程

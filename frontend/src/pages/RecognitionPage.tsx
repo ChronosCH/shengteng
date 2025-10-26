@@ -33,9 +33,10 @@ import VideoCapture from '../components/VideoCapture'
 import ContinuousVideoRecognition from '../components/ContinuousVideoRecognition'
 import mindVacRealtimeService, { MindVacRealtimeResult } from '../services/mindVacRealtimeService'
 
-const CAPTURE_DURATION_MS = 3000
-const TARGET_FPS = 12
-const MIN_FRAME_COUNT = 10
+const CAPTURE_DURATION_MS = 7000
+const TARGET_FPS = 24
+const MIN_FRAME_COUNT = 32
+const BACKEND_MIN_FRAME_COUNT = 8
 const CAPTURE_WIDTH = 256
 const CAPTURE_HEIGHT = 256
 
@@ -68,9 +69,9 @@ function RecognitionPage() {
     framesRef.current = []
     captureStartRef.current = performance.now()
     lastFrameTsRef.current = captureStartRef.current
-    setCollectionProgress(0)
-    setFpsEstimate(0)
-    setStatusMessage('正在采集手势，请持续保持动作 3 秒')
+  setCollectionProgress(0)
+  setFpsEstimate(0)
+  setStatusMessage('正在采集手势，请持续保持动作约 10 秒')
     setError(null)
     setRealtimeResult(null)
     setCurrentText('')
@@ -83,24 +84,53 @@ function RecognitionPage() {
       const stopTime = endTime ?? performance.now()
       setIsCollecting(false)
 
-      const frames = [...framesRef.current]
+      let frames = [...framesRef.current]
       const elapsedMs = Math.max(1, stopTime - captureStartRef.current)
+      const originalFrameCount = frames.length
 
-      if (frames.length < MIN_FRAME_COUNT) {
+      if (frames.length === 0) {
         framesRef.current = []
         setCollectionProgress(0)
-        setStatusMessage('采集数据不足')
-        setError('采集帧数不足，请保持手势稳定约 3 秒后再试')
+        setStatusMessage('未采集到有效画面，请检查摄像头后重试')
+        setError('未捕捉到任何帧，请保持手势在取景框内并稍后再试')
         return
       }
 
-      setIsProcessing(true)
-      setStatusMessage('正在调用 Mind-VAC 模型进行识别...')
+      let autoPadded = false
 
-      const fps = Math.max(1, frames.length / (elapsedMs / 1000))
+      if (frames.length < MIN_FRAME_COUNT) {
+        // 若采集帧过少，先补齐到后端要求的最小帧数，再补齐到页面设定的窗口长度
+        if (frames.length < BACKEND_MIN_FRAME_COUNT) {
+          const lastFrame = frames[frames.length - 1]
+          while (frames.length < BACKEND_MIN_FRAME_COUNT) {
+            frames.push(lastFrame)
+          }
+        }
+
+        const paddedFrames = [...frames]
+        while (paddedFrames.length < MIN_FRAME_COUNT) {
+          const remaining = MIN_FRAME_COUNT - paddedFrames.length
+          const batch = frames.slice(0, remaining)
+          paddedFrames.push(...batch)
+        }
+
+        frames = paddedFrames
+        autoPadded = true
+      }
+
+      if (autoPadded) {
+        setStatusMessage('采集帧稍少，系统已自动补足，正在调用 Mind-VAC 模型...')
+      } else {
+        setStatusMessage('正在调用 Mind-VAC 模型进行识别...')
+      }
+
+      setIsProcessing(true)
+
+      const fps = Math.max(1, originalFrameCount / (elapsedMs / 1000))
+      const normalizedFps = Math.max(12, Math.min(30, Math.round(fps)))
 
       mindVacRealtimeService
-        .recognizeFrames(frames, fps, true)
+        .recognizeFrames(frames, normalizedFps, true)
         .then((result) => {
           setRealtimeResult(result)
           setCurrentText(result.text || '')

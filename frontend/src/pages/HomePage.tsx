@@ -503,7 +503,7 @@ function HomePage() {
                       background: `linear-gradient(135deg, ${feature.color}20 0%, ${feature.color}10 100%)`,
                     },
                   }}
-                  onClick={() => window.location.href = feature.path}
+                  onClick={() => navigate(feature.path)}
                 >
                   <CardContent sx={{ p: 4, textAlign: 'center' }}>
                     <Avatar

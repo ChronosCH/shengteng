@@ -2,8 +2,8 @@
  * 优化的响应式主布局组件 - 增强版
  */
 
-import { ReactNode, useState, useEffect, useMemo, useCallback } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import {
   Box,
   AppBar,
@@ -61,7 +61,6 @@ import AuthModal from './auth/AuthModal'
 import UserProfile from './auth/UserProfile'
 
 interface LayoutProps {
-  children: ReactNode
   darkMode: boolean
   onToggleDarkMode: () => void
 }
@@ -85,7 +84,7 @@ const navigationGroups = [
   }
 ]
 
-function Layout({ children, darkMode, onToggleDarkMode }: LayoutProps) {
+function Layout({ darkMode, onToggleDarkMode }: LayoutProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<string[]>(['主要功能'])
   const [notifications, setNotifications] = useState(3)
@@ -102,12 +101,20 @@ function Layout({ children, darkMode, onToggleDarkMode }: LayoutProps) {
   const { isRecognizing, confidence, websocketService, stats } = useSignLanguageRecognition()
   const { isAuthenticated, user } = useAuth()
   const [isConnected, setIsConnected] = useState(false)
+  
+  // 强制重新渲染的key
+  const [renderKey, setRenderKey] = useState(0)
 
   // 确保组件完全挂载后再显示动画
   useEffect(() => {
     const timer = setTimeout(() => setIsMounted(true), 100)
     return () => clearTimeout(timer)
   }, [])
+
+  // 当路径改变时，强制重新渲染
+  useEffect(() => {
+    setRenderKey(prev => prev + 1)
+  }, [location.pathname])
 
   // 优化的WebSocket连接状态监听
   useEffect(() => {
@@ -661,7 +668,9 @@ function Layout({ children, darkMode, onToggleDarkMode }: LayoutProps) {
           }
         }}
       >
-        {children}
+        <Box key={renderKey}>
+          <Outlet />
+        </Box>
       </Box>
 
       {/* 添加增强的CSS动画 */}

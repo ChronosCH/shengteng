@@ -2,7 +2,7 @@
  * 视频捕获组件 - 处理摄像头视频流
  */
 
-import React, { useRef, useEffect, useState } from 'react'
+import React, { useRef, useEffect, useState, useCallback } from 'react'
 import {
   Box,
   Button,
@@ -39,9 +39,13 @@ const VideoCapture: React.FC<VideoCaptureProps> = ({
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const autoStartRef = useRef(false)
 
   // 启动摄像头
-  const startCamera = async () => {
+  const startCamera = useCallback(async () => {
+    if (isLoading || isStreaming) {
+      return
+    }
     try {
       setError(null)
       setIsLoading(true)
@@ -68,7 +72,7 @@ const VideoCapture: React.FC<VideoCaptureProps> = ({
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [isLoading, isStreaming])
 
   // 停止摄像头
   const stopCamera = () => {
@@ -95,6 +99,23 @@ const VideoCapture: React.FC<VideoCaptureProps> = ({
   }, [isStreaming, isActive, onFrame])
 
   // 组件卸载时清理
+  useEffect(() => {
+    if (!autoStartRef.current) {
+      autoStartRef.current = true
+      startCamera().catch(err => {
+        console.error('自动启动摄像头失败:', err)
+      })
+    }
+  }, [startCamera])
+
+  useEffect(() => {
+    if (isActive && !isStreaming && !isLoading) {
+      startCamera().catch(err => {
+        console.error('识别时自动启动摄像头失败:', err)
+      })
+    }
+  }, [isActive, isStreaming, isLoading, startCamera])
+
   useEffect(() => {
     return () => {
       stopCamera()
@@ -249,22 +270,7 @@ const VideoCapture: React.FC<VideoCaptureProps> = ({
         </Box>
 
         <Stack direction="row" spacing={2}>
-          {!isStreaming ? (
-            <Button
-              variant="contained"
-              startIcon={<Videocam />}
-              onClick={startCamera}
-              disabled={isLoading}
-              fullWidth
-              size="large"
-              sx={{ 
-                py: 1.5,
-                fontWeight: 600,
-              }}
-            >
-              {isLoading ? '启动中...' : '启动摄像头'}
-            </Button>
-          ) : (
+          {isStreaming ? (
             <Button
               variant="outlined"
               startIcon={<VideocamOff />}
@@ -277,6 +283,21 @@ const VideoCapture: React.FC<VideoCaptureProps> = ({
               }}
             >
               停止摄像头
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              startIcon={<Videocam />}
+              onClick={() => startCamera().catch(() => undefined)}
+              fullWidth
+              size="large"
+              disabled={isLoading}
+              sx={{ 
+                py: 1.5,
+                fontWeight: 600,
+              }}
+            >
+              {isLoading ? '启动中...' : '重新尝试启动'}
             </Button>
           )}
         </Stack>

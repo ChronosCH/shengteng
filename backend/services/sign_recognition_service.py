@@ -123,6 +123,10 @@ class MindVacEngine:
         self.decoder = None
         self.gloss_dict: Optional[Dict[str, Any]] = None
         self.num_classes: int = 0
+        self.min_sequence_frames = int(getattr(settings, "MINDVAC_MIN_SEQUENCE_FRAMES", 64))
+        self.sequence_multiple = int(getattr(settings, "MINDVAC_SEQUENCE_MULTIPLE", 4))
+        self.temporal_leading_pad = int(getattr(settings, "MINDVAC_TEMPORAL_LEADING_PAD", 6))
+        self.temporal_trailing_pad = int(getattr(settings, "MINDVAC_TEMPORAL_TRAILING_PAD", 6))
 
         if not self.enabled:
             logger.info("Mind-VAC 集成被禁用，使用备用识别管线")
@@ -383,9 +387,11 @@ class MindVacEngine:
 
         video_array = video_tensor.asnumpy()
 
+        target_multiple = max(1, self.sequence_multiple)
         total_frames = video_array.shape[0]
-        left_pad = 6
-        right_pad = int(np.ceil(total_frames / 4.0)) * 4 - total_frames + 6
+        left_pad = max(0, self.temporal_leading_pad)
+        aligned_frames = int(np.ceil(total_frames / target_multiple)) * target_multiple
+        right_pad = aligned_frames - total_frames + max(0, self.temporal_trailing_pad)
 
         if left_pad > 0:
             pad_front = np.repeat(video_array[:1], left_pad, axis=0)
@@ -398,6 +404,20 @@ class MindVacEngine:
             pad_back = np.empty((0,) + video_array.shape[1:], dtype=video_array.dtype)
 
         padded_video = np.concatenate([pad_front, video_array, pad_back], axis=0)
+
+        # 确保时序长度达到模型稳定推理所需的最小帧数
+        min_required = max(self.min_sequence_frames, target_multiple)
+        if padded_video.shape[0] < min_required:
+            deficit = min_required - padded_video.shape[0]
+            pad_extra = np.repeat(padded_video[-1:], deficit, axis=0)
+            padded_video = np.concatenate([padded_video, pad_extra], axis=0)
+
+        # 再次对齐序列长度到指定倍数，避免 pooling 时尺寸不匹配
+        remainder = padded_video.shape[0] % target_multiple
+        if remainder:
+            pad_tail = np.repeat(padded_video[-1:], target_multiple - remainder, axis=0)
+            padded_video = np.concatenate([padded_video, pad_tail], axis=0)
+
         padded_video = np.expand_dims(padded_video, axis=0)
 
         tensor = self.Tensor(padded_video, dtype=self.ms.float32)
