@@ -198,6 +198,10 @@ class Settings(BaseSettings):
     MINDVAC_OUTPUT_DIR: str = "mind_vac/output_dir"
     MINDVAC_USE_LLM: bool = True
     MINDVAC_QWEN_MODEL: str = Field(default="qwen-plus")
+    MINDVAC_DASHSCOPE_API_KEY: Optional[str] = None
+    MINDVAC_QWEN_API_KEY: Optional[str] = None
+    DASHSCOPE_API_KEY: Optional[str] = None
+    QWEN_API_KEY: Optional[str] = None
 
     
     @validator('SECRET_KEY')

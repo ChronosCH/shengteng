@@ -112,6 +112,7 @@ class MindVacEngine:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.use_llm = bool(getattr(settings, "MINDVAC_USE_LLM", True))
         self.qwen_model = getattr(settings, "MINDVAC_QWEN_MODEL", "qwen-plus")
+        self.settings = settings
 
         self.available = False
         self.initialized = False
@@ -228,7 +229,7 @@ class MindVacEngine:
 
                 # 初始化Qwen客户端
                 if self.use_llm:
-                    api_key = os.environ.get('DASHSCOPE_API_KEY')
+                    api_key = self._resolve_api_key()
                     if api_key:
                         try:
                             self.qwen_client = self.QwenAPI(api_key=api_key, model=self.qwen_model)
@@ -246,6 +247,34 @@ class MindVacEngine:
                 self.last_error = f"Mind-VAC 初始化失败: {exc}"
                 logger.error(self.last_error)
                 raise
+
+    def _resolve_api_key(self) -> Optional[str]:
+        candidates: List[Optional[str]] = []
+        if self.settings is not None:
+            for attr in ("MINDVAC_DASHSCOPE_API_KEY", "MINDVAC_QWEN_API_KEY", "DASHSCOPE_API_KEY", "QWEN_API_KEY"):
+                try:
+                    value = getattr(self.settings, attr)
+                except AttributeError:
+                    value = None
+                if value:
+                    candidates.append(value)
+
+        for env_name in ("MINDVAC_DASHSCOPE_API_KEY", "DASHSCOPE_API_KEY", "MINDVAC_QWEN_API_KEY", "QWEN_API_KEY"):
+            value = os.environ.get(env_name)
+            if value:
+                candidates.append(value)
+
+        try:
+            from mind_vac.config import DASHSCOPE_API_KEY as config_key
+            if config_key:
+                candidates.append(config_key)
+        except Exception:
+            pass
+
+        for key in candidates:
+            if key and str(key).strip():
+                return str(key).strip()
+        return None
 
     def _preprocess_checkpoint(self, param_dict):
         converted = {}
@@ -435,6 +464,14 @@ class MindVacEngine:
         confidence = self._compute_confidence(sequence_logits, feat_len)
 
         llm_result = None
+        if use_llm_flag and not self.qwen_client:
+            api_key = self._resolve_api_key()
+            if api_key:
+                try:
+                    self.qwen_client = self.QwenAPI(api_key=api_key, model=self.qwen_model)
+                except Exception as exc:
+                    logger.warning(f"Mind-VAC LLM 客户端初始化失败: {exc}")
+
         if use_llm_flag and self.qwen_client and raw_gloss_text:
             try:
                 llm_result = self.qwen_client.translate_gloss_to_sentence(raw_gloss_text)

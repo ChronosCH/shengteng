@@ -142,17 +142,48 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
   }
 
   return (
-    <Card sx={{ p: 3 }}>
+    <Card 
+      sx={{ 
+        p: 3,
+        borderRadius: 3,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+      }}
+    >
       <CardContent>
         <Stack spacing={3}>
           {/* 标题 */}
-          <Box>
-            <Typography variant="h5" gutterBottom fontWeight={600}>
-              连续手语识别
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              使用真正的CSLR模型进行完整句子识别
-            </Typography>
+          <Box
+            sx={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              borderRadius: 2,
+              p: 3,
+              color: 'white',
+            }}
+          >
+            <Stack direction="row" alignItems="center" spacing={2}>
+              <Box
+                sx={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: '50%',
+                  bgcolor: 'rgba(255,255,255,0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '24px',
+                }}
+              >
+                🎬
+              </Box>
+              <Box>
+                <Typography variant="h5" gutterBottom fontWeight={700} sx={{ mb: 0.5 }}>
+                  连续手语识别
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  使用 Mind-VAC CSLR 模型 + 通义千问大语言模型进行完整句子识别与翻译
+                </Typography>
+              </Box>
+            </Stack>
           </Box>
 
           {/* 错误提示 */}
@@ -163,17 +194,40 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
           )}
 
           {/* 文件选择 */}
-          <Card variant="outlined">
+          <Card 
+            variant="outlined" 
+            sx={{
+              background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+              border: '2px dashed',
+              borderColor: file ? 'success.main' : 'primary.main',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                borderColor: file ? 'success.dark' : 'primary.dark',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                transform: 'translateY(-2px)',
+              }
+            }}
+          >
             <CardContent>
               <Stack spacing={2}>
-                <Stack direction="row" spacing={2} alignItems="center">
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
                   <Button 
                     variant="contained" 
                     component="label" 
                     startIcon={<CloudUpload />}
                     disabled={isProcessing}
+                    size="large"
+                    sx={{
+                      py: 1.5,
+                      px: 3,
+                      fontWeight: 600,
+                      boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+                      '&:hover': {
+                        boxShadow: '0 6px 16px rgba(102, 126, 234, 0.4)',
+                      }
+                    }}
                   >
-                    选择视频文件
+                    📁 选择视频文件
                     <input 
                       hidden 
                       type="file" 
@@ -183,61 +237,144 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
                   </Button>
                   
                   {file && (
-                    <Box>
-                      <Chip 
-                        icon={<VideoFile />}
-                        label={file.name}
-                        color="info"
-                        variant="outlined"
-                      />
-                      <Typography variant="caption" display="block" color="text.secondary">
-                        {formatFileSize(file.size)}
-                      </Typography>
+                    <Box 
+                      sx={{ 
+                        flex: 1,
+                        p: 2,
+                        bgcolor: 'rgba(255,255,255,0.9)',
+                        borderRadius: 2,
+                        border: '1px solid',
+                        borderColor: 'success.light',
+                      }}
+                    >
+                      <Stack direction="row" spacing={2} alignItems="center">
+                        <VideoFile color="success" sx={{ fontSize: 32 }} />
+                        <Box flex={1}>
+                          <Typography variant="body1" fontWeight={600} color="success.dark">
+                            {file.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            大小: {formatFileSize(file.size)}
+                          </Typography>
+                        </Box>
+                      </Stack>
                     </Box>
                   )}
                 </Stack>
+
+                {!file && (
+                  <Box 
+                    sx={{ 
+                      textAlign: 'center',
+                      py: 2,
+                      color: 'text.secondary',
+                    }}
+                  >
+                    <Typography variant="body2">
+                      💡 支持 MP4, AVI, MOV 等常见视频格式，文件大小限制 100MB
+                    </Typography>
+                  </Box>
+                )}
               </Stack>
             </CardContent>
           </Card>
 
           {/* 进度显示 */}
           {isProcessing && (
-            <Box>
-              <LinearProgress 
-                variant="determinate" 
-                value={progress * 100} 
-                sx={{ height: 8, borderRadius: 2 }}
-              />
-              <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}>
-                <Typography variant="caption" color="text.secondary">
-                  {statusMessage}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {(progress * 100).toFixed(1)}%
-                </Typography>
+            <Card 
+              sx={{ 
+                p: 3,
+                background: 'linear-gradient(135deg, #667eea22 0%, #764ba222 100%)',
+                border: '2px solid',
+                borderColor: 'primary.main',
+              }}
+            >
+              <Stack spacing={2}>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Box 
+                    sx={{ 
+                      width: 40, 
+                      height: 40, 
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      animation: 'pulse 2s ease-in-out infinite',
+                      '@keyframes pulse': {
+                        '0%, 100%': { transform: 'scale(1)', opacity: 1 },
+                        '50%': { transform: 'scale(1.1)', opacity: 0.8 },
+                      }
+                    }}
+                  >
+                    <Typography variant="body2" color="white" fontWeight={700}>
+                      {(progress * 100).toFixed(0)}%
+                    </Typography>
+                  </Box>
+                  <Box flex={1}>
+                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                      正在处理中...
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {statusMessage}
+                    </Typography>
+                  </Box>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={progress * 100} 
+                  sx={{ 
+                    height: 12, 
+                    borderRadius: 6,
+                    bgcolor: 'rgba(0,0,0,0.1)',
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 6,
+                      background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+                    }
+                  }}
+                />
               </Stack>
-            </Box>
+            </Card>
           )}
 
           {/* 控制按钮 */}
-          <Stack direction="row" spacing={2}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <Button
               disabled={!file || isProcessing}
               variant="contained"
               startIcon={<PlayArrow />}
               onClick={startRecognition}
+              size="large"
+              sx={{
+                flex: 1,
+                py: 1.5,
+                fontWeight: 600,
+                background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #0d8071 0%, #2dd464 100%)',
+                  boxShadow: '0 4px 12px rgba(17, 153, 142, 0.4)',
+                },
+                '&:disabled': {
+                  background: 'grey.300',
+                }
+              }}
             >
-              开始识别
+              🚀 开始识别
             </Button>
             
             <Button
               disabled={!isProcessing}
               color="warning"
-              variant="outlined"
+              variant="contained"
               startIcon={<Stop />}
               onClick={stopProcessing}
+              size="large"
+              sx={{
+                py: 1.5,
+                fontWeight: 600,
+              }}
             >
-              停止
+              ⏸ 停止
             </Button>
             
             <Button
@@ -245,212 +382,278 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
               variant="outlined"
               startIcon={<Refresh />}
               onClick={resetRecognition}
+              size="large"
+              sx={{
+                py: 1.5,
+                fontWeight: 600,
+              }}
             >
-              重置
+              🔄 重置
             </Button>
           </Stack>
 
           {/* 识别结果 */}
           {result && (
             <Box>
-              <Typography variant="h6" gutterBottom fontWeight={600}>
-                识别结果
+              <Typography variant="h6" gutterBottom fontWeight={600} sx={{ mb: 3 }}>
+                🎯 识别结果
               </Typography>
 
               <Grid container spacing={3}>
-                {/* 主要结果 */}
+                {/* LLM增强翻译结果 - 主要展示 */}
+                {result.llm_result?.success && (result.llm_result?.chinese || result.llm_result?.english) && (
+                  <Grid item xs={12}>
+                    <Paper 
+                      elevation={3}
+                      sx={{ 
+                        p: 3,
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: 'white',
+                        borderRadius: 2,
+                      }}
+                    >
+                      <Stack spacing={2}>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Typography variant="h6" fontWeight={700}>
+                            ✨ 通义千问大语言模型增强翻译
+                          </Typography>
+                          {result.llm_result?.confidence && (
+                            <Chip 
+                              label={`置信度: ${result.llm_result.confidence}`}
+                              size="small"
+                              sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }}
+                            />
+                          )}
+                        </Box>
+                        
+                        {result.llm_result?.chinese && (
+                          <Box
+                            sx={{
+                              p: 2.5,
+                              bgcolor: 'rgba(255, 255, 255, 0.95)',
+                              borderRadius: 1.5,
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                            }}
+                          >
+                            <Typography variant="caption" sx={{ color: '#666', fontWeight: 600, mb: 0.5, display: 'block' }}>
+                              🇨🇳 中文翻译
+                            </Typography>
+                            <Typography 
+                              variant="h6"
+                              sx={{
+                                color: '#333',
+                                fontWeight: 600,
+                                lineHeight: 1.6,
+                                wordBreak: 'break-word',
+                              }}
+                            >
+                              {result.llm_result.chinese}
+                            </Typography>
+                          </Box>
+                        )}
+
+                        {result.llm_result?.english && (
+                          <Box
+                            sx={{
+                              p: 2.5,
+                              bgcolor: 'rgba(255, 255, 255, 0.95)',
+                              borderRadius: 1.5,
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                            }}
+                          >
+                            <Typography variant="caption" sx={{ color: '#666', fontWeight: 600, mb: 0.5, display: 'block' }}>
+                              🇺🇸 English Translation
+                            </Typography>
+                            <Typography 
+                              variant="body1"
+                              sx={{
+                                color: '#333',
+                                fontWeight: 500,
+                                lineHeight: 1.6,
+                                wordBreak: 'break-word',
+                                fontStyle: 'italic',
+                              }}
+                            >
+                              {result.llm_result.english}
+                            </Typography>
+                          </Box>
+                        )}
+
+                        {result.llm_result?.explanation && result.llm_result.explanation.trim() && (
+                          <Box
+                            sx={{
+                              p: 2,
+                              bgcolor: 'rgba(255, 255, 255, 0.15)',
+                              borderRadius: 1,
+                              border: '1px solid rgba(255,255,255,0.3)',
+                            }}
+                          >
+                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.95)' }}>
+                              💡 <strong>说明:</strong> {result.llm_result.explanation}
+                            </Typography>
+                          </Box>
+                        )}
+                      </Stack>
+                    </Paper>
+                  </Grid>
+                )}
+
+                {/* Mind-VAC原始识别结果 */}
                 <Grid item xs={12} md={6}>
-                  <Paper variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom fontWeight={600}>
-                      识别文本
+                  <Paper 
+                    elevation={2}
+                    sx={{ 
+                      p: 2.5,
+                      height: '100%',
+                      borderRadius: 2,
+                      border: '1px solid',
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <Typography variant="subtitle1" gutterBottom fontWeight={700} sx={{ color: 'primary.main', mb: 2 }}>
+                      🤖 MIND-VAC 原始识别
                     </Typography>
                     <Stack spacing={2}>
-                      <Box
-                        sx={{
-                          p: 2,
-                          bgcolor: 'background.default',
-                          borderRadius: 1,
-                          border: '1px solid',
-                          borderColor: 'divider',
-                        }}
-                      >
-                        <Typography variant="overline" color="text.secondary">
-                          最终输出
-                        </Typography>
-                        <Typography 
-                          variant="body1"
-                          sx={{
-                            fontWeight: 600,
-                            wordBreak: 'break-word',
-                          }}
-                        >
-                          {result.text || '无识别结果'}
-                        </Typography>
-                        {result.llm_result?.success && (
-                          <Typography variant="caption" color="text.secondary">
-                            由通义千问 LLM 增强
-                          </Typography>
-                        )}
-                      </Box>
-
                       {result.baseline_text && (
                         <Box
                           sx={{
                             p: 2,
-                            bgcolor: 'background.paper',
-                            borderRadius: 1,
-                            border: '1px dashed',
-                            borderColor: 'divider',
+                            bgcolor: 'background.default',
+                            borderRadius: 1.5,
+                            border: '2px solid',
+                            borderColor: 'primary.light',
                           }}
                         >
-                          <Typography variant="overline" color="text.secondary">
-                            基础翻译（Mind-VAC）
+                          <Typography variant="caption" color="text.secondary" fontWeight={600} display="block" sx={{ mb: 0.5 }}>
+                            基础翻译
                           </Typography>
-                          <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                          <Typography 
+                            variant="body1" 
+                            sx={{ 
+                              wordBreak: 'break-word',
+                              fontWeight: 500,
+                              color: 'text.primary',
+                            }}
+                          >
                             {result.baseline_text}
                           </Typography>
                         </Box>
                       )}
 
-                      {result.llm_result?.chinese && (
-                        <Box
-                          sx={{
-                            p: 2,
-                            bgcolor: 'background.paper',
-                            borderRadius: 1,
-                            border: '1px dashed',
-                            borderColor: 'divider',
-                          }}
-                        >
-                          <Typography variant="overline" color="text.secondary">
-                            LLM 中文增强
-                          </Typography>
-                          <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                            {result.llm_result.chinese}
-                          </Typography>
-                          {result.llm_result.success === false && result.llm_result.error && (
-                            <Typography variant="caption" color="error" display="block" sx={{ mt: 0.5 }}>
-                              {result.llm_result.error}
-                            </Typography>
-                          )}
-                        </Box>
-                      )}
-
-                      {result.llm_result?.english && (
-                        <Box
-                          sx={{
-                            p: 2,
-                            bgcolor: 'background.paper',
-                            borderRadius: 1,
-                            border: '1px dashed',
-                            borderColor: 'divider',
-                          }}
-                        >
-                          <Typography variant="overline" color="text.secondary">
-                            LLM English Translation
-                          </Typography>
-                          <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                            {result.llm_result.english}
-                          </Typography>
-                        </Box>
-                      )}
-
-                      {result.llm_result?.explanation && result.llm_result.explanation.trim() && (
-                        <Typography variant="caption" color="text.secondary">
-                          说明: {result.llm_result.explanation}
-                        </Typography>
-                      )}
-
                       {result.raw_gloss_text && (
                         <Box
                           sx={{
-                            p: 1.5,
-                            borderRadius: 1,
-                            bgcolor: 'rgba(0,0,0,0.02)',
+                            p: 2,
+                            borderRadius: 1.5,
+                            bgcolor: 'rgba(103, 58, 183, 0.08)',
+                            border: '1px dashed',
+                            borderColor: 'secondary.main',
                           }}
                         >
-                          <Typography variant="overline" color="text.secondary">
-                            Gloss 序列
+                          <Typography variant="caption" color="secondary.main" fontWeight={600} display="block" sx={{ mb: 0.5 }}>
+                            📝 Gloss 序列
                           </Typography>
-                          <Typography variant="body2" sx={{ wordBreak: 'break-word', fontFamily: 'monospace' }}>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              wordBreak: 'break-word', 
+                              fontFamily: 'monospace',
+                              color: 'text.secondary',
+                              fontSize: '0.85rem',
+                            }}
+                          >
                             {result.raw_gloss_text}
                           </Typography>
                         </Box>
                       )}
 
-                      {result.llm_result?.raw_response && (
-                        <Accordion disableGutters elevation={0} sx={{ border: '1px dashed', borderColor: 'divider', borderRadius: 1 }}>
-                          <AccordionSummary expandIcon={<ExpandMore />}>
-                            <Typography variant="overline" color="text.secondary">
-                              LLM 原始响应
-                            </Typography>
-                          </AccordionSummary>
-                          <AccordionDetails>
-                            <Typography variant="caption" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'monospace' }}>
-                              {result.llm_result.raw_response}
-                            </Typography>
-                          </AccordionDetails>
-                        </Accordion>
-                      )}
-
-                      <Stack direction="row" spacing={1} flexWrap="wrap">
+                      <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ gap: 1 }}>
                         <Chip 
-                          label={`模型置信度 ${((result.overall_confidence ?? 0) * 100).toFixed(1)}%`}
+                          label={`置信度 ${((result.overall_confidence ?? 0) * 100).toFixed(1)}%`}
                           color="primary"
+                          size="small"
+                          sx={{ fontWeight: 600 }}
+                        />
+                        <Chip 
+                          label={result.pipeline?.toUpperCase() || 'UNKNOWN'}
                           variant="outlined"
                           size="small"
                         />
-                        {result.llm_result?.confidence && (
-                          <Chip 
-                            label={`LLM 置信度 ${result.llm_result.confidence}`}
-                            color="secondary"
-                            variant="outlined"
-                            size="small"
-                          />
-                        )}
                       </Stack>
-
-                      {result.llm_result?.error && !result.llm_result?.success && (
-                        <Typography variant="caption" color="error">
-                          LLM 生成失败: {result.llm_result.error}
-                        </Typography>
-                      )}
                     </Stack>
                   </Paper>
                 </Grid>
                 
+                {/* 处理信息 */}
                 <Grid item xs={12} md={6}>
-                  <Paper variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom fontWeight={600}>
-                      处理信息
+                  <Paper 
+                    elevation={2}
+                    sx={{ 
+                      p: 2.5,
+                      height: '100%',
+                      borderRadius: 2,
+                      border: '1px solid',
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <Typography variant="subtitle1" gutterBottom fontWeight={700} sx={{ color: 'success.main', mb: 2 }}>
+                      📊 处理信息
                     </Typography>
-                    <Stack spacing={1}>
-                      <Box display="flex" justifyContent="space-between">
-                        <Typography variant="body2">识别管线:</Typography>
-                        <Typography variant="body2" fontWeight={600} textTransform="uppercase">
-                          {result.pipeline || '未知'}
-                        </Typography>
+                    <Stack spacing={1.5}>
+                      <Box 
+                        display="flex" 
+                        justifyContent="space-between" 
+                        alignItems="center"
+                        sx={{
+                          p: 1.5,
+                          bgcolor: 'background.default',
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Typography variant="body2" color="text.secondary">识别管线</Typography>
+                        <Chip 
+                          label={result.pipeline?.toUpperCase() || '未知'}
+                          size="small"
+                          color="info"
+                          sx={{ fontWeight: 600 }}
+                        />
                       </Box>
-                      <Box display="flex" justifyContent="space-between">
-                        <Typography variant="body2">视频时长:</Typography>
-                        <Typography variant="body2">{formatDuration(result.duration)}</Typography>
+                      <Box 
+                        display="flex" 
+                        justifyContent="space-between"
+                        sx={{
+                          p: 1.5,
+                          bgcolor: 'background.default',
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Typography variant="body2" color="text.secondary">视频时长</Typography>
+                        <Typography variant="body2" fontWeight={600}>{formatDuration(result.duration)}</Typography>
                       </Box>
-                      <Box display="flex" justifyContent="space-between">
-                        <Typography variant="body2">帧数:</Typography>
-                        <Typography variant="body2">{result.frame_count ?? '—'}</Typography>
+                      <Box 
+                        display="flex" 
+                        justifyContent="space-between"
+                        sx={{
+                          p: 1.5,
+                          bgcolor: 'background.default',
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Typography variant="body2" color="text.secondary">总帧数</Typography>
+                        <Typography variant="body2" fontWeight={600}>{result.frame_count ?? '—'}</Typography>
                       </Box>
-                      <Box display="flex" justifyContent="space-between">
-                        <Typography variant="body2">帧率:</Typography>
-                        <Typography variant="body2">{(result.fps ?? 0).toFixed(1)} fps</Typography>
+                      <Box 
+                        display="flex" 
+                        justifyContent="space-between"
+                        sx={{
+                          p: 1.5,
+                          bgcolor: 'background.default',
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Typography variant="body2" color="text.secondary">视频帧率</Typography>
+                        <Typography variant="body2" fontWeight={600}>{(result.fps ?? 0).toFixed(1)} fps</Typography>
                       </Box>
-                      {result.frames_dir && (
-                        <Box display="flex" justifyContent="space-between">
-                          <Typography variant="body2">帧目录:</Typography>
-                          <Typography variant="body2" sx={{ maxWidth: 180, textAlign: 'right', wordBreak: 'break-all' }}>
-                            {result.frames_dir}
-                          </Typography>
-                        </Box>
-                      )}
                     </Stack>
                   </Paper>
                 </Grid>
@@ -458,20 +661,50 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
 
               {/* Gloss序列详情 */}
               {result.gloss_sequence && result.gloss_sequence.length > 0 && (
-                <Accordion sx={{ mt: 2 }}>
-                  <AccordionSummary expandIcon={<ExpandMore />}>
-                    <Typography variant="subtitle1">
-                      Gloss序列 ({result.gloss_sequence.length} 个词汇)
-                    </Typography>
+                <Accordion 
+                  sx={{ 
+                    mt: 3,
+                    borderRadius: 2,
+                    '&:before': { display: 'none' },
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  }}
+                >
+                  <AccordionSummary 
+                    expandIcon={<ExpandMore />}
+                    sx={{
+                      bgcolor: 'background.default',
+                      borderRadius: '8px 8px 0 0',
+                    }}
+                  >
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Typography variant="subtitle1" fontWeight={600}>
+                        📋 Gloss 词汇序列
+                      </Typography>
+                      <Chip 
+                        label={`${result.gloss_sequence.length} 个词汇`}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                      />
+                    </Box>
                   </AccordionSummary>
-                  <AccordionDetails>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  <AccordionDetails sx={{ p: 2.5 }}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
                       {result.gloss_sequence.map((gloss, index) => (
                         <Chip 
                           key={index} 
-                          label={gloss} 
+                          label={`${index + 1}. ${gloss}`}
+                          color="secondary"
                           variant="outlined" 
-                          size="small"
+                          size="medium"
+                          sx={{
+                            fontWeight: 500,
+                            fontSize: '0.9rem',
+                            '&:hover': {
+                              bgcolor: 'secondary.light',
+                              color: 'white',
+                            }
+                          }}
                         />
                       ))}
                     </Box>
@@ -481,34 +714,76 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
 
               {/* 分段详情 */}
               {result.segments && result.segments.length > 0 && (
-                <Accordion sx={{ mt: 1 }}>
-                  <AccordionSummary expandIcon={<ExpandMore />}>
-                    <Typography variant="subtitle1">
-                      分段详情 ({result.segments.length} 个分段)
-                    </Typography>
+                <Accordion 
+                  sx={{ 
+                    mt: 2,
+                    borderRadius: 2,
+                    '&:before': { display: 'none' },
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  }}
+                >
+                  <AccordionSummary 
+                    expandIcon={<ExpandMore />}
+                    sx={{
+                      bgcolor: 'background.default',
+                      borderRadius: '8px 8px 0 0',
+                    }}
+                  >
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Typography variant="subtitle1" fontWeight={600}>
+                        🎬 时序分段详情
+                      </Typography>
+                      <Chip 
+                        label={`${result.segments.length} 个分段`}
+                        size="small"
+                        color="info"
+                        variant="outlined"
+                      />
+                    </Box>
                   </AccordionSummary>
-                  <AccordionDetails>
+                  <AccordionDetails sx={{ p: 0 }}>
                     <Table size="small">
                       <TableHead>
-                        <TableRow>
-                          <TableCell>分段</TableCell>
-                          <TableCell>Gloss序列</TableCell>
-                          <TableCell>时间</TableCell>
-                          <TableCell>置信度</TableCell>
+                        <TableRow sx={{ bgcolor: 'background.default' }}>
+                          <TableCell sx={{ fontWeight: 700 }}>分段</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Gloss序列</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>时间范围</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>置信度</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {result.segments.map((segment, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{index + 1}</TableCell>
+                          <TableRow 
+                            key={index}
+                            sx={{
+                              '&:nth-of-type(odd)': {
+                                bgcolor: 'background.default',
+                              },
+                              '&:hover': {
+                                bgcolor: 'action.hover',
+                              }
+                            }}
+                          >
                             <TableCell>
+                              <Chip 
+                                label={`#${index + 1}`}
+                                size="small"
+                                color="primary"
+                                variant="outlined"
+                              />
+                            </TableCell>
+                            <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
                               {segment.gloss_sequence.join(' ')}
                             </TableCell>
                             <TableCell>
                               {segment.start_time.toFixed(1)}s - {segment.end_time.toFixed(1)}s
                             </TableCell>
                             <TableCell>
-                              {(segment.confidence * 100).toFixed(1)}%
+                              <Chip 
+                                label={`${(segment.confidence * 100).toFixed(1)}%`}
+                                size="small"
+                                color={segment.confidence > 0.8 ? "success" : segment.confidence > 0.6 ? "warning" : "error"}
+                              />
                             </TableCell>
                           </TableRow>
                         ))}
@@ -516,6 +791,70 @@ const ContinuousVideoRecognition: React.FC<Props> = ({ onResult }) => {
                     </Table>
                   </AccordionDetails>
                 </Accordion>
+              )}
+
+              {/* LLM原始响应 - 可选展开 */}
+              {result.llm_result?.raw_response && (
+                <Accordion 
+                  sx={{ 
+                    mt: 2,
+                    borderRadius: 2,
+                    '&:before': { display: 'none' },
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  }}
+                >
+                  <AccordionSummary 
+                    expandIcon={<ExpandMore />}
+                    sx={{
+                      bgcolor: 'background.default',
+                      borderRadius: '8px 8px 0 0',
+                    }}
+                  >
+                    <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
+                      🔍 LLM 原始响应（调试信息）
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ p: 2.5 }}>
+                    <Box
+                      sx={{
+                        p: 2,
+                        bgcolor: 'grey.100',
+                        borderRadius: 1,
+                        border: '1px solid',
+                        borderColor: 'grey.300',
+                        maxHeight: '300px',
+                        overflow: 'auto',
+                      }}
+                    >
+                      <Typography 
+                        variant="caption" 
+                        component="pre"
+                        sx={{ 
+                          whiteSpace: 'pre-wrap', 
+                          wordBreak: 'break-word', 
+                          fontFamily: 'monospace',
+                          fontSize: '0.75rem',
+                          lineHeight: 1.6,
+                          margin: 0,
+                        }}
+                      >
+                        {result.llm_result.raw_response}
+                      </Typography>
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {/* 错误信息显示 */}
+              {result.llm_result?.error && !result.llm_result?.success && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  <Typography variant="body2">
+                    <strong>LLM 增强失败:</strong> {result.llm_result.error}
+                  </Typography>
+                  <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                    已回退到基础识别结果
+                  </Typography>
+                </Alert>
               )}
             </Box>
           )}
