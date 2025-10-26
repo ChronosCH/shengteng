@@ -21,6 +21,7 @@ router = APIRouter(tags=["学习训练"])
 learning_service = LearningTrainingService()
 security_manager = SecurityManager()
 get_current_user = security_manager.get_current_user
+get_current_user_optional = security_manager.get_current_user_optional
 
 class PredictRequest(BaseModel):
     file_path: str
@@ -422,7 +423,7 @@ async def upload_isolated_sign(
 @router.post("/isolated-sign/predict")
 async def predict_isolated_sign(
     request: Request,
-    payload: PredictRequest | None = Body(default=None),
+    payload: Optional[PredictRequest] = Body(default=None),
     current_user: dict = Depends(get_current_user),
     service: IsolatedSignService = Depends(get_isolated_service),
 ):
@@ -444,6 +445,10 @@ async def predict_isolated_sign(
             raise HTTPException(status_code=404, detail="视频文件不存在")
 
         result = await service.predict(file_path)
+        
+        # 生成学习反馈
+        feedback = _generate_learning_feedback(result.predicted_gloss, result.confidence)
+        
         return {
             "success": True,
             "prediction": {
@@ -451,12 +456,304 @@ async def predict_isolated_sign(
                 "confidence": result.confidence,
                 "logits": result.logits,
             },
+            "feedback": feedback,
         }
     except HTTPException:
         raise
     except Exception as exc:
         logger.error(f"孤立手语识别失败: {exc}")
         raise HTTPException(status_code=500, detail="推理失败")
+
+def _generate_learning_feedback(gloss: str, confidence: float) -> Dict[str, Any]:
+    """生成学习反馈"""
+    feedback = {
+        "recognized_sign": gloss,
+        "accuracy_level": "",
+        "message": "",
+        "tips": [],
+        "next_steps": []
+    }
+    
+    if confidence >= 0.9:
+        feedback["accuracy_level"] = "excellent"
+        feedback["message"] = f"太棒了！识别到标准的'{gloss}'手语，准确率高达{confidence*100:.1f}%！"
+        feedback["tips"] = [
+            "动作非常标准，继续保持！",
+            "可以尝试加快手语速度，模拟真实对话",
+        ]
+        feedback["next_steps"] = [
+            "尝试学习下一个手语动作",
+            "挑战更复杂的手语组合",
+        ]
+    elif confidence >= 0.75:
+        feedback["accuracy_level"] = "good"
+        feedback["message"] = f"很不错！识别到'{gloss}'手语，准确率{confidence*100:.1f}%。"
+        feedback["tips"] = [
+            "动作基本标准，稍加练习会更好",
+            "注意手型的清晰度和动作幅度",
+        ]
+        feedback["next_steps"] = [
+            "多练几次以提高熟练度",
+            "可以尝试结合面部表情",
+        ]
+    elif confidence >= 0.6:
+        feedback["accuracy_level"] = "fair"
+        feedback["message"] = f"识别到'{gloss}'手语，但准确率只有{confidence*100:.1f}%，还需要改进。"
+        feedback["tips"] = [
+            "建议重新观看标准教学视频",
+            "注意手指的姿态和动作的连贯性",
+            "确保光线充足，背景简洁",
+        ]
+        feedback["next_steps"] = [
+            "观看标准示范视频",
+            "对照镜子慢速练习",
+            "再次录制视频上传",
+        ]
+    else:
+        feedback["accuracy_level"] = "needs_improvement"
+        feedback["message"] = f"识别到'{gloss}'，但准确率较低({confidence*100:.1f}%)，动作可能不够标准。"
+        feedback["tips"] = [
+            "请仔细观看教学视频，注意每个细节",
+            "确保手部完整出现在画面中",
+            "动作要清晰、幅度要适中",
+            "避免背景干扰和光线不足",
+        ]
+        feedback["next_steps"] = [
+            "从基础手型开始练习",
+            "分解动作，逐步掌握",
+            "可以向AI助手请教正确做法",
+        ]
+    
+    return feedback
+
+
+class AITutorRequest(BaseModel):
+    message: str
+    context: Optional[Dict[str, Any]] = None
+    history: Optional[List[Dict[str, str]]] = None
+
+
+@router.post("/ai-tutor/chat")
+async def chat_with_ai_tutor(
+    request: AITutorRequest,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """
+    AI手语教学助手对话接口
+    支持联网搜索学习资源
+    （可选认证 - 未登录用户也可以使用，但功能有限）
+    """
+    try:
+        # 检查API密钥
+        api_key = os.environ.get('DASHSCOPE_API_KEY')
+        if not api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="未配置 DASHSCOPE_API_KEY，无法使用AI助手功能"
+            )
+
+        import requests
+        
+        # 构建系统提示词 - 让AI扮演手语教学老师
+        system_prompt = """你是一位专业、耐心的手语教学老师。你的任务是帮助用户学习手语。
+
+你的能力：
+1. 解答手语学习相关的各种问题
+2. 推荐适合的学习内容和进度
+3. 解释手语动作要领和技巧
+4. 提供鼓励和学习建议
+5. 可以联网搜索并推荐优质的手语学习视频（B站、YouTube等）
+
+回答要求：
+1. 语言要亲切、鼓励性强
+2. 解释要清晰易懂
+3. 给出具体可操作的建议
+4. 如果用户询问某个手语如何做，除了文字描述，也要推荐相关学习视频链接
+5. 当推荐视频时，优先推荐B站（bilibili.com）的中文手语教程
+
+当前用户信息：
+- 用户ID: """ + str((current_user.get("id") if current_user else None) or (current_user.get("user_id") if current_user else None) or "guest")
+
+        # 如果有识别上下文，加入提示词
+        if request.context:
+            if request.context.get("recognized_sign"):
+                system_prompt += f"\n- 刚刚识别到的手语：{request.context['recognized_sign']}"
+            if request.context.get("confidence"):
+                system_prompt += f"\n- 识别准确率：{request.context['confidence']*100:.1f}%"
+        
+        # 构建消息列表
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # 添加历史消息（保留最近10条）
+        if request.history:
+            recent_history = request.history[-10:] if len(request.history) > 10 else request.history
+            for msg in recent_history:
+                if msg.get("role") in ["user", "assistant"]:
+                    messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
+        
+        # 添加当前用户消息
+        messages.append({
+            "role": "user",
+            "content": request.message
+        })
+        
+        # 调用通义千问API（启用联网搜索）
+        api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {api_key}'
+        }
+        
+        payload = {
+            "model": "qwen-plus",
+            "input": {
+                "messages": messages
+            },
+            "parameters": {
+                "temperature": 0.7,
+                "max_tokens": 2000,
+                "result_format": "message",
+                "enable_search": True  # 启用联网搜索
+            }
+        }
+        
+        response = requests.post(
+            api_url,
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+        response.raise_for_status()
+        
+        result = response.json()
+        
+        # 提取AI回复
+        if 'output' in result and 'choices' in result['output']:
+            ai_reply = result['output']['choices'][0]['message']['content']
+            
+            return {
+                "success": True,
+                "message": ai_reply,
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            raise HTTPException(status_code=500, detail="AI响应格式异常")
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"AI助手API请求失败: {e}")
+        raise HTTPException(status_code=500, detail=f"AI服务暂时不可用: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI助手对话失败: {e}")
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
+
+@router.post("/ai-tutor/suggest-videos")
+async def suggest_learning_videos(
+    sign_name: str = Body(..., embed=True),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    AI推荐手语学习视频
+    """
+    try:
+        api_key = os.environ.get('DASHSCOPE_API_KEY')
+        if not api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="未配置 DASHSCOPE_API_KEY"
+            )
+
+        import requests
+        
+        prompt = f"""请帮我搜索关于"{sign_name}"手语的学习视频，要求：
+1. 优先推荐B站（bilibili.com）的中文手语教程
+2. 也可以推荐YouTube上的优质教程
+3. 确保视频链接真实可用
+4. 每个推荐包含：标题、链接、简短说明
+5. 最多推荐5个视频
+
+请以JSON格式返回：
+{{
+  "videos": [
+    {{
+      "title": "视频标题",
+      "url": "视频链接",
+      "platform": "B站/YouTube",
+      "description": "简短说明"
+    }}
+  ]
+}}"""
+        
+        api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {api_key}'
+        }
+        
+        payload = {
+            "model": "qwen-plus",
+            "input": {
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ]
+            },
+            "parameters": {
+                "temperature": 0.3,
+                "max_tokens": 1500,
+                "result_format": "message",
+                "enable_search": True
+            }
+        }
+        
+        response = requests.post(api_url, headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        
+        if 'output' in result and 'choices' in result['output']:
+            ai_reply = result['output']['choices'][0]['message']['content']
+            
+            # 尝试解析JSON
+            import json
+            import re
+            
+            # 清理可能的markdown标记
+            ai_reply = ai_reply.strip()
+            if '```json' in ai_reply:
+                ai_reply = re.sub(r'```json\s*', '', ai_reply)
+            if '```' in ai_reply:
+                ai_reply = re.sub(r'```\s*', '', ai_reply)
+            ai_reply = ai_reply.strip()
+            
+            try:
+                videos_data = json.loads(ai_reply)
+                return {
+                    "success": True,
+                    "videos": videos_data.get("videos", []),
+                    "raw_response": ai_reply
+                }
+            except json.JSONDecodeError:
+                # 如果无法解析JSON，返回原始文本
+                return {
+                    "success": True,
+                    "videos": [],
+                    "raw_response": ai_reply,
+                    "note": "AI返回了文本格式的推荐，请查看raw_response"
+                }
+        else:
+            raise HTTPException(status_code=500, detail="AI响应格式异常")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"视频推荐失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # 导出路由
 __all__ = ["router"]

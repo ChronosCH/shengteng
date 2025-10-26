@@ -4,6 +4,7 @@
 """
 
 import jwt
+from jwt.exceptions import InvalidTokenError
 import asyncio
 import base64
 import logging
@@ -581,7 +582,7 @@ class SecurityManager:
                 detail="令牌已过期",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        except jwt.JWTError:
+        except InvalidTokenError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="无效的令牌",
@@ -634,6 +635,30 @@ class SecurityManager:
                 detail="用户账户已被禁用"
             )
         return current_user
+    
+    async def get_current_user_optional(
+        self, 
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
+    ) -> Optional[dict]:
+        """获取当前用户（可选认证）- 如果没有提供token则返回None"""
+        if credentials is None:
+            return None
+        
+        try:
+            token = credentials.credentials
+            payload = self.verify_token(token)
+            
+            if payload.get("type") != "access":
+                return None
+            
+            user_id = payload.get("user_id")
+            if user_id is None:
+                return None
+            
+            user = await db_manager.get_user_by_id(user_id)
+            return user
+        except Exception:
+            return None
     
     async def require_admin(self, current_user: dict = Depends(lambda: None)):
         """要求管理员权限"""
@@ -863,7 +888,7 @@ class SecurityManager:
                 )
             
             return payload
-        except jwt.JWTError:
+        except InvalidTokenError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="无效的API密钥"

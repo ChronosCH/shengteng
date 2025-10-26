@@ -11,6 +11,13 @@ export interface IsolatedPredictionResponse {
     confidence: number
     logits: number[]
   }
+  feedback?: {
+    recognized_sign: string
+    accuracy_level: string
+    message: string
+    tips: string[]
+    next_steps: string[]
+  }
 }
 
 class IsolatedSignLearningService {

@@ -1,0 +1,24 @@
+WLASL MindSpore版本 - 状态说明
+=====================================
+
+状态: ✅ 已修复 - MindSpore推理结果与PyTorch保持一致
+
+更新内容:
+--------
+- 自动重映射BatchNorm参数命名（weight/bias → gamma/beta，running_* → moving_*）
+- 支持直接加载PyTorch权重并转换为MindSpore格式，同时在本地缓存修复后的.ckpt
+- 推理脚本 `inference_mindspore.py` 现可输出与 `simple_inference.py` 一致的结果
+
+使用说明:
+--------
+1. 激活环境: `conda activate wlasl`
+2. 进入目录: `cd /root/WLASL/mind_wl`
+3. 执行推理: `python inference_mindspore.py`
+
+备注:
+-----
+- 首次运行会检测并修复MindSpore权重中的BatchNorm命名，随后自动缓存修复结果
+- 若MindSpore权重缺失，将自动从PyTorch权重转换生成
+- 依赖: MindSpore 2.0.0 (CPU), PyTorch 1.11+ (用于权重转换)
+
+更新日期: 2025-10-26
