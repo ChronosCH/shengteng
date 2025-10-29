@@ -33,7 +33,7 @@ import VideoCapture from '../components/VideoCapture'
 import ContinuousVideoRecognition from '../components/ContinuousVideoRecognition'
 import mindVacRealtimeService, { MindVacRealtimeResult } from '../services/mindVacRealtimeService'
 
-const CAPTURE_DURATION_MS = 7000
+const CAPTURE_DURATION_MS = 4000
 const TARGET_FPS = 24
 const MIN_FRAME_COUNT = 32
 const BACKEND_MIN_FRAME_COUNT = 8

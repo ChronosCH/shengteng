@@ -2,28 +2,6 @@
 
 本目录包含WLASL手语识别项目的MindSpore实现，支持CPU推理。
 
-**⚠️ 重要提示：当前版本存在权重转换问题**
-
-由于PyTorch和MindSpore在BatchNorm层的参数命名差异（`running_mean` vs `moving_mean`等），直接转换会导致228个参数无法正确加载，包括所有BatchNorm的统计量和可学习参数。这会导致推理结果完全不准确。
-
-**已知问题：**
-- ❌ BatchNorm参数名称不匹配
-- ❌ 228/total参数未加载
-- ❌ 推理结果不准确（所有视频预测为同一类别）
-
-**解决方案：**
-1. **推荐**：使用PyTorch版本进行推理
-   - 位置：`/root/WLASL/simple_inference.py`
-   - 文档：`/root/WLASL/CPU_README.md`
-   - 状态：✅ 已验证，结果正确
-
-2. **进阶**：手动修复参数映射（需要深入了解两个框架）
-   - 需要创建完整的参数名称映射表
-   - 需要处理不同的参数格式
-   - 工作量较大，不推荐新手尝试
-
-本MindSpore版本仅作为**框架转换示例**和**学习参考**，不建议用于实际推理任务。
-
 ## 📁 目录结构
 
 ```
@@ -83,7 +61,6 @@ python inference_mindspore.py --test-only
 
 #### 方案A：转换PyTorch权重（推荐）
 
-如果你已有PyTorch的预训练权重：
 
 ```bash
 # 1. 在同一环境安装PyTorch

@@ -2,8 +2,8 @@ import os, re, cv2
 from natsort import natsorted  # 可选, 若未安装下面提供备用实现
 
 # -------- 可配置项 ----------
-image_folder = r"D:\Programs\shengteng\mind_vac\test\1"   # 修改为你的图片文件夹
-output_video = r"D:\Programs\shengteng\mind_vac\test_vedios\output.mp4"
+image_folder = r"D:\Programs\shengteng\mind_vac\test\5"   # 修改为你的图片文件夹
+output_video = r"D:\Programs\shengteng\mind_vac\test_vedios\output5.mp4"
 fps = 30
 # ----------------------------
 
